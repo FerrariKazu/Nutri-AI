@@ -1,0 +1,48 @@
+# Production-Grade RAG System Requirements
+# Python 3.11+ compatible
+# Optimized for CUDA/RTX 4060 GPU
+
+
+# Text Processing
+rapidfuzz==2.13.7
+inflect==6.0.4
+
+# HTTP & Caching
+requests==2.31.0
+requests-cache==0.9.8
+
+# Progress & Logging
+# Production-Grade RAG System Requirements
+# Python 3.11+ compatible
+# Optimized for CUDA/RTX 4060 GPU
+
+
+# Text Processing
+rapidfuzz==2.13.7
+inflect==6.0.4
+
+# HTTP & Caching
+requests==2.31.0
+requests-cache==0.9.8
+
+# Progress & Logging
+tqdm==4.66.1
+python-dotenv==1.0.0
+
+# YAML support
+pyyaml==6.0.1
+
+# Data Processing
+pandas==2.0.3
+pyarrow==12.0.1
+openpyxl==3.1.2
+numpy==1.24.3
+scipy==1.10.1  # For TestClient
+
+# Database
+# No additional requirements - using stdlib sqlite3
+
+# Utilities
+python-multipart==0.0.6  # For FastAPI file uploads
+fastapi==0.95.2
+uvicorn[standard]==0.22.0

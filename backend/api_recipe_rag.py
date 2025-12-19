@@ -4,7 +4,7 @@ RAG-enhanced recipe generation endpoint.
 Combines food and compound retrieval for scientifically-grounded recipe invention.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
 import logging
@@ -12,7 +12,6 @@ import logging
 from backend.vector_store_food import search as food_search
 from backend.vector_store_compound import search as compound_search
 from backend.nutrition_loader import normalizer
-from backend.utils.api_response import create_success_response, create_error_response
 from llm import generate  # Existing Qwen wrapper
 from prompts import SYSTEM_PROMPT
 from ingredient_constraints import analyze_ingredients, BASIC_PANTRY_ITEMS
@@ -32,8 +31,19 @@ class RAGRecipeRequest(BaseModel):
     explain_compounds: bool = Field(True, description="Include chemical explanations")
 
 
-@router.post("/recipe/rag", response_model=dict)
-async def generate_rag_recipe(req: RAGRecipeRequest) -> dict:
+class RAGRecipeResponse(BaseModel):
+    """Response with RAG-enhanced recipe."""
+    success: bool
+    recipe: str
+    retrieved_foods: List[Dict]
+    compound_blocks: List[Dict]
+    rag_used: bool
+    corrected: bool = False
+    extras_removed: Optional[List[str]] = None
+
+
+@router.post("/recipe/rag", response_model=RAGRecipeResponse)
+async def generate_rag_recipe(req: RAGRecipeRequest) -> RAGRecipeResponse:
     """
     Generate recipe with RAG (Retrieval-Augmented Generation).
     
@@ -209,17 +219,16 @@ Do NOT use any of those extra ingredients again. Keep the same structure and che
         # STEP 6: Return Response
         # ===========================================================
         
-        data = {
-            "success": True,
-            "recipe": final_recipe,
-            "retrieved_foods": retrieved_foods[:3],  # Return top 3
-            "compound_blocks": compound_blocks[:5],  # Return top 5
-            "rag_used": len(retrieved_foods) > 0 or len(compound_blocks) > 0,
-            "corrected": corrected,
-            "extras_removed": extras if extras else None
-        }
-        return create_success_response(data)
+        return RAGRecipeResponse(
+            success=True,
+            recipe=final_recipe,
+            retrieved_foods=retrieved_foods[:3],  # Return top 3
+            compound_blocks=compound_blocks[:5],  # Return top 5
+            rag_used=len(retrieved_foods) > 0 or len(compound_blocks) > 0,
+            corrected=corrected,
+            extras_removed=extras if extras else None
+        )
     
     except Exception as e:
         logger.error(f"RAG recipe generation failed: {e}")
-        return create_error_response('INTERNAL_ERROR', str(e))
+        raise HTTPException(status_code=500, detail=str(e))

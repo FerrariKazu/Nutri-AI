@@ -18,7 +18,7 @@ _recipes_by_id: Dict[int, Dict[str, Any]] = {}
 _loaded = False
 
 
-def load_recipes(json_path: str = "data/recipes_with_nutrition.json") -> None:
+def load_recipes(json_path: str = "processed/recipes_with_nutrition.json") -> None:
     """
     Load processed recipes from JSON file into memory.
     

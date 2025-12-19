@@ -18,7 +18,10 @@ pip-delete-this-directory.txt
 *.sqlite3
 *.jsonl
 *.parquet
+data/
+processed/
 **/data/
+**/processed/
 **/models/
 **/checkpoints/
 **/models_cache/

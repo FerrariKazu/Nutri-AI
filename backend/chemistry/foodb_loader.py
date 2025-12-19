@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Any
 logger = logging.getLogger(__name__)
 
 # Path to FooDB directory
-FOODB_PATH = Path(__file__).parent.parent.parent / "data" / "raw" / "FoodDB"
+FOODB_PATH = Path(__file__).parent.parent.parent / "FoodDB"
 
 # Cache for loaded data
 _compound_cache = {}

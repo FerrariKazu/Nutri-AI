@@ -17,15 +17,20 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional
 
-# Add parent to path
-sys.path.insert(0, str(Path(__file__).parent))
+# Add current and parent to path for flexible execution
+current_dir = Path(__file__).parent
+parent_dir = current_dir.parent
+if str(current_dir) not in sys.path:
+    sys.path.insert(0, str(current_dir))
+if str(parent_dir) not in sys.path:
+    sys.path.insert(1, str(parent_dir))
 
 from tools.database_tools import DatabaseTools
 from utils.logging_config import setup_logging, get_logger
 from utils.error_handling import retry_with_backoff, ErrorMessageFormatter
 from utils.context_optimizer import ContextOptimizer
-from backend.prompts.prompt_templates import PromptBuilder
-from backend.utils.response_formatter import ResponseFormatter
+from prompt_logic.prompt_templates import PromptBuilder
+from utils.response_formatter import ResponseFormatter
 
 # Setup logging
 setup_logging()
