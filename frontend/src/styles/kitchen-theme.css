@@ -1,0 +1,381 @@
+/* Kitchen-themed custom styles */
+
+:root {
+    --kitchen-cream: #FFF8E7;
+    --kitchen-butter: #FFE5B4;
+    --kitchen-cinnamon: #D2691E;
+    --kitchen-coffee: #6F4E37;
+    --kitchen-mint: #98FF98;
+    --kitchen-tomato: #FF6347;
+
+    --shadow-soft: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-medium: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --shadow-strong: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    /* Dark Mode Colors */
+    --kitchen-cream-dark: #1F1B18;
+    --kitchen-bg-dark: #121212;
+    --kitchen-card-dark: #1E1E1E;
+    --kitchen-text-dark: #EAE0D5;
+    --kitchen-border-dark: #3F3025;
+}
+
+/* Dark Mode Overrides */
+.dark body {
+    background-color: var(--kitchen-bg-dark);
+    color: var(--kitchen-text-dark);
+    background-image:
+        radial-gradient(circle at 100% 0%, #3F3025 0%, transparent 15%),
+        radial-gradient(circle at 0% 100%, #3F3025 0%, transparent 15%);
+}
+
+.dark .recipe-card,
+.dark .kitchen-input,
+.dark .message-user,
+.dark .message-assistant {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+}
+
+.dark .recipe-card {
+    background: var(--kitchen-card-dark);
+    border-color: var(--kitchen-border-dark);
+    color: var(--kitchen-text-dark);
+}
+
+.dark .message-user {
+    background: var(--kitchen-cinnamon);
+    color: #FFF;
+    border: 1px solid var(--kitchen-border-dark);
+}
+
+.dark .message-assistant {
+    background-color: var(--kitchen-card-dark);
+    border-color: var(--kitchen-border-dark);
+    color: var(--kitchen-text-dark);
+}
+
+.dark .kitchen-input {
+    background-color: var(--kitchen-card-dark);
+    border-color: var(--kitchen-border-dark);
+    color: var(--kitchen-text-dark);
+}
+
+/* Base styles */
+body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--kitchen-cream);
+}
+
+/* Handwritten headers */
+.handwritten {
+    font-family: 'Caveat', cursive;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+/* Kitchen card style */
+.kitchen-card {
+    background: white;
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: var(--shadow-medium);
+    border: 3px solid var(--kitchen-butter);
+    position: relative;
+    overflow: hidden;
+}
+
+.kitchen-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 8px;
+    background: linear-gradient(90deg,
+            var(--kitchen-tomato) 0%,
+            var(--kitchen-cinnamon) 25%,
+            var(--kitchen-butter) 50%,
+            var(--kitchen-mint) 75%,
+            var(--kitchen-tomato) 100%);
+}
+
+/* Recipe card special style */
+.recipe-card {
+    background: linear-gradient(135deg, #ffffff 0%, #FFF8E7 100%);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: var(--shadow-soft);
+    border-left: 4px solid var(--kitchen-cinnamon);
+    transition: all 0.3s ease;
+}
+
+.recipe-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-strong);
+}
+
+/* Ingredient tag style */
+.ingredient-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--kitchen-mint);
+    color: var(--kitchen-coffee);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    box-shadow: var(--shadow-soft);
+    transition: all 0.2s ease;
+}
+
+.ingredient-tag:hover {
+    transform: scale(1.05);
+    box-shadow: var(--shadow-medium);
+}
+
+/* Chat message bubbles */
+.message-user {
+    background: linear-gradient(135deg, var(--kitchen-butter) 0%, var(--kitchen-cream) 100%);
+    border-radius: 18px 18px 4px 18px;
+    padding: 12px 16px;
+    box-shadow: var(--shadow-soft);
+}
+
+.message-assistant {
+    background: white;
+    border-radius: 18px 18px 18px 4px;
+    padding: 16px 20px;
+    box-shadow: var(--shadow-medium);
+    border-left: 4px solid var(--kitchen-cinnamon);
+}
+
+/* Mode selector special styling */
+.mode-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 30px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.mode-badge:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-medium);
+}
+
+.mode-badge.simple {
+    background: linear-gradient(135deg, #98FF98 0%, #90EE90 100%);
+    color: #2d5016;
+}
+
+.mode-badge.standard {
+    background: linear-gradient(135deg, #FFE5B4 0%, #FFC30B 100%);
+    color: #6F4E37;
+}
+
+.mode-badge.chemistry {
+    background: linear-gradient(135deg, #87CEEB 0%, #4682B4 100%);
+    color: #1a3a52;
+}
+
+.mode-badge.selected {
+    border-color: currentColor;
+    box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Animated cooking icon */
+@keyframes stir {
+
+    0%,
+    100% {
+        transform: rotate(-10deg);
+    }
+
+    50% {
+        transform: rotate(10deg);
+    }
+}
+
+.cooking-icon {
+    animation: stir 2s ease-in-out infinite;
+    transform-origin: bottom center;
+}
+
+/* Ingredient float animation */
+@keyframes ingredient-float {
+
+    0%,
+    100% {
+        transform: translateY(0) rotate(0deg);
+    }
+
+    25% {
+        transform: translateY(-10px) rotate(5deg);
+    }
+
+    75% {
+        transform: translateY(-5px) rotate(-5deg);
+    }
+}
+
+.ingredient-float {
+    animation: ingredient-float 4s ease-in-out infinite;
+}
+
+/* Loading spinner - cooking pot */
+@keyframes pot-bubble {
+
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 0.7;
+    }
+
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+}
+
+.cooking-loader {
+    display: flex;
+    gap: 8px;
+}
+
+.cooking-loader span {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--kitchen-cinnamon);
+    animation: pot-bubble 1.4s ease-in-out infinite;
+}
+
+.cooking-loader span:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.cooking-loader span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.cooking-loader span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+/* Tooltip kitchen style */
+.kitchen-tooltip {
+    background: var(--kitchen-coffee);
+    color: var(--kitchen-cream);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    box-shadow: var(--shadow-medium);
+    position: relative;
+}
+
+.kitchen-tooltip::before {
+    content: '';
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 6px solid var(--kitchen-coffee);
+}
+
+/* Scroll bar styling */
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--kitchen-cream);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--kitchen-butter);
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--kitchen-cinnamon);
+}
+
+/* Button styles */
+.btn-kitchen-primary {
+    background: linear-gradient(135deg, var(--kitchen-tomato) 0%, var(--kitchen-cinnamon) 100%);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow-soft);
+}
+
+.btn-kitchen-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-strong);
+}
+
+.btn-kitchen-secondary {
+    background: white;
+    color: var(--kitchen-cinnamon);
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-weight: 600;
+    border: 2px solid var(--kitchen-butter);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-kitchen-secondary:hover {
+    background: var(--kitchen-cream);
+    border-color: var(--kitchen-cinnamon);
+}
+
+/* Input fields */
+.kitchen-input {
+    background: white;
+    border: 2px solid var(--kitchen-butter);
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    width: 100%;
+}
+
+.kitchen-input:focus {
+    outline: none;
+    border-color: var(--kitchen-cinnamon);
+    box-shadow: 0 0 0 4px rgba(210, 105, 30, 0.1);
+}
+
+/* Decorative elements */
+.kitchen-separator {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 24px 0;
+}
+
+.kitchen-separator::before,
+.kitchen-separator::after {
+    content: '';
+    flex: 1;
+    border-bottom: 2px dashed var(--kitchen-butter);
+}
+
+.kitchen-separator span {
+    padding: 0 16px;
+    color: var(--kitchen-cinnamon);
+    font-weight: 600;
+}

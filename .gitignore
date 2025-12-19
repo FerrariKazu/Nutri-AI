@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.cache/
+
+# Data & Models (Large files)
+*.bin
+*.pkl
+*.sqlite
+*.sqlite3
+*.jsonl
+*.parquet
+**/data/
+**/models/
+**/checkpoints/
+**/models_cache/
+
+# Logs
+*.log
+logs/
+
+# Node / Frontend
+node_modules/
+dist/
+.env*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific large/unnecessary files
+Modelfile.*
+ngrok-v3-stable-linux-amd64.tgz
+test_system_prompt_leakage*.py
+rebuild_faiss.log
+server.log
+api.log
+backend_restart*.log
+ollama.log
+.orchids/
+
+# Nested git repos
+.git/
+!/.git/
