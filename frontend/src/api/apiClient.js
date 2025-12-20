@@ -102,7 +102,7 @@ function getBackendURL() {
 
 
 const API_CONFIG = {
-    timeout: 30000,  // 30 seconds
+    timeout: 120000,  // 120 seconds for LLM workloads
     maxRetries: 3,
     retryDelay: 1000,  // 1 second
 };

@@ -18,6 +18,7 @@ import os
 import requests
 import re
 import logging
+import json
 from typing import Optional, List, Dict, Tuple
 
 logger = logging.getLogger(__name__)
@@ -52,7 +53,7 @@ if TOOLS_AVAILABLE:
 
 # Configuration constants
 OLLAMA_URL = "http://localhost:11434/api/chat"
-DEFAULT_MODEL_NAME = "qwen2.5:7b-instruct-q4_K_M"
+DEFAULT_MODEL_NAME = "qwen3:8b"
 
 
 
@@ -91,9 +92,29 @@ def generate(
     Raises:
         LLMError: If the request fails or the response is malformed.
     """
+    import time
+    start_time = time.time()
+    
     # Determine which model to use
     if model_name is None:
         model_name = os.getenv("OLLAMA_MODEL_NAME", DEFAULT_MODEL_NAME)
+
+    # ========== EXTREME LOGGING: LLM CALL START ==========
+    logger.info("=" * 60)
+    logger.info(f"🤖 LLM CALL START")
+    logger.info(f"   Model: {model_name}")
+    logger.info(f"   Temperature: {temperature}")
+    logger.info(f"   Max Tokens: {max_tokens}")
+    logger.info(f"   Messages count: {len(messages)}")
+    logger.info(f"   Ollama URL: {OLLAMA_URL}")
+    
+    # Log first user message for context
+    for msg in messages:
+        if msg.get('role') == 'user':
+            content_preview = str(msg.get('content', ''))[:200]
+            logger.info(f"   User message preview: {content_preview}...")
+            break
+    logger.info("=" * 60)
 
     # Build the request payload
     payload = {
@@ -108,30 +129,127 @@ def generate(
 
     try:
         # Make the request to Ollama (increased timeout for longer responses)
-        response = requests.post(OLLAMA_URL, json=payload, timeout=60)
+        logger.info(f"📡 Sending request to Ollama at {OLLAMA_URL}...")
+        response = requests.post(OLLAMA_URL, json=payload, timeout=180)
         
         # Check for HTTP errors
         if not response.ok:
-            raise LLMError(
-                f"Ollama API returned status {response.status_code}: {response.text}"
-            )
+            error_msg = f"Ollama API returned status {response.status_code}: {response.text}"
+            logger.error(f"🔴 LLM HTTP ERROR: {error_msg}")
+            raise LLMError(error_msg)
         
         # Parse the response
         data = response.json()
         
         # Extract the assistant's message
         if "message" not in data or "content" not in data["message"]:
-            raise LLMError(
-                f"Unexpected response structure from Ollama: {data}"
-            )
+            error_msg = f"Unexpected response structure from Ollama: {data}"
+            logger.error(f"🔴 LLM PARSE ERROR: {error_msg}")
+            raise LLMError(error_msg)
         
         assistant_reply = data["message"]["content"].strip()
+        elapsed = time.time() - start_time
+        
+        # ========== EXTREME LOGGING: LLM CALL SUCCESS ==========
+        logger.info("=" * 60)
+        logger.info(f"✅ LLM CALL SUCCESS")
+        logger.info(f"   Response length: {len(assistant_reply)} chars")
+        logger.info(f"   Elapsed time: {elapsed:.2f}s")
+        logger.info(f"   Response preview: {assistant_reply[:150]}...")
+        logger.info("=" * 60)
+        
         return assistant_reply
         
     except requests.exceptions.RequestException as e:
+        elapsed = time.time() - start_time
+        logger.exception(f"🔴 LLM NETWORK ERROR after {elapsed:.2f}s: {e}")
         raise LLMError(
             f"Failed to contact Ollama at {OLLAMA_URL}: {e}"
         ) from e
+
+
+def stream(
+    messages: list[dict],
+    temperature: float = 0.7,
+    max_tokens: int = 2048,
+    model_name: Optional[str] = None,
+):
+    """
+    Stream a response from the Qwen model via Ollama.
+
+    Args:
+        messages: List of message dictionaries.
+        temperature: Sampling temperature.
+        max_tokens: Maximum number of tokens to generate.
+        model_name: Override the model name.
+
+    Yields:
+        Individual text chunks as they are generated.
+    """
+    import time
+    start_time = time.time()
+    
+    if model_name is None:
+        model_name = os.getenv("OLLAMA_MODEL_NAME", DEFAULT_MODEL_NAME)
+
+    # ========== EXTREME LOGGING: STREAM START ==========
+    logger.info("=" * 60)
+    logger.info(f"🔄 LLM STREAM START")
+    logger.info(f"   Model: {model_name}")
+    logger.info(f"   Temperature: {temperature}")
+    logger.info(f"   Max Tokens: {max_tokens}")
+    logger.info(f"   Messages count: {len(messages)}")
+    logger.info("=" * 60)
+
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "stream": True,
+        "options": {
+            "temperature": temperature,
+            "num_predict": max_tokens,
+        }
+    }
+
+    chunk_count = 0
+    total_chars = 0
+    
+    try:
+        logger.info(f"📡 Starting stream request to {OLLAMA_URL}...")
+        response = requests.post(OLLAMA_URL, json=payload, timeout=180, stream=True)
+        
+        if not response.ok:
+            error_msg = f"Ollama API returned status {response.status_code}: {response.text}"
+            logger.error(f"🔴 STREAM HTTP ERROR: {error_msg}")
+            raise LLMError(error_msg)
+        
+        for line in response.iter_lines():
+            if line:
+                data = json.loads(line)
+                if "message" in data and "content" in data["message"]:
+                    chunk = data["message"]["content"]
+                    chunk_count += 1
+                    total_chars += len(chunk)
+                    yield chunk
+                if data.get("done", False):
+                    break
+        
+        # ========== EXTREME LOGGING: STREAM END ==========
+        elapsed = time.time() - start_time
+        logger.info("=" * 60)
+        logger.info(f"✅ LLM STREAM COMPLETE")
+        logger.info(f"   Chunks received: {chunk_count}")
+        logger.info(f"   Total characters: {total_chars}")
+        logger.info(f"   Elapsed time: {elapsed:.2f}s")
+        logger.info("=" * 60)
+                    
+    except requests.exceptions.RequestException as e:
+        elapsed = time.time() - start_time
+        logger.exception(f"🔴 STREAM NETWORK ERROR after {elapsed:.2f}s: {e}")
+        raise LLMError(f"Failed to contact Ollama at {OLLAMA_URL}: {e}")
+    except json.JSONDecodeError as e:
+        logger.exception(f"🔴 STREAM PARSE ERROR: {e}")
+        raise LLMError(f"Failed to parse Ollama response: {e}")
 
 
 def build_prompt(
