@@ -17,12 +17,48 @@ const LOCAL_BACKEND_URLS = [
 // Fallback if local backend isn't running
 const RAILWAY_BACKEND_URL = 'https://nutri-ai.up.railway.app';
 
+// ============================================================================ 
+// EXTREME DEBUG LOGGING - NEVER SUPPRESS
+// ============================================================================ 
+const DEBUG_MODE = true;
+
+function debugLog(category, message, data = null) {
+    if (!DEBUG_MODE) return;
+    const timestamp = new Date().toISOString();
+    const prefix = `[${timestamp}] [${category}]`;
+
+    if (data) {
+        console.log(`${prefix} ${message}`, data);
+    } else {
+        console.log(`${prefix} ${message}`);
+    }
+}
+
+function debugError(category, message, error = null) {
+    const timestamp = new Date().toISOString();
+    const prefix = `[${timestamp}] [${category}] ❌`;
+
+    console.error(`${prefix} ${message}`);
+    if (error) {
+        console.error(`${prefix} Error details:`, {
+            name: error.name,
+            message: error.message,
+            status: error.status,
+            response: error.response,
+            stack: error.stack
+        });
+    }
+}
+
 let finalBackendURL = '';
 
 async function detectBackend() {
+    debugLog('BACKEND', '🔍 Starting backend detection...');
+
     // 0. Check Environment Variable (Vercel/Vite)
     if (import.meta.env.VITE_API_URL) {
         const envUrl = import.meta.env.VITE_API_URL.replace(/\/$/, ''); // Remove trailing slash
+        debugLog('BACKEND', `🌍 Using VITE_API_URL: ${envUrl}`);
         console.log(`🌍 Using VITE_API_URL: ${envUrl}`);
         return envUrl;
     }
@@ -30,20 +66,23 @@ async function detectBackend() {
     // 1. Try local URLs first
     for (const url of LOCAL_BACKEND_URLS) {
         try {
+            debugLog('BACKEND', `   Trying: ${url}`);
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
             const response = await fetch(`${url}/api/health`, { signal: controller.signal });
             clearTimeout(timeoutId);
             if (response.ok) {
+                debugLog('BACKEND', `✅ Backend found at: ${url}`);
                 console.log(`✅ Local Backend detected, using: ${url}`);
                 return url;
             }
         } catch (error) {
-            // This is expected if the server isn't running on this URL
+            debugLog('BACKEND', `   ❌ ${url} - ${error.message || 'not reachable'}`);
         }
     }
 
     // 2. Fallback to Railway
+    debugLog('BACKEND', `⚠️ No local backend found. Falling back to: ${RAILWAY_BACKEND_URL}`);
     console.log(`- Local backend not found. Falling back to Railway: ${RAILWAY_BACKEND_URL}`);
     return RAILWAY_BACKEND_URL;
 }
@@ -169,6 +208,13 @@ export async function sendPrompt(prompt, mode = 'standard', signal = null) {
     const { controller, cleanup } = createTimeoutController(API_CONFIG.timeout);
     const baseURL = await getBackendURL();
 
+    // ========== EXTREME DEBUG: REQUEST START ==========
+    debugLog('API', '='.repeat(50));
+    debugLog('API', `📤 SENDING REQUEST: POST ${baseURL}/api/chat`);
+    debugLog('API', `   Mode: ${mode}`);
+    debugLog('API', `   Prompt: ${prompt.substring(0, 100)}...`);
+    debugLog('API', '='.repeat(50));
+
     try {
         const response = await retry(async () => {
             const res = await fetch(`${baseURL}/api/chat`, {
@@ -188,6 +234,12 @@ export async function sendPrompt(prompt, mode = 'standard', signal = null) {
                 const errorText = await res.text();
                 const errorData = parseJSON(errorText);
 
+                debugError('API', `HTTP ERROR: ${res.status} ${res.statusText}`, {
+                    status: res.status,
+                    response: errorData,
+                    rawText: errorText
+                });
+
                 throw new APIError(
                     errorData?.error || `HTTP ${res.status}: ${res.statusText}`,
                     res.status,
@@ -195,6 +247,7 @@ export async function sendPrompt(prompt, mode = 'standard', signal = null) {
                 );
             }
 
+            debugLog('API', `📥 RESPONSE: ${res.status} OK`);
             return res;
         }, API_CONFIG.maxRetries, API_CONFIG.retryDelay);
 
@@ -222,7 +275,7 @@ export async function sendPrompt(prompt, mode = 'standard', signal = null) {
                         // Take the last part which is likely the actual Answer
                         content = parts[parts.length - 1].trim();
                         // Clean up leading punctuation often left behind
-                        content = content.replace(/^["\?:\.\s]+/, '');
+                        content = content.replace(/^["\?\.\s]+/, '');
                         break;
                     }
                 }
@@ -235,9 +288,14 @@ export async function sendPrompt(prompt, mode = 'standard', signal = null) {
             };
         };
 
-        return sanitizeResponse(await response.json());
+        const jsonData = await response.json();
+        debugLog('API', `📥 RESPONSE DATA:`, jsonData);
+        return sanitizeResponse(jsonData);
 
     } catch (error) {
+        // ========== EXTREME DEBUG: ERROR DETAILS ==========
+        debugError('API', 'REQUEST FAILED', error);
+
         // Classify error
         if (error.name === 'AbortError') {
             throw new TimeoutError('Request timed out');
@@ -280,6 +338,13 @@ export function streamPrompt(
     // Combined abort signal
     const combinedSignal = signal || controller.signal;
 
+    // ========== EXTREME DEBUG: STREAM START ==========
+    debugLog('STREAM', '='.repeat(50));
+    debugLog('STREAM', '🔄 STARTING STREAM REQUEST');
+    debugLog('STREAM', `   Prompt: ${prompt.substring(0, 100)}...`);
+    debugLog('STREAM', `   Mode: ${mode}`);
+    debugLog('STREAM', '='.repeat(50));
+
     // NUCLEAR CLEAN RESPONSE FUNCTION
     const cleanResponse = (text) => {
         // Remove system prompt
@@ -312,6 +377,7 @@ export function streamPrompt(
     (async () => {
         try {
             const baseURL = await getBackendURL();
+            debugLog('STREAM', `📡 Fetching from: ${baseURL}/api/chat/stream`);
             const response = await fetch(`${baseURL}/api/chat/stream`, {
                 method: 'POST',
                 headers: {
@@ -325,11 +391,18 @@ export function streamPrompt(
             });
 
             if (!response.ok) {
+                const errorText = await response.text();
+                debugError('STREAM', `HTTP ERROR: ${response.status}`, {
+                    status: response.status,
+                    text: errorText
+                });
                 throw new APIError(
                     `HTTP ${response.status}: ${response.statusText}`,
                     response.status
                 );
             }
+
+            debugLog('STREAM', '🟢 Response OK, starting reader...');
 
             // Get reader from response body
             const reader = response.body.getReader();
@@ -339,16 +412,24 @@ export function streamPrompt(
             let buffer = '';
             let rawBuffer = ''; // To track raw stream for cleaning
             let previousCleanLength = 0;
+            let tokenCount = 0;
 
             // Read stream
             while (true) {
                 const { done, value } = await reader.read();
 
-                if (done) break;
-                if (aborted) break;
+                if (done) {
+                    debugLog('STREAM', '🏁 Reader done');
+                    break;
+                }
+                if (aborted) {
+                    debugLog('STREAM', '🛑 Stream aborted by user/timeout');
+                    break;
+                }
 
                 // Decode chunk
-                buffer += decoder.decode(value, { stream: true });
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
 
                 // Process complete lines (SSE format)
                 const lines = buffer.split('\n');
@@ -359,6 +440,7 @@ export function streamPrompt(
                         const data = line.slice(6); // Remove "data: " prefix
 
                         if (data === '[DONE]') {
+                            debugLog('STREAM', '✅ [DONE] marker received');
                             break;
                         }
 
@@ -368,6 +450,7 @@ export function streamPrompt(
                             const type = parsed.type || 'content';
 
                             if (token && type === 'content') {
+                                tokenCount++;
                                 // Add to RAW buffer
                                 rawBuffer += token;
 
@@ -384,11 +467,13 @@ export function streamPrompt(
                             }
 
                         } catch (e) {
-                            // Ignore invalid JSON
+                            debugError('STREAM', 'JSON parse error in chunk', { data, error: e.message });
                         }
                     }
                 }
             }
+
+            debugLog('STREAM', `✨ Stream complete. Total tokens emitted: ${tokenCount}`);
 
             // Call completion callback
             if (!aborted && onComplete) {
@@ -396,7 +481,7 @@ export function streamPrompt(
             }
 
         } catch (error) {
-            // ... (rest of error handling)
+            debugError('STREAM', 'FATAL ERROR in stream', error);
             if (!aborted && onError) {
                 if (error.name === 'AbortError') {
                     onError(new TimeoutError('Stream timed out'));

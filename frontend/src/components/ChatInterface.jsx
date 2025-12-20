@@ -5,16 +5,17 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { sendPrompt, streamPrompt, APIError, NetworkError } from '../api/apiClient';
+import { sendPrompt, streamPrompt, APIError, NetworkError, TimeoutError } from '../api/apiClient';
 import { Send } from 'lucide-react';
 import MessageBubble from './MessageBubble';
+import ErrorPanel from './ErrorPanel';
 
 const ChatInterface = ({ currentMode }) => {
     // UI state only - no async logic
     const [messages, setMessages] = useState([]);
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState(null);
+    const [error, setError] = useState(null); // Now stores an object: { type, status, message, response }
 
     // Ref to store current streaming abort function
     const abortStreamRef = useRef(null);
@@ -67,7 +68,6 @@ const ChatInterface = ({ currentMode }) => {
             currentMode,
 
             // onToken callback - just update UI state
-            // onToken callback - just update UI state
             (token, type) => {
                 // NUCLEAR: Ignore thinking, check for leaks
                 if (type === 'thinking') return;
@@ -96,9 +96,15 @@ const ChatInterface = ({ currentMode }) => {
                 setIsLoading(false);
             },
 
-            // onError callback - just update UI state
-            (error) => {
-                setError(getErrorMessage(error));
+            // onError callback - store detailed error object
+            (err) => {
+                console.error('🔴 ChatInterface received error:', err);
+                setError({
+                    type: err.name || 'Error',
+                    status: err.status || (err instanceof NetworkError ? 'NETWORK_FAIL' : 'UNKNOWN'),
+                    message: err.message || 'An unexpected error occurred',
+                    response: err.response || null
+                });
                 setIsLoading(false);
 
                 // Remove streaming message on error
@@ -126,19 +132,6 @@ const ChatInterface = ({ currentMode }) => {
             e.preventDefault();
             handleSend();
         }
-    };
-
-    /**
-     * Get user-friendly error message
-     */
-    const getErrorMessage = (error) => {
-        if (error instanceof NetworkError) {
-            return '🌐 Network error. Please check your connection.';
-        }
-        if (error instanceof APIError) {
-            return `❌ ${error.message}`;
-        }
-        return '❌ Something went wrong. Please try again.';
     };
 
     return (
@@ -179,11 +172,12 @@ const ChatInterface = ({ currentMode }) => {
                         </div>
                     ))}
 
-                {/* Error message */}
+                {/* Detailed Error Panel */}
                 {error && (
-                    <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl max-w-3xl mx-auto shadow-sm">
-                        {error}
-                    </div>
+                    <ErrorPanel
+                        error={error}
+                        onDismiss={() => setError(null)}
+                    />
                 )}
                 <div ref={messagesEndRef} />
             </div>
