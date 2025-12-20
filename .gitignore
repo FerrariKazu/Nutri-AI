@@ -53,3 +53,4 @@ ollama.log
 # Nested git repos
 .git/
 !/.git/
+nutri-deploy/
