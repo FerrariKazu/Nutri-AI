@@ -69,7 +69,10 @@ async function detectBackend() {
             debugLog('BACKEND', `   Trying: ${url}`);
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
-            const response = await fetch(`${url}/api/health`, { signal: controller.signal });
+            const response = await fetch(`${url}/api/health`, {
+                signal: controller.signal,
+                headers: { 'ngrok-skip-browser-warning': 'true' }
+            });
             clearTimeout(timeoutId);
             if (response.ok) {
                 debugLog('BACKEND', `✅ Backend found at: ${url}`);
@@ -221,6 +224,7 @@ export async function sendPrompt(prompt, mode = 'standard', signal = null) {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'ngrok-skip-browser-warning': 'true',
                 },
                 body: JSON.stringify({
                     message: prompt,
@@ -382,6 +386,7 @@ export function streamPrompt(
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'ngrok-skip-browser-warning': 'true',
                 },
                 body: JSON.stringify({
                     message: prompt,

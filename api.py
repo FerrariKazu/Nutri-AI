@@ -12,12 +12,15 @@ import threading
 from typing import Literal, List, Optional
 import logging
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 import asyncio
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
+import psutil
+import traceback
 
 from llm import generate, build_prompt, generate_with_reflection
 from prompts import SYSTEM_PROMPT
@@ -246,19 +249,64 @@ class SearchResponse(BaseModel):
     loading_status: Optional[dict] = None
 
 
+# ============================================================================
+# EXTREME LOGGING MIDDLEWARE - Logs EVERY request with full details
+# ============================================================================
+class ExtremeLoggingMiddleware(BaseHTTPMiddleware):
+    """Middleware that logs EVERY incoming request with extreme detail."""
+    
+    async def dispatch(self, request: Request, call_next):
+        # Log EVERY incoming request
+        logger.info("=" * 70)
+        logger.info(f"🔵 INCOMING REQUEST: {request.method} {request.url.path}")
+        logger.info(f"   Full URL: {request.url}")
+        logger.info(f"   Client: {request.client.host if request.client else 'unknown'}")
+        logger.info(f"   Headers: {dict(request.headers)}")
+        logger.info(f"   Query Params: {dict(request.query_params)}")
+        
+        # Memory before
+        try:
+            mem_before = psutil.Process().memory_info().rss / 1024 / 1024
+            logger.info(f"   Memory BEFORE: {mem_before:.2f} MB")
+        except Exception as e:
+            mem_before = 0
+            logger.warning(f"   Memory check failed: {e}")
+        
+        try:
+            response = await call_next(request)
+            logger.info(f"🟢 RESPONSE: {response.status_code} for {request.method} {request.url.path}")
+            return response
+        except Exception as e:
+            logger.exception(f"🔴 REQUEST FAILED: {type(e).__name__}: {e}")
+            traceback.print_exc()
+            raise  # Crash loudly, don't recover silently
+        finally:
+            try:
+                mem_after = psutil.Process().memory_info().rss / 1024 / 1024
+                logger.info(f"   Memory AFTER: {mem_after:.2f} MB (Δ {mem_after - mem_before:+.2f} MB)")
+            except:
+                pass
+            logger.info("=" * 70)
+
+
 app = FastAPI(
     title="Nutri API",
     description="Backend API for the Nutri recipe inventor with RAG.",
     version="0.2.1",
 )
 
+# Add CORS middleware first (innermost)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+# Add extreme logging middleware (outermost - runs first)
+app.add_middleware(ExtremeLoggingMiddleware)
 
 app.include_router(rag_api.router, prefix="/api", tags=["rag"])
 
