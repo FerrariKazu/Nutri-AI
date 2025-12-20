@@ -6,7 +6,7 @@
 export const getWebSocketURL = () => {
     // In development, point to local backend
     if (import.meta.env.DEV) {
-        return 'ws://localhost:8000/ws';
+        return 'wss://chaim-smokeproof-nonexcitably.ngrok-free.dev/ws';
     }
 
     // In production, assume served from same origin (FastAPI serving React build)
@@ -21,7 +21,7 @@ export const getWebSocketURL = () => {
 
 export const getApiURL = () => {
     if (import.meta.env.DEV) {
-        return 'http://localhost:8000';
+        return 'https://chaim-smokeproof-nonexcitably.ngrok-free.dev/';
     }
     return ''; // Relative path in production
 };
