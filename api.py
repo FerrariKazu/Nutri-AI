@@ -900,40 +900,11 @@ async def chat_stream(req: ChatRequest):
         try:
             from llm import stream
             
-            buffer = ""
-            in_final_answer = False
-            system_phrases = ["I am NUTRI-CHEM GPT", "System Prompt:", "My capabilities include"]
-            
             async for chunk in run_in_thread(stream, llm_messages):
-                buffer += chunk
-                
-                if "Final Answer:" in buffer and not in_final_answer:
-                    in_final_answer = True
-                    pre, post = buffer.split("Final Answer:", 1)
-                    buffer = post
-                    buffer = re.sub(r'<[/]?think>.*?</?think>', '', buffer, flags=re.DOTALL | re.IGNORECASE)
-                    buffer = re.sub(r'<[/]?thinking>.*?</?thinking>', '', buffer, flags=re.DOTALL | re.IGNORECASE)
-                    
-                if in_final_answer:
-                    if buffer:
-                        yield f"data: {json.dumps({'type': 'content', 'token': buffer})}\n\n"
-                        yielded_any = True
-                        buffer = ""
-                        
-            if not in_final_answer and buffer:
-                cleaned = buffer
-                for phrase in system_phrases:
-                    if phrase in cleaned:
-                        cleaned = cleaned.split(phrase)[-1]
-                        cleaned = re.sub(r'^[\s\.:\?]+', '', cleaned)
-                
-                cleaned = re.sub(r'</?think>.*?$', '', cleaned, flags=re.DOTALL)
-                cleaned = re.sub(r'Thought:.*?(?=\n|$)', '', cleaned)
-                cleaned = re.sub(r'Action:.*?(?=\n|$)', '', cleaned)
-                cleaned = re.sub(r'Observation:.*?(?=\n|$)', '', cleaned)
-                
-                if cleaned.strip():
-                    yield f"data: {json.dumps({'type': 'content', 'token': cleaned.strip()})}\n\n"
+                if chunk:
+                    # Basic cleaning for thinking tags if they appear mid-stream
+                    # But we yield immediately to prevent timeouts
+                    yield f"data: {json.dumps({'type': 'content', 'token': chunk})}\n\n"
                     yielded_any = True
             
             if not yielded_any:
