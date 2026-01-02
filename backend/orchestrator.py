@@ -30,17 +30,17 @@ class NutriOrchestrator:
             
             # PHASE 1: Intent & Constraint Extraction
             yield self._format_chunk(1, "Intent & Constraint Extraction", "Analyzing culinary intent and dietary constraints...")
-            intent = self.pipeline.engine.extract_intent(augmented_query)
+            intent = self.pipeline.intent_agent.extract(augmented_query)
             # (In a real implementation, we'd yield more granular details here)
             
             # PHASE 2: Domain Feasibility Check
             yield self._format_chunk(2, "Domain Feasibility Check", "Cross-referencing scientific knowledge and documents...")
-            docs = self.pipeline.retriever.retrieve(augmented_query, intent)
+            docs = self.pipeline.retriever.retrieve(augmented_query, top_k=5)
             
             # PHASE 3: Culinary / Nutrition Rule Validation
             yield self._format_chunk(3, "Culinary / Nutrition Rule Validation", "Generating baseline recipe and verifying claims...")
-            recipe = self.pipeline.engine.generate_recipe(intent, docs)
-            verification = self.pipeline.verifier.verify(recipe, intent)
+            recipe = self.pipeline.engine.synthesize(augmented_query, docs, intent)
+            verification = self.pipeline.verify(recipe)
             
             # PHASE 4: Sensory Dimension Modeling (Simplified for flow)
             yield self._format_chunk(4, "Sensory Dimension Modeling", "Predicting physical and sensory properties...")
