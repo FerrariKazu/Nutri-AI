@@ -35,7 +35,7 @@ class NutriOrchestrator:
             
             # PHASE 2: Domain Feasibility Check
             yield self._format_chunk(2, "Domain Feasibility Check", "Cross-referencing scientific knowledge and documents...")
-            docs = self.pipeline.retriever.retrieve(augmented_query, top_k=5)
+            docs = self.pipeline.retriever.retrieve(augmented_query, top_k=2)
             
             # PHASE 3: Culinary / Nutrition Rule Validation
             yield self._format_chunk(3, "Culinary / Nutrition Rule Validation", "Generating baseline recipe and verifying claims...")
