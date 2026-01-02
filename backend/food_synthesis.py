@@ -614,7 +614,7 @@ class NutriPipeline:
             retrieval_query = user_input
         
         # Retrieve relevant documents
-        retrieved_docs = self.retriever.retrieve(retrieval_query, top_k=10)
+        retrieved_docs = self.retriever.retrieve(retrieval_query, top_k=3)
         
         # Synthesize recipe
         recipe = self.engine.synthesize(
