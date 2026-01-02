@@ -9,7 +9,6 @@
 // ============================================================================ 
 
 const LOCAL_BACKEND_URLS = [
-    'https://chaim-smokeproof-nonexcitably.ngrok-free.dev',
     'http://localhost:8000',
     'http://localhost:8001',
 ];
