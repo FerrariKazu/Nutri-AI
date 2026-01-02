@@ -7,18 +7,27 @@
         @apply h-full;
         height: 100vh;
         height: 100dvh;
+        background-color: #0e0e11;
     }
 
     body {
-        @apply h-full antialiased;
+        @apply h-full antialiased text-neutral-100;
+        background-color: #0e0e11;
+        font-feature-settings: "ss01", "ss02", "cv01", "cv02";
         overscroll-behavior-y: none;
         touch-action: pan-y;
         -webkit-overflow-scrolling: touch;
     }
 
-    html.dark body {
-        background-color: #121212;
-        color: #EAE0D5;
+    /* Subtle Noise Texture */
+    body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        pointer-events: none;
+        opacity: 0.025;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
     }
 
     #root {
@@ -35,28 +44,7 @@
         padding-top: max(1rem, env(safe-area-inset-top));
     }
 
-    .touch-pan-y {
-        -webkit-user-select: none;
-        user-select: none;
-    }
-
-    textarea, input, [contenteditable] {
-        -webkit-user-select: text;
-        user-select: text;
-    }
-
-    @keyframes borderGlow {
-        0%, 100% {
-            box-shadow: 
-                0 0 8px rgba(251, 146, 60, 0.3),
-                0 0 16px rgba(251, 146, 60, 0.15),
-                0 0 24px rgba(251, 146, 60, 0.05);
-        }
-        50% {
-            box-shadow: 
-                0 0 12px rgba(251, 146, 60, 0.5),
-                0 0 24px rgba(251, 146, 60, 0.25),
-                0 0 36px rgba(251, 146, 60, 0.1);
-        }
+    .analytical-shadow {
+        box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
     }
 }

@@ -8,72 +8,38 @@ export default {
     theme: {
         extend: {
             colors: {
-                // Kitchen-inspired color palette
-                kitchen: {
-                    cream: '#FFF8E7',
-                    butter: '#FFE5B4',
-                    cinnamon: '#D2691E',
-                    coffee: '#6F4E37',
-                    mint: '#98FF98',
-                    tomato: '#FF6347',
-                    lemon: '#FFF44F',
-                    olive: '#808000',
-                    sage: '#9DC183',
-                    honey: '#FFC30B',
-                    'bg-dark': '#121212',
-                    'card-dark': '#1E1E1E',
-                    'text-dark': '#EAE0D5',
-                    'border-dark': '#3F3025',
+                // Scientific / Cognitive Palette
+                neutral: {
+                    950: '#0e0e11',
+                    900: '#111214',
+                    800: '#18191c',
+                    700: '#222326',
+                    400: '#a1a1aa',
+                    100: '#f4f4f5',
                 },
-                warm: {
-                    50: '#FFF8F0',
-                    100: '#FFEDD5',
-                    200: '#FED7AA',
-                    300: '#FDBA74',
-                    400: '#FB923C',
-                    500: '#F97316',
-                    600: '#EA580C',
-                    700: '#C2410C',
-                    800: '#9A3412',
-                    900: '#7C2D12',
+                accent: {
+                    DEFAULT: '#fb923c', // Subtle orange accent
+                    muted: '#432a18',
                 }
             },
             fontFamily: {
-                display: ['Caveat', 'cursive'],
-                body: ['Inter', 'system-ui', 'sans-serif'],
+                sans: ['Inter', 'system-ui', 'sans-serif'], // UI / Labels
+                serif: ['"Source Serif 4"', 'Georgia', 'serif'], // Analytical output
+                mono: ['"JetBrains Mono"', 'monospace'], // Metrics / Hashes
             },
             animation: {
-                'float': 'float 3s ease-in-out infinite',
-                'wiggle': 'wiggle 1s ease-in-out infinite',
-                'bounce-slow': 'bounce 3s infinite',
-                'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                'spin-slow': 'spin 3s linear infinite',
-                'star-movement-bottom': 'star-movement-bottom linear infinite alternate',
-                'star-movement-top': 'star-movement-top linear infinite alternate',
+                'pulse-subtle': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                'fade-in': 'fadeIn 0.3s ease-out forwards',
             },
             keyframes: {
-                float: {
-                    '0%, 100%': { transform: 'translateY(0px)' },
-                    '50%': { transform: 'translateY(-20px)' },
-                },
-                wiggle: {
-                    '0%, 100%': { transform: 'rotate(-3deg)' },
-                    '50%': { transform: 'rotate(3deg)' },
-                },
-                'star-movement-bottom': {
-                    '0%': { transform: 'translate(0%, 0%)', opacity: '1' },
-                    '100%': { transform: 'translate(-100%, 0%)', opacity: '0' },
-                },
-                'star-movement-top': {
-                    '0%': { transform: 'translate(0%, 0%)', opacity: '1' },
-                    '100%': { transform: 'translate(100%, 0%)', opacity: '0' },
+                fadeIn: {
+                    '0%': { opacity: '0', transform: 'translateY(2px)' },
+                    '100%': { opacity: '1', transform: 'translateY(0)' },
                 },
             },
-            backgroundImage: {
-                'kitchen-gradient': 'linear-gradient(135deg, #FFF8E7 0%, #FFE5B4 50%, #FED7AA 100%)',
-                'cooking-pattern': "url('/patterns/kitchen-pattern.svg')",
-            }
         },
     },
-    plugins: [],
+    plugins: [
+        require('@tailwindcss/typography'),
+    ],
 }
