@@ -22,8 +22,8 @@ class LLMQwen3:
             model_name: Name of the model in Ollama
         """
         host = os.getenv("LLM_ENDPOINT", "http://localhost:11434")
-        # Increase timeout for complex extraction tasks
-        self.client = ollama.Client(host=host, timeout=120.0)
+        # Increase timeout significantly for complex extraction tasks on consumer hardware
+        self.client = ollama.Client(host=host, timeout=300.0)
         self.model_name = self._validate_model(model_name)
         self._validate_connection()
     
@@ -91,6 +91,7 @@ class LLMQwen3:
                     "num_predict": max_new_tokens,
                     "temperature": temperature,
                     "top_p": 0.9,
+                    "num_ctx": 16384, # Large context for streaming multi-phase reasoning
                 }
             )
             
