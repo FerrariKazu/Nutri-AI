@@ -12,10 +12,10 @@ const ControlRail = ({ selectedDepth, onDepthChange }) => {
     ];
 
     return (
-        <div className="flex flex-col gap-8 py-8 px-4 border-r border-neutral-800 h-full bg-neutral-950">
+        <div className="flex flex-col gap-8 py-8 px-4 border-r border-neutral-800 h-full bg-neutral-900/40 backdrop-blur-none">
             <div className="flex flex-col gap-1">
-                <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 mb-4 opacity-50 px-2">
-                    Analysis Depth
+                <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 mb-6 opacity-40 px-3 cursor-default">
+                    Reasoning Mode
                 </span>
                 <div className="flex flex-col gap-2">
                     {depths.map((depth) => (

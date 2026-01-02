@@ -31,7 +31,7 @@ const ReasoningConsole = ({ onSend, isLoading, isMemoryActive }) => {
     }, [inputValue]);
 
     return (
-        <div className="p-6 bg-neutral-950 border-t border-neutral-800">
+        <div className="p-6 bg-neutral-950/80 border-t border-neutral-800 backdrop-blur-none">
             <div className="max-w-4xl mx-auto flex flex-col gap-3">
                 {/* Meta Indicators */}
                 <div className="flex items-center gap-4 px-1">

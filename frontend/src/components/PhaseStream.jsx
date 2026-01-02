@@ -9,7 +9,21 @@ import { ChevronDown, ChevronRight, Binary, Fingerprint } from 'lucide-react';
  */
 const PhaseStream = ({ messages }) => {
     return (
-        <div className="flex-1 overflow-y-auto p-8 space-y-12">
+        <div className="flex-1 overflow-y-auto p-8 space-y-12 relative">
+            {/* Idle-State Cognitive Anchor */}
+            {messages.length === 0 && (
+                <div className="absolute inset-0 flex items-center justify-center p-8 pointer-events-none">
+                    <div className="max-w-2xl text-center space-y-4 opacity-20 transition-opacity duration-1000 animate-fade-in">
+                        <h1 className="text-3xl md:text-4xl font-serif font-normal text-neutral-100 leading-tight">
+                            Nutri analyzes dishes as physical systems — heat, structure, chemistry, and perception.
+                        </h1>
+                        <p className="text-sm font-mono uppercase tracking-[0.2em] text-neutral-400">
+                            Describe a dish, constraint, or sensory goal.
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {messages.map((msg, idx) => (
                 <div key={idx} className="max-w-4xl mx-auto flex flex-col gap-6 animate-fade-in">
                     {/* User Query - Minimalist Header */}

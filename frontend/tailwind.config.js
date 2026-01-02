@@ -10,16 +10,16 @@ export default {
             colors: {
                 // Scientific / Cognitive Palette
                 neutral: {
-                    950: '#0e0e11',
-                    900: '#111214',
-                    800: '#18191c',
-                    700: '#222326',
+                    950: '#0e0f11', // Material Charcoal
+                    900: '#121316',
+                    800: '#1a1b1e',
+                    700: '#242528',
                     400: '#a1a1aa',
                     100: '#f4f4f5',
                 },
                 accent: {
-                    DEFAULT: '#fb923c', // Subtle orange accent
-                    muted: '#432a18',
+                    DEFAULT: '#d97706', // Instrumental Amber (desaturated)
+                    muted: '#452e15',
                 }
             },
             fontFamily: {

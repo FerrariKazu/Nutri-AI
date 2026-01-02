@@ -7,27 +7,30 @@
         @apply h-full;
         height: 100vh;
         height: 100dvh;
-        background-color: #0e0e11;
+        background-color: #0e0f11;
     }
 
     body {
         @apply h-full antialiased text-neutral-100;
-        background-color: #0e0e11;
+        background-color: #0e0f11;
+        /* Subtle thermal cue: neutral to very subtle warm dark at bottom */
+        background-image: linear-gradient(to bottom, transparent, rgba(69, 46, 21, 0.03));
         font-feature-settings: "ss01", "ss02", "cv01", "cv02";
         overscroll-behavior-y: none;
         touch-action: pan-y;
         -webkit-overflow-scrolling: touch;
     }
 
-    /* Subtle Noise Texture */
+    /* Fine Procedural Noise Texture (Tactile Material Feel) */
     body::before {
         content: "";
         position: fixed;
         inset: 0;
         z-index: 100;
         pointer-events: none;
-        opacity: 0.025;
-        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        opacity: 0.015;
+        /* 1.5% opacity for subtle grain */
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
     }
 
     #root {

@@ -101,12 +101,12 @@ function App() {
                     />
                 </div>
 
-                {/* New Session Action - Absolute subtle */}
+                {/* New Session Action - Sharp & Instrumental */}
                 <button
                     onClick={handleNewSession}
-                    className="absolute top-3 right-4 transform transition-opacity opacity-20 hover:opacity-100 text-[10px] font-mono uppercase tracking-widest border border-neutral-800 px-2 py-0.5 rounded hover:bg-neutral-800"
+                    className="absolute top-2.5 right-6 transform transition-all opacity-20 hover:opacity-100 text-[10px] font-mono uppercase tracking-[0.2em] border border-neutral-800 hover:border-accent/40 px-3 py-1 rounded bg-neutral-900/50 hover:bg-accent/5 hover:text-accent shadow-sm"
                 >
-                    Clear History
+                    Reset Environment
                 </button>
             </div>
         </ErrorBoundary>

@@ -9,7 +9,7 @@ const SystemStatus = ({ sessionId, turnCount, confidence = 'High', warnings = []
     const shortSessionId = sessionId ? sessionId.split('_').pop()?.substring(0, 8) : '--------';
 
     return (
-        <div className="flex items-center justify-between px-6 py-2 border-b border-neutral-800 bg-neutral-900/50 backdrop-blur-sm h-10">
+        <div className="flex items-center justify-between px-6 py-2 border-b border-neutral-800 bg-neutral-900/80 backdrop-blur-none h-10 select-none">
             <div className="flex items-center gap-6">
                 {/* Session Identification */}
                 <div className="flex items-center gap-2">
