@@ -29,15 +29,20 @@ echo -e "${BLUE}====================================================${NC}"
 echo -e "${BLUE}🚀 Nutri-AI Launch System (Robust Mode)${NC}"
 echo -e "${BLUE}====================================================${NC}"
 
-# Cleanup function
-cleanup() {
-    echo -e "\n${YELLOW}🛑 Stopping all background services...${NC}"
+# Function to kill all related processes
+kill_services() {
     pkill -f "backend.server" || true
     pkill -f "server.py" || true
     pkill -f "ngrok" || true
     pkill -f "vite" || true
     pkill -f "ollama serve" || true
     pkill -f "lt --port" || true
+}
+
+# Cleanup function for signals
+cleanup() {
+    echo -e "\n${YELLOW}🛑 Stopping all background services...${NC}"
+    kill_services
     echo -e "${GREEN}✅ Services stopped.${NC}"
     exit
 }
@@ -45,7 +50,7 @@ cleanup() {
 trap cleanup SIGINT SIGTERM
 
 echo -e "${YELLOW}🧹 Cleaning up old sessions...${NC}"
-cleanup > /dev/null 2>&1 || true
+kill_services > /dev/null 2>&1 || true
 sleep 2
 
 echo -e "${YELLOW}⚙️  Starting services in background...${NC}"
