@@ -90,9 +90,6 @@ class LLMQwen3:
                 options={
                     "num_predict": max_new_tokens,
                     "temperature": temperature,
-                options={
-                    "num_predict": max_new_tokens,
-                    "temperature": temperature,
                     "top_p": 0.9,
                     "num_ctx": 6144, # Optimized for RTX 4060 (8GB VRAM)
                 }
