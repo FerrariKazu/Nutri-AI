@@ -48,36 +48,29 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Cleanup function
 cleanup() {
     echo -e "\n${YELLOW}🛑 Stopping all background services...${NC}"
+    pkill -f "backend.server" || true
     pkill -f "server.py" || true
     pkill -f "ngrok" || true
     pkill -f "vite" || true
-    echo -e "${GREEN}✅ Backend and Tunnel stopped.${NC}"
+    pkill -f "ollama serve" || true
+    echo -e "${GREEN}✅ Services stopped.${NC}"
     exit
 }
 
 trap cleanup SIGINT SIGTERM
 
 echo -e "${YELLOW}🧹 Cleaning up old sessions...${NC}"
+pkill -f "backend.server" || true
 pkill -f "server.py" || true
 pkill -f "ngrok" || true
 pkill -f "vite" || true
-sleep 1
+pkill -f "ollama serve" || true
+sleep 2
 
 # Configure Ngrok
 if [ -n "$NGROK_AUTHTOKEN" ]; then
     echo -e "${YELLOW}🔑 Configuring ngrok...${NC}"
     ngrok config add-authtoken "$NGROK_AUTHTOKEN" > /dev/null 2>&1
-fi
-
-LAUNCH_CMD=""
-
-if [ "$TERMINAL" = "gnome-terminal" ]; then
-    LAUNCH_CMD="gnome-terminal --title"
-elif [ "$TERMINAL" = "x-terminal-emulator" ]; then
-    LAUNCH_CMD="x-terminal-emulator -T"
-elif [ "$TERMINAL" = "wt" ]; then
-    # For Windows Terminal, it's a bit more complex, but we'll try 'wt.exe'
-    LAUNCH_CMD="wt.exe --title"
 fi
 
 if [ "$TERMINAL" != "none" ] && [ -n "$DISPLAY" ]; then
@@ -95,46 +88,64 @@ if [ "$TERMINAL" != "none" ] && [ -n "$DISPLAY" ]; then
     sleep 2
 
     # 2. Backend Terminal
+    # Added PYTHONPATH to ensure 'backend' module is found
+    BACKEND_CMD="echo '⚙️ NUTRI BACKEND LOGS'; cd '$SCRIPT_DIR'; source venv/bin/activate; export PYTHONPATH=\$PYTHONPATH:. ; python -u backend/server.py; exec bash"
     if [ "$TERMINAL" = "gnome-terminal" ]; then
-        dbus-run-session -- gnome-terminal --title="Nutri Backend" -- bash -c "echo '⚙️ NUTRI BACKEND LOGS'; cd '$SCRIPT_DIR'; source venv/bin/activate; python -u backend/server.py; exec bash"
+        dbus-run-session -- gnome-terminal --title="Nutri Backend" -- bash -c "$BACKEND_CMD"
     elif [ "$TERMINAL" = "xterm" ]; then
-        xterm -title "Nutri Backend" -e bash -c "echo '⚙️ NUTRI BACKEND LOGS'; cd '$SCRIPT_DIR'; source venv/bin/activate; python -u backend/server.py; exec bash" &
+        xterm -title "Nutri Backend" -e bash -c "$BACKEND_CMD" &
     else
-        x-terminal-emulator -T "Nutri Backend" -e bash -c "echo '⚙️ NUTRI BACKEND LOGS'; cd '$SCRIPT_DIR'; source venv/bin/activate; python -u backend/server.py; exec bash" &
+        x-terminal-emulator -T "Nutri Backend" -e bash -c "$BACKEND_CMD" &
     fi
 
     sleep 5
 
     # 3. Frontend Terminal
+    FRONTEND_CMD="echo '🌐 NUTRI FRONTEND LOGS'; cd '$SCRIPT_DIR/frontend'; npm run dev; exec bash"
     if [ "$TERMINAL" = "gnome-terminal" ]; then
-        dbus-run-session -- gnome-terminal --title="Nutri Frontend" -- bash -c "echo '🌐 NUTRI FRONTEND LOGS'; cd '$SCRIPT_DIR/frontend'; npm run dev; exec bash"
+        dbus-run-session -- gnome-terminal --title="Nutri Frontend" -- bash -c "$FRONTEND_CMD"
     elif [ "$TERMINAL" = "xterm" ]; then
-        xterm -title "Nutri Frontend" -e bash -c "echo '🌐 NUTRI FRONTEND LOGS'; cd '$SCRIPT_DIR/frontend'; npm run dev; exec bash" &
+        xterm -title "Nutri Frontend" -e bash -c "$FRONTEND_CMD" &
     else
-        x-terminal-emulator -T "Nutri Frontend" -e bash -c "echo '🌐 NUTRI FRONTEND LOGS'; cd '$SCRIPT_DIR/frontend'; npm run dev; exec bash" &
+        x-terminal-emulator -T "Nutri Frontend" -e bash -c "$FRONTEND_CMD" &
     fi
 
     # 4. Ngrok & Summary (Stay in this terminal)
     echo -e "${YELLOW}🚀 Starting ngrok tunnel...${NC}"
     ngrok http 8000 --log=stdout > ngrok.log 2>&1 &
-    sleep 10
-
-    NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o 'https://[a-zA-Z0-9.-]*\.ngrok-free.app' | head -n 1)
+    
+    # Wait for Ngrok to generate URL
+    echo -e "${YELLOW}⏳ Waiting for ngrok endpoint...${NC}"
+    NGROK_URL=""
+    for i in {1..20}; do
+        NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o 'https://[a-zA-Z0-9.-]*\.ngrok-free.app' | head -n 1)
+        if [ -n "$NGROK_URL" ]; then break; fi
+        sleep 1
+    done
+    
+    if [ -z "$NGROK_URL" ]; then
+        echo -e "${RED}❌ Failed to detect ngrok URL. Check ngrok.log${NC}"
+    fi
     
     echo -e "${GREEN}====================================================${NC}"
     echo -e "${GREEN}✨ Nutri-AI is now ONLINE in EXTREME DEBUG MODE!${NC}"
     echo -e "🌍 Public URL: ${NC}${YELLOW}$NGROK_URL${NC}"
+    echo -e "⚙️  Backend: ${NC}http://localhost:8000"
+    echo -e "🌐 Frontend: ${NC}http://localhost:5173"
     echo -e "${GREEN}====================================================${NC}"
-    echo -e "${BLUE}Check the separate terminal windows for live logs.${NC}"
+    echo -e "${BLUE}Check separate terminal windows if they opened.${NC}"
+    echo -e "${BLUE}If using Vercel, update VITE_API_URL to: $NGROK_URL${NC}"
     
 else
     echo -e "${RED}⚠️ No GUI terminal detected (or no DISPLAY). Running in background mode...${NC}"
     
     # Fallback to original background behavior but with explicit logging
+    pkill -f "ollama serve" || true
     nohup ollama serve > ollama.log 2>&1 &
     echo -e "${YELLOW}🤖 Ollama started in background (logs: ollama.log)${NC}"
     
     source venv/bin/activate
+    export PYTHONPATH=$PYTHONPATH:.
     nohup python -u backend/server.py > api.log 2>&1 &
     echo -e "${YELLOW}⚙️  Backend started in background (logs: api.log)${NC}"
     
@@ -145,14 +156,20 @@ else
     nohup ngrok http 8000 --log=stdout > ngrok.log 2>&1 &
     echo -e "${YELLOW}🚀 Ngrok started in background (logs: ngrok.log)${NC}"
     
-    sleep 20
-    NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o 'https://[a-zA-Z0-9.-]*\.ngrok-free.app' | head -n 1)
+    echo -e "${YELLOW}⏳ Waiting for ngrok endpoint...${NC}"
+    NGROK_URL=""
+    for i in {1..20}; do
+        NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o 'https://[a-zA-Z0-9.-]*\.ngrok-free.app' | head -n 1)
+        if [ -n "$NGROK_URL" ]; then break; fi
+        sleep 1
+    done
     
     echo -e "${GREEN}====================================================${NC}"
     echo -e "${GREEN}✨ Nutri-AI is ONLINE!${NC}"
     echo -e "🌍 Public URL: ${NC}${YELLOW}$NGROK_URL${NC}"
     echo -e "${GREEN}====================================================${NC}"
     echo -e "Use 'tail -f *.log' to see live logs in this environment."
+    echo -e "${BLUE}If using Vercel, update VITE_API_URL to: $NGROK_URL${NC}"
 fi
 
 # Keep script running

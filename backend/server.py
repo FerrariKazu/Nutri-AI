@@ -23,7 +23,7 @@ app = FastAPI(title="Nutri Unified API", description="Integrated 13-Phase Food S
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://nutri-ai-ochre.vercel.app"], # In production, restrict to Vercel domain
+    allow_origins=["*"], # For debugging, allow all origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
