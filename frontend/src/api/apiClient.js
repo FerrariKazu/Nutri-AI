@@ -244,6 +244,7 @@ export async function sendPrompt(prompt, mode = 'standard', signal = null) {
                 headers: {
                     'Content-Type': 'application/json',
                     'ngrok-skip-browser-warning': 'true',
+                    'Bypass-Tunnel-Reminder': 'true',
                 },
                 body: JSON.stringify({
                     message: prompt,
@@ -566,6 +567,7 @@ export function streamNutriChat(
                 headers: {
                     'Content-Type': 'application/json',
                     'ngrok-skip-browser-warning': 'true',
+                    'Bypass-Tunnel-Reminder': 'true',
                 },
                 body: JSON.stringify({
                     session_id: sessionId,
