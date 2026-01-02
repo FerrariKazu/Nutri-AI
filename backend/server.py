@@ -15,7 +15,7 @@ from backend.orchestrator import NutriOrchestrator
 from backend.memory import SessionMemoryStore
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Nutri Unified API", description="Integrated 13-Phase Food Synthesis Engine")

@@ -170,16 +170,18 @@ class LLMQwen3:
                         "num_predict": max_new_tokens,
                         "temperature": current_temp,
                         "top_p": 0.9,
+                        "num_ctx": 8192,  # Increase context window for large USDA docs
                     },
                 )
 
                 if not response:
-                    logger.error(f"❌ Ollama returned empty response object (attempt {attempt+1})")
+                    logger.error(f"❌ Ollama returned NO response object (attempt {attempt+1})")
                     continue
 
                 content = response.get("message", {}).get("content", "")
                 if not content or not content.strip():
                     logger.error(f"⚠️ Ollama returned empty content (attempt {attempt+1})")
+                    logger.debug(f"FULL RESPONSE OBJECT: {response}")
                     current_temp += 0.2
                     continue
 
