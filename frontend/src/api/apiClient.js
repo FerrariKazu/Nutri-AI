@@ -10,8 +10,8 @@
 
 const LOCAL_BACKEND_URLS = [
     'https://chaim-smokeproof-nonexcitably.ngrok-free.dev',
-    'http://localhost:8001',
     'http://localhost:8000',
+    'http://localhost:8001',
 ];
 
 // Fallback if local backend isn't running
@@ -69,7 +69,7 @@ async function detectBackend() {
             debugLog('BACKEND', `   Trying: ${url}`);
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
-            const response = await fetch(`${url}/api/health`, {
+            const response = await fetch(`${url}/health`, {
                 signal: controller.signal,
                 headers: { 'ngrok-skip-browser-warning': 'true' }
             });
@@ -194,6 +194,26 @@ function parseJSON(text) {
         return null;
     }
 }
+
+/**
+ * Get or generate a persistent session ID
+ */
+export function getSessionId() {
+    let sessionId = localStorage.getItem('nutri_session_id');
+    if (!sessionId) {
+        sessionId = `sess_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
+        localStorage.setItem('nutri_session_id', sessionId);
+    }
+    return sessionId;
+}
+
+/**
+ * Clear current session
+ */
+export function clearSession() {
+    localStorage.removeItem('nutri_session_id');
+}
+
 
 // ============================================================================ 
 // CORE API FUNCTIONS
@@ -451,24 +471,34 @@ export function streamPrompt(
 
                         try {
                             const parsed = JSON.parse(data);
-                            const token = parsed.token || parsed.content || '';
-                            const type = parsed.type || 'content';
+                            const type = parsed.type || 'token';
 
-                            if (token && type === 'content') {
-                                tokenCount++;
-                                // Add to RAW buffer
-                                rawBuffer += token;
+                            if (type === 'status') {
+                                // Inform UI of status change (e.g., "Model warming up...")
+                                onToken(parsed.message, 'status');
+                            } else if (type === 'ping') {
+                                // Pings are just to keep the connection alive
+                                debugLog('STREAM', '💓 Ping received');
+                            } else if (type === 'token' || type === 'content') {
+                                const token = parsed.content || parsed.token || '';
+                                if (token) {
+                                    tokenCount++;
+                                    // Add to RAW buffer
+                                    rawBuffer += token;
 
-                                // Clean the entire raw buffer
-                                const cleanBuffer = cleanResponse(rawBuffer);
+                                    // Clean the entire raw buffer
+                                    const cleanBuffer = cleanResponse(rawBuffer);
 
-                                // If cleaning resulted in new content, emit it
-                                if (cleanBuffer.length > previousCleanLength) {
-                                    const newContent = cleanBuffer.slice(previousCleanLength);
-                                    fullResponse += newContent;
-                                    onToken(newContent, 'content');
-                                    previousCleanLength = cleanBuffer.length;
+                                    // If cleaning resulted in new content, emit it
+                                    if (cleanBuffer.length > previousCleanLength) {
+                                        const newContent = cleanBuffer.slice(previousCleanLength);
+                                        fullResponse += newContent;
+                                        onToken(newContent, 'token');
+                                        previousCleanLength = cleanBuffer.length;
+                                    }
                                 }
+                            } else if (type === 'error') {
+                                throw new Error(parsed.message || 'Stream error');
                             }
 
                         } catch (e) {
@@ -507,6 +537,92 @@ export function streamPrompt(
         controller.abort();
     };
 }
+
+/**
+ * Stream Nutri's 13-phase reasoning process (Phase 13 Integration)
+ * 
+ * @param {string} message - User input
+ * @param {Object} preferences - { verbosity, explanations, streaming }
+ * @param {Function} onPhase - Callback for phase updates: (phaseData) => void
+ * @param {Function} onComplete - Callback when final output is ready: (finalOutput) => void
+ * @param {Function} onError - Callback for errors
+ * @returns {Function} - Abort function
+ */
+export function streamNutriChat(
+    message,
+    preferences = { verbosity: 'medium', explanations: true, streaming: true },
+    onPhase,
+    onComplete,
+    onError
+) {
+    let aborted = false;
+    const controller = new AbortController();
+    const sessionId = getSessionId();
+
+    (async () => {
+        try {
+            const baseURL = await getBackendURL();
+            const response = await fetch(`${baseURL}/nutri/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'ngrok-skip-browser-warning': 'true',
+                },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    message: message,
+                    preferences: preferences
+                }),
+                signal: controller.signal,
+            });
+
+            if (!response.ok) {
+                throw new APIError(`HTTP ${response.status}`, response.status);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done || aborted) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const dataText = line.slice(6).trim();
+                        if (!dataText) continue;
+
+                        try {
+                            const parsed = JSON.parse(dataText);
+                            if (parsed.phase === 'final') {
+                                onComplete(parsed.output);
+                            } else if (parsed.error) {
+                                throw new Error(parsed.error);
+                            } else {
+                                onPhase(parsed);
+                            }
+                        } catch (e) {
+                            console.error('Failed to parse SSE chunk:', dataText, e);
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            if (!aborted) onError(error);
+        }
+    })();
+
+    return () => {
+        aborted = true;
+        controller.abort();
+    };
+}
+
 
 /**
  * Change response mode

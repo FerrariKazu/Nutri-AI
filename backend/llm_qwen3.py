@@ -5,6 +5,7 @@ Wrapper for Qwen3 model via local Ollama instance
 
 import logging
 import os
+import json
 from typing import Dict, List, Optional
 import ollama
 
@@ -21,7 +22,8 @@ class LLMQwen3:
             model_name: Name of the model in Ollama
         """
         host = os.getenv("LLM_ENDPOINT", "http://localhost:11434")
-        self.client = ollama.Client(host=host)
+        # Increase timeout for complex extraction tasks
+        self.client = ollama.Client(host=host, timeout=120.0)
         self.model_name = self._validate_model(model_name)
         self._validate_connection()
     
@@ -60,9 +62,6 @@ class LLMQwen3:
     ):
         """
         Generate streaming text using Ollama chat API with guaranteed non-empty output.
-        
-        Yields:
-            String chunks of generated text
         """
         if not messages or all(not m.get("content", "").strip() for m in messages):
             raise ValueError("No input provided to Ollama")
@@ -116,84 +115,123 @@ class LLMQwen3:
         self,
         messages: List[Dict],
         max_new_tokens: int = 2024,
-        temperature: float = 0.3
+        temperature: float = 0.7,
+        json_mode: bool = False
     ) -> str:
         """
-        Generate text using Ollama chat API with strict validation.
+        Generate text using Ollama chat API with robust validation and JSON extraction.
         """
         if not messages or not isinstance(messages, list):
             raise ValueError("No messages provided to Ollama")
 
-        roles = []
-        lengths = []
-        for m in messages:
-            role = str(m.get("role"))
-            content = str(m.get("content", ""))
-            roles.append(role)
-            lengths.append(len(content))
+        # If json_mode is requested, append a clear instruction to the last message
+        if json_mode:
+            # Check if user message exists, otherwise add one
+            has_user = any(m.get("role") == "user" for m in messages)
+            if not has_user:
+                messages.append({"role": "user", "content": "Generate the requested JSON data."})
+            
+            # Add strict instruction to the last user message
+            for m in reversed(messages):
+                if m.get("role") == "user":
+                    m["content"] += "\n\nCRITICAL: Return ONLY valid JSON. No conversational filler. Start with [ or { and end with ] or }."
+                    break
 
+        # Pre-flight logging
+        v_roles = [m.get("role") for m in messages]
+        v_lengths = [len(str(m.get("content", ""))) for m in messages]
         logger.info(
-            f"Ollama preflight - model={self.model_name} "
-            f"count={len(messages)} roles={roles} lens={lengths}"
+            f"Ollama Call - model={self.model_name} json={json_mode} "
+            f"count={len(messages)} roles={v_roles} lens={v_lengths}"
         )
-
+        
         valid_messages: List[Dict] = []
         has_user = False
-
         for m in messages:
-            if not isinstance(m, Dict):
-                continue
             role = m.get("role")
             content = str(m.get("content", "")).strip()
-            if role not in ["user", "system", "assistant"]:
-                continue
-            if not content:
-                continue
-            valid_messages.append({"role": role, "content": content})
-            if role == "user":
-                has_user = True
-
-        if not valid_messages:
-            logger.error("All messages empty or invalid before Ollama call")
-            raise ValueError("All messages empty or invalid before Ollama call")
+            if role in ["user", "system", "assistant"] and content:
+                valid_messages.append({"role": role, "content": content})
+                if role == "user": has_user = True
 
         if not has_user:
-            logger.error("No user message present before Ollama call")
             raise ValueError("No user message present before Ollama call")
 
-        v_roles = [m["role"] for m in valid_messages]
-        v_lengths = [len(m["content"]) for m in valid_messages]
-        logger.info(
-            f"Ollama payload - model={self.model_name} "
-            f"count={len(valid_messages)} roles={v_roles} lens={v_lengths}"
-        )
-        logger.info(f"Final message payload: {valid_messages}")
+        # Use 0.7 temperature by default to prevent "stuck" models
+        # But if json_mode is True, maybe slightly lower is safer, but not 0.1
+        current_temp = temperature if not json_mode else 0.4
 
-        response = self.client.chat(
-            model=self.model_name,
-            messages=valid_messages,
-            options={
-                "num_predict": max_new_tokens,
-                "temperature": temperature,
-                "top_p": 0.9,
-            },
-        )
+        for attempt in range(2):
+            try:
+                response = self.client.chat(
+                    model=self.model_name,
+                    messages=valid_messages,
+                    options={
+                        "num_predict": max_new_tokens,
+                        "temperature": current_temp,
+                        "top_p": 0.9,
+                    },
+                )
 
-        if response and response.get("usage"):
-            logger.info(f"Ollama usage: {response['usage']}")
+                if not response:
+                    logger.error(f"❌ Ollama returned empty response object (attempt {attempt+1})")
+                    continue
 
-        if not response:
-            logger.error("❌ Ollama returned empty response object")
-            raise RuntimeError("Ollama returned empty response object")
+                content = response.get("message", {}).get("content", "")
+                if not content or not content.strip():
+                    logger.error(f"⚠️ Ollama returned empty content (attempt {attempt+1})")
+                    current_temp += 0.2
+                    continue
 
-        content = response.get("message", {}).get("content", "")
+                if json_mode:
+                    logger.info(f"Raw Ollama output (json_mode=True): {content}")
+                    content = self._extract_json(content)
 
-        if not content or not content.strip():
-            logger.error("⚠️ Ollama returned empty content")
-            raise RuntimeError("Ollama returned empty content from chat API")
+                logger.info(f"✅ Generated {len(content)} characters (model: {self.model_name})")
+                return content
 
-        logger.info(f"✅ Generated {len(content)} characters")
-        return content
+            except Exception as e:
+                logger.error(f"❌ Ollama API error (attempt {attempt+1}): {e}")
+                if attempt == 1: raise
+        
+        raise RuntimeError("Ollama failed to return content after retries")
+
+    def _extract_json(self, text: str) -> str:
+        """Robustly extract JSON from text, handling potential markdown blocks."""
+        text = text.strip()
+        # Look for JSON code blocks
+        if "```json" in text:
+            start = text.find("```json") + 7
+            end = text.find("```", start)
+            if end > start:
+                return text[start:end].strip()
+        
+        # Look for generic code blocks
+        if "```" in text:
+            start = text.find("```") + 3
+            end = text.find("```", start)
+            if end > start:
+                return text[start:end].strip()
+                
+        # Look for first { or [ and last } or ]
+        start_brace = text.find('{')
+        start_bracket = text.find('[')
+        
+        start = -1
+        if start_brace != -1 and (start_bracket == -1 or (start_bracket != -1 and start_brace < start_bracket)):
+            start = start_brace
+            end = text.rfind('}') + 1
+        elif start_bracket != -1:
+            start = start_bracket
+            end = text.rfind(']') + 1
+            
+        if start != -1 and end > start:
+            result = text[start:end].strip()
+            # Double check if it looks like JSON
+            if (result.startswith('{') and result.endswith('}')) or (result.startswith('[') and result.endswith(']')):
+                return result
+            
+        return text
 
     def health_check(self) -> Dict:
         """Return system health info"""
@@ -203,7 +241,7 @@ class LLMQwen3:
                 "status": "online",
                 "provider": "ollama",
                 "model": self.model_name,
-                "available_models": [m['name'] for m in models['models']]
+                "available_models": [m.get('name') or m.get('model') for m in models['models']]
             }
         except Exception as e:
             return {

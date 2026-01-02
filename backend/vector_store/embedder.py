@@ -15,17 +15,19 @@ logger = logging.getLogger(__name__)
 _model: SentenceTransformer = None
 
 
-def load_model(model_name: str = "sentence-transformers/all-MiniLM-L6-v2") -> None:
+def load_model(model_name: str = "BAAI/bge-m3", force: bool = False) -> None:
     """
     Load the sentence transformer model with GPU support.
+    Uses a singleton pattern to avoid redundant loading.
     
     Args:
         model_name: HuggingFace model name
+        force: Force reload even if already loaded
     """
     global _model
     
-    if _model is not None:
-        logger.info("Embedding model already loaded")
+    if _model is not None and not force:
+        logger.info(f"Embedding model already loaded: {_model.model_card_data.model_name_or_path}")
         return
     
     logger.info(f"Loading embedding model: {model_name}...")

@@ -2,7 +2,7 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-const MessageBubble = ({ role, content, isStreaming }) => {
+const MessageBubble = ({ role, content, isStreaming, isWarmingUp, phase }) => {
     // Styling for User vs Assistant
     const isUser = role === 'user';
     const alignClass = isUser ? 'items-end' : 'items-start';
@@ -45,8 +45,20 @@ const MessageBubble = ({ role, content, isStreaming }) => {
                     shadow-sm overflow-hidden break-words
                 `}
             >
-                {/* Streaming Indicator if empty content */}
-                {isStreaming && !content && role === 'assistant' && (
+                {/* Phase Status Indicator */}
+                {isStreaming && phase && (
+                    <div className="flex items-center gap-2 mb-2 p-2 rounded-lg bg-orange-100/50 dark:bg-orange-950/30 border border-orange-200/50 dark:border-orange-400/20">
+                        <div className="flex space-x-1 items-center">
+                            <div className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse"></div>
+                        </div>
+                        <div className="text-xs font-semibold text-orange-800 dark:text-orange-300 uppercase tracking-tight">
+                            Phase {phase.phase}: {phase.title}
+                        </div>
+                    </div>
+                )}
+
+                {/* Streaming Indicator if empty content and no phase */}
+                {isStreaming && !content && !phase && role === 'assistant' && (
                     <div className="flex space-x-1 items-center h-6">
                         <div className="w-2 h-2 bg-orange-500/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
                         <div className="w-2 h-2 bg-orange-500/50 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
@@ -56,7 +68,7 @@ const MessageBubble = ({ role, content, isStreaming }) => {
 
                 {/* Content */}
                 {content && typeof content === 'string' && (
-                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                    <div className={`prose prose-sm dark:prose-invert max-w-none ${isWarmingUp ? 'italic opacity-70 animate-pulse' : ''}`}>
                         <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             components={components}

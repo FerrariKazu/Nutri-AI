@@ -48,7 +48,7 @@ class EmbedderBGE:
         )
         logger.info("✅ BGE-M3 model loaded")
     
-    def embed_text(self, text: str) -> np.ndarray:
+    def embed_text(self, text: str, max_length: int = 8192) -> np.ndarray:
         """Generate embedding for a single text"""
         # Check cache
         if self.caching_enabled and text in self.cache:
@@ -58,7 +58,7 @@ class EmbedderBGE:
         result = self.model.encode(
             [text],
             batch_size=1,
-            max_length=8192
+            max_length=max_length
         )
         
         # Extract dense vector
@@ -73,7 +73,7 @@ class EmbedderBGE:
         
         return embedding
     
-    def embed_texts(self, texts: List[str], batch_size: int = 64) -> np.ndarray:
+    def embed_texts(self, texts: List[str], batch_size: int = 64, max_length: int = 8192) -> np.ndarray:
         """Generate embeddings for multiple texts in batches"""
         if not texts:
             return np.array([])
@@ -94,11 +94,11 @@ class EmbedderBGE:
         
         # Embed uncached texts
         if uncached_texts:
-            logger.info(f"Generating embeddings for {len(uncached_texts)} texts (batch_size={batch_size})")
+            logger.info(f"Generating embeddings for {len(uncached_texts)} texts (batch_size={batch_size}, max_length={max_length})")
             embeddings = self.model.encode(
                 uncached_texts,
                 batch_size=batch_size,
-                max_length=8192
+                max_length=max_length
             )['dense_vecs']
             
             # Normalize
@@ -115,14 +115,6 @@ class EmbedderBGE:
     def compute_score(self, pairs: List[List[str]], batch_size: int = 64, max_length: int = 8192) -> List[float]:
         """
         Compute relevance scores for pairs of (query, document)
-        
-        Args:
-            pairs: List of [query, document] pairs
-            batch_size: Batch size
-            max_length: Max sequence length
-            
-        Returns:
-            List of float scores
         """
         return self.model.compute_score(
             pairs,
@@ -146,28 +138,16 @@ class EmbedderBGE:
     
     def __del__(self):
         """Save cache on destruction"""
-        self.save_cache()
+        try:
+            self.save_cache()
+        except:
+            pass
 
 
 if __name__ == "__main__":
     # Test the embedder
     print("Testing BGE-M3 Embedder...")
-    
-    embedder = EmbedderBGE(cache_file="backend/models_cache/bge_embeddings_cache.json")
-    
-    # Test single text
+    embedder = EmbedderBGE()
     text = "chicken and potatoes dinner"
-    embedding = embedder.embed_text(text)
-    print(f"✅ Single text embedding: shape={embedding.shape}, norm={np.linalg.norm(embedding):.4f}")
-    
-    # Test batch
-    texts = ["rice and chicken", "pasta with tomato sauce", "grilled salmon"]
-    embeddings = embedder.embed_texts(texts, batch_size=2)
-    print(f"✅ Batch embeddings: shape={embeddings.shape}")
-    
-    # Verify normalization
-    norms = np.linalg.norm(embeddings, axis=1)
-    print(f"✅ L2 norms: {norms}")
-    
-    embedder.save_cache()
-    print("✅ Test complete")
+    embedding = embedder.embed_text(text, max_length=1024)
+    print(f"✅ Test complete: shape={embedding.shape}")

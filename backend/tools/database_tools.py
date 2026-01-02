@@ -9,13 +9,18 @@ import logging
 from typing import List, Dict, Any
 
 # Tool imports
-from .chemistry_tools import get_food_chemistry
-from .recipe_search import search_recipes
-from .pantry import pantry_tools
-from .nutrition import get_ingredient_nutrition
-from .memory_tools import MemoryTools
+from ..retriever.router import RetrievalRouter, IndexType
 
 logger = logging.getLogger(__name__)
+
+# Global router instance for tool access
+_router = None
+
+def get_router():
+    global _router
+    if _router is None:
+        _router = RetrievalRouter()
+    return _router
 
 class DatabaseTools:
     """
@@ -31,57 +36,83 @@ class DatabaseTools:
             {
                 "name": "search_recipes",
                 "priority": 10,
-                "description": "Search the local database for food recipes based on keywords or requirements.",
+                "description": "Find recipes using the 13k Recipes index. Best for cooking instructions and meal ideas.",
                 "parameters": "query: str, k: int=5"
             },
             {
-                "name": "get_food_chemistry",
+                "name": "search_usda_branded",
                 "priority": 9,
-                "description": "Get molecular data, chemical properties, and reactions for food compounds from PubChem.",
-                "parameters": "compound: str"
+                "description": "Search 1.9M+ commercial food products for specific brands and ingredients. Highest volume data.",
+                "parameters": "query: str, k: int=5"
             },
             {
-                "name": "get_nutrition_data",
+                "name": "search_usda_foundation",
+                "priority": 9,
+                "description": "Search high-fidelity laboratory data for whole, raw foods/ingredients. Most accurate for base components.",
+                "parameters": "query: str, k: int=5"
+            },
+            {
+                "name": "search_open_nutrition",
                 "priority": 8,
-                "description": "Get detailed nutritional breakdown (macros, vitamins) for specific foods.",
-                "parameters": "food_item: str"
+                "description": "Search OpenNutrition database (320k+ entries) for international and diverse food products.",
+                "parameters": "query: str, k: int=5"
+            },
+            {
+                "name": "search_chemistry",
+                "priority": 8,
+                "description": "Search FoodDB, DSSTox, and chemical libraries for molecular info, reactions, and toxins.",
+                "parameters": "query: str, k: int=5"
+            },
+            {
+                "name": "search_science",
+                "priority": 7,
+                "description": "Search scientific PDFs and papers for the physics/chemistry of cooking and deep food science.",
+                "parameters": "query: str, k: int=5"
             },
             {
                 "name": "pantry_manager",
-                "priority": 7,
+                "priority": 5,
                 "description": "Manage user pantry items (add, remove, list, clear).",
                 "parameters": "action: str, items: list=[]"
-            },
-            {
-                "name": "manage_memory",
-                "priority": 5,
-                "description": "Save or retrieve important details from earlier in the conversation.",
-                "parameters": "action: str, key: str, value: str=None, session_id: str='default'"
             }
         ]
 
-    # Wrapper methods to match naming in AgenticRAG or provide clean interface
+    # --- Granular Search Tools (Isolated Architecture) ---
     
+    def _run_isolated_search(self, query: str, index_type: IndexType, k: int = 5) -> str:
+        router = get_router()
+        results = router.search(query, index_types=[index_type], top_k=k)
+        if not results:
+            return f"No results found in {index_type.value} for '{query}'"
+        
+        # Format output for the agent
+        output = [f"Found {len(results)} matches in {index_type.value}:\n"]
+        for i, r in enumerate(results, 1):
+            text = r.get('text', '')
+            meta = r.get('metadata', {})
+            output.append(f"[{i}] {text[:500]}...") # Truncate for prompt economy
+        return "\n".join(output)
+
     def search_recipes(self, query: str, k: int = 5) -> str:
-        results = search_recipes(query, k=k)
-        return json.dumps(results)
+        return self._run_isolated_search(query, IndexType.RECIPES, k)
 
-    def get_food_chemistry(self, compound: str) -> str:
-        results = get_food_chemistry(compound)
-        return json.dumps(results)
+    def search_usda_branded(self, query: str, k: int = 5) -> str:
+        return self._run_isolated_search(query, IndexType.USDA_BRANDED, k)
 
-    def get_nutrition_data(self, food_item: str) -> str:
-        results = get_ingredient_nutrition(food_item)
-        return json.dumps(results) if results else "No nutrition data found."
+    def search_usda_foundation(self, query: str, k: int = 5) -> str:
+        return self._run_isolated_search(query, IndexType.USDA_FOUNDATION, k)
+
+    def search_open_nutrition(self, query: str, k: int = 5) -> str:
+        return self._run_isolated_search(query, IndexType.OPEN_NUTRITION, k)
+
+    def search_chemistry(self, query: str, k: int = 5) -> str:
+        return self._run_isolated_search(query, IndexType.CHEMISTRY, k)
+
+    def search_science(self, query: str, k: int = 5) -> str:
+        return self._run_isolated_search(query, IndexType.SCIENCE, k)
 
     def pantry_manager(self, action: str, items: list = None, session_id: str = "default") -> str:
+        from .pantry import pantry_tools
         if items is None: items = []
         results = pantry_tools(action, {"session_id": session_id, "items": items})
-        return json.dumps(results)
-
-    def manage_memory(self, action: str, key: str, value: str = None, session_id: str = "default") -> str:
-        if action == "save":
-            results = MemoryTools.save(session_id, key, value)
-        else:
-            results = MemoryTools.get(session_id, key)
         return json.dumps(results)

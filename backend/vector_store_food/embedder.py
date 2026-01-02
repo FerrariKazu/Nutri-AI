@@ -13,10 +13,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Model configuration
-MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-EMBEDDING_DIM = 384
+MODEL_NAME = "BAAI/bge-m3"
+EMBEDDING_DIM = 1024
 
-# Global model instance
+from ..vector_store import embedder as shared_embedder
+
+# Global model instance (shared with main vector store)
 _model: Optional[SentenceTransformer] = None
 
 
@@ -36,19 +38,9 @@ def load_model(device: Optional[str] = None) -> SentenceTransformer:
         logger.info("Embedder model already loaded")
         return _model
     
-    # Auto-detect device if not specified
-    if device is None:
-        if torch.cuda.is_available():
-            device = 'cuda'
-            gpu_name = torch.cuda.get_device_name(0)
-            logger.info(f"CUDA available - using GPU: {gpu_name}")
-        else:
-            device = 'cpu'
-            logger.info("CUDA not available - using CPU")
-    
-    logger.info(f"Loading embedding model: {MODEL_NAME}")
-    _model = SentenceTransformer(MODEL_NAME, device=device)
-    logger.info(f"✅ Model loaded on {device} | Embedding dimension: {EMBEDDING_DIM}")
+    # Ensure shared model is loaded
+    shared_embedder.load_model(model_name=MODEL_NAME)
+    _model = shared_embedder._model
     
     return _model
 

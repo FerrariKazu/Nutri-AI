@@ -54,3 +54,6 @@ ollama.log
 .git/
 !/.git/
 nutri-deploy/
+
+# Indices
+backend/indexes/

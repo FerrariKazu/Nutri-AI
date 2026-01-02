@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { sendPrompt, streamPrompt, APIError, NetworkError, TimeoutError } from '../api/apiClient';
+import { streamNutriChat, APIError, NetworkError, TimeoutError } from '../api/apiClient';
 import { Send } from 'lucide-react';
 import MessageBubble from './MessageBubble';
 import ErrorPanel from './ErrorPanel';
@@ -15,7 +15,7 @@ const ChatInterface = ({ currentMode }) => {
     const [messages, setMessages] = useState([]);
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState(null); // Now stores an object: { type, status, message, response }
+    const [error, setError] = useState(null);
 
     // Ref to store current streaming abort function
     const abortStreamRef = useRef(null);
@@ -33,7 +33,6 @@ const ChatInterface = ({ currentMode }) => {
 
     /**
      * Handle send button click
-     * Just calls API function and updates UI state
      */
     const handleSend = async () => {
         if (!inputValue.trim() || isLoading) return;
@@ -59,55 +58,49 @@ const ChatInterface = ({ currentMode }) => {
             role: 'assistant',
             content: '',
             isStreaming: true,
+            phase: null, // Track the current Nutri phase
             timestamp: assistantMessageId,
         }]);
 
-        // Call API function (streaming)
-        abortStreamRef.current = streamPrompt(
+        // Call Unified Nutri API function (Phase 13 Integration)
+        abortStreamRef.current = streamNutriChat(
             userMessage,
-            currentMode,
+            { verbosity: 'medium', explanations: true, streaming: true },
 
-            // onToken callback - just update UI state
-            (token, type) => {
-                // NUCLEAR: Ignore thinking, check for leaks
-                if (type === 'thinking') return;
-                if (!token || typeof token !== 'string') return;
-
-                // Final safety check
-                if (token.includes('NUTRI-CHEM') || token.includes('capabilities')) return;
-
-                setMessages(prev => prev.map(msg => {
-                    if (msg.id !== assistantMessageId) return msg;
-
-                    return {
-                        ...msg,
-                        content: (msg.content || '') + token
-                    };
-                }));
+            // onPhase callback
+            (phaseData) => {
+                setMessages(prev => prev.map(msg =>
+                    msg.id === assistantMessageId
+                        ? { ...msg, phase: phaseData }
+                        : msg
+                ));
             },
 
             // onComplete callback
-            (fullResponse) => {
+            (finalOutput) => {
+                const finalContent = `### ${finalOutput.recipe?.slice(0, 100) || 'Optimized Recipe'}\n\n${finalOutput.explanation}\n\n**Scientific Summary:** ${finalOutput.sensory_profile ? 'Sensory balance achieved.' : 'Standard synthesis complete.'}`;
+
                 setMessages(prev => prev.map(msg =>
                     msg.id === assistantMessageId
-                        ? { ...msg, isStreaming: false }
+                        ? {
+                            ...msg,
+                            content: finalContent,
+                            isStreaming: false,
+                            phase: null
+                        }
                         : msg
                 ));
                 setIsLoading(false);
             },
 
-            // onError callback - store detailed error object
+            // onError callback
             (err) => {
-                console.error('🔴 ChatInterface received error:', err);
                 setError({
                     type: err.name || 'Error',
                     status: err.status || (err instanceof NetworkError ? 'NETWORK_FAIL' : 'UNKNOWN'),
                     message: err.message || 'An unexpected error occurred',
-                    response: err.response || null
                 });
                 setIsLoading(false);
-
-                // Remove streaming message on error
                 setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId));
             }
         );
@@ -167,6 +160,8 @@ const ChatInterface = ({ currentMode }) => {
                                     role={msg.role}
                                     content={msg.content}
                                     isStreaming={msg.isStreaming}
+                                    isWarmingUp={msg.isWarmingUp}
+                                    phase={msg.phase}
                                 />
                             )}
                         </div>

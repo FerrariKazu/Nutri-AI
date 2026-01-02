@@ -9,6 +9,7 @@ from pathlib import Path
 import json
 import uuid
 import threading
+import time
 from typing import Literal, List, Optional
 import logging
 
@@ -897,24 +898,46 @@ async def chat_stream(req: ChatRequest):
 
     async def event_generator():
         yielded_any = False
+        last_heartbeat = time.time()
+        
+        # 1. Immediate Status Message
+        yield f"data: {json.dumps({'type': 'status', 'message': 'Model warming up...'})}\n\n"
+        
         try:
             from llm import stream
             
-            async for chunk in run_in_thread(stream, llm_messages):
-                if chunk:
-                    # Basic cleaning for thinking tags if they appear mid-stream
-                    # But we yield immediately to prevent timeouts
-                    yield f"data: {json.dumps({'type': 'content', 'token': chunk})}\n\n"
-                    yielded_any = True
+            # Use run_in_thread to wrap the blocking Ollama call
+            gen = run_in_thread(stream, llm_messages)
+            
+            while True:
+                try:
+                    # Wait for next chunk from the LLM
+                    chunk = await asyncio.wait_for(gen.__anext__(), timeout=1.0)
+                    
+                    if chunk:
+                        # Deliver real token
+                        yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
+                        yielded_any = True
+                        
+                except asyncio.TimeoutError:
+                    # If we haven't yielded any real tokens yet, send a heartbeat ping
+                    now = time.time()
+                    if not yielded_any and (now - last_heartbeat >= 2.0):
+                        yield f"data: {json.dumps({'type': 'ping'})}\n\n"
+                        last_heartbeat = now
+                    continue
+                except StopAsyncIteration:
+                    # Stream finished normally
+                    break
             
             if not yielded_any:
-                yield f"data: {json.dumps({'type': 'content', 'token': 'I apologize, but I could not generate a response. Please try again.'})}\n\n"
+                yield f"data: {json.dumps({'type': 'token', 'content': 'I apologize, but I could not generate a response. Please try again.'})}\n\n"
             
             yield "data: [DONE]\n\n"
             
         except Exception as e:
             logger.error(f"Stream generation failed: {e}")
-            yield f"data: {json.dumps({'type': 'content', 'token': f'Error: {str(e)}. Please try again.'})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
             yield "data: [DONE]\n\n"
 
     async def run_in_thread(fn, *args):
