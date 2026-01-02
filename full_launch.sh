@@ -24,13 +24,21 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
+WHITE='\033[1;37m'
+CYAN='\033[0;36m'
 
 echo -e "${BLUE}====================================================${NC}"
-echo -e "${BLUE}🚀 Nutri-AI Launch System (Ultra-Reliable)${NC}"
+echo -e "${BLUE}🚀 Nutri-AI Launch System (Zero-Zombie Mode)${NC}"
 echo -e "${BLUE}====================================================${NC}"
 
 # Cleanup function
 kill_services() {
+    echo -e "${YELLOW}🧹 Aggressively recovering ports...${NC}"
+    # Force kill anything on our ports (solves 502/CORS issues)
+    fuser -k 8000/tcp > /dev/null 2>&1 || true
+    fuser -k 5173/tcp > /dev/null 2>&1 || true
+    
+    # Kill by name as backup
     pkill -f "backend.server" || true
     pkill -f "server.py" || true
     pkill -f "ngrok" || true
@@ -42,9 +50,9 @@ kill_services() {
 }
 
 cleanup() {
-    echo -e "\n${YELLOW}🛑 Stopping all background services...${NC}"
+    echo -e "\n${RED}🛑 Stopping all background services...${NC}"
     kill_services
-    echo -e "${GREEN}✅ Services stopped.${NC}"
+    echo -e "${GREEN}✅ Services stopped cleanly.${NC}"
     exit
 }
 
@@ -89,20 +97,19 @@ fi
 echo -e "${YELLOW}🚀 Establishing tunnel endpoint...${NC}"
 rm -f "$SCRIPT_DIR/tunnel.log"
 
-# A. LocalTunnel (Fast, but has bypass page)
+# A. LocalTunnel
 nohup lt --port 8000 > "$SCRIPT_DIR/tunnel.log" 2>&1 &
 
-# B. Serveo (Very reliable for WSL)
+# B. Serveo
 nohup ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -R 80:localhost:8000 serveo.net >> "$SCRIPT_DIR/tunnel.log" 2>&1 &
 
-# C. Localhost.run (Good alternative)
+# C. Localhost.run
 nohup ssh -o StrictHostKeyChecking=no -R 80:localhost:8000 nokey@localhost.run >> "$SCRIPT_DIR/tunnel.log" 2>&1 &
 
 # 5. Detect URL
 echo -ne "${YELLOW}⏳ Waiting for URL...${NC}"
 TUNNEL_URL=""
 for i in {1..35}; do
-    # Search for all possible URL formats
     TUNNEL_URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.(loca\.lt|serveo\.net|serveousercontent\.com|lhr\.life|localhost\.run)' "$SCRIPT_DIR/tunnel.log" | head -n 1)
     if [ -n "$TUNNEL_URL" ]; then break; fi
     echo -ne "."
@@ -135,5 +142,10 @@ else
     echo -e "${RED}❌ Failed to establish a tunnel. Check tunnel.log and ngrok.log${NC}"
 fi
 
-# Keep script running
-wait
+echo -e "${WHITE}⚠️  KEEP THIS TERMINAL OPEN TO MAINTAIN THE CONNECTION.${NC}"
+echo -e "${WHITE}Press ${CYAN}Ctrl+C${WHITE} to stop all services and exit.${NC}"
+
+# Keep alive loop
+while true; do
+    sleep 60
+done
