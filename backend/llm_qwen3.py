@@ -88,10 +88,10 @@ class LLMQwen3:
                 messages=messages,
                 stream=True,
                 options={
-                    "num_predict": max_new_tokens,
+                    "num_predict": 1024, # Reduced from max_new_tokens (default 2048)
                     "temperature": temperature,
                     "top_p": 0.9,
-                    "num_ctx": 6144, # Optimized for RTX 4060 (8GB VRAM)
+                    "num_ctx": 4096, # STRICT limit for RTX 4060 (8GB) to prevent CPU offload
                 }
             )
             
@@ -115,12 +115,20 @@ class LLMQwen3:
     def generate_text(
         self,
         messages: List[Dict],
-        max_new_tokens: int = 2024,
+        max_new_tokens: int = 4096,
         temperature: float = 0.7,
-        json_mode: bool = False
+        json_mode: bool = False,
+        stream_callback: Optional[callable] = None
     ) -> str:
         """
-        Generate text using Ollama chat API with robust validation and JSON extraction.
+        Generate text using Ollama chat API with robust validation, JSON extraction, and optional streaming.
+        
+        Args:
+            messages: Conversation history
+            max_new_tokens: Maximum tokens to generate (default 4096)
+            temperature: Creativity (0.0-1.0)
+            json_mode: Whether to enforce JSON output
+            stream_callback: Optional function(token: str) -> None to receive tokens in real-time
         """
         if not messages or not isinstance(messages, list):
             raise ValueError("No messages provided to Ollama")
@@ -164,30 +172,58 @@ class LLMQwen3:
 
         for attempt in range(2):
             try:
-                response = self.client.chat(
-                    model=self.model_name,
-                    messages=valid_messages,
-                    options={
-                        "num_predict": max_new_tokens,
-                        "temperature": current_temp,
-                        "top_p": 0.9,
-                        "num_ctx": 8192,  # Increase context window for large USDA docs
-                    },
-                )
+                # UNIFIED PATH: Always use streaming under the hood if callback provided OR just to be safe?
+                # Actually, standard chat() is simpler for non-streaming.
+                # BUT to support streaming we must use chat(stream=True).
+                
+                if stream_callback:
+                    full_content = ""
+                    stream = self.client.chat(
+                        model=self.model_name,
+                        messages=valid_messages,
+                        stream=True,
+                        options={
+                            "num_predict": max_new_tokens,
+                            "temperature": current_temp,
+                            "top_p": 0.9,
+                            "num_ctx": 8192,
+                        },
+                    )
+                    
+                    for chunk in stream:
+                        if 'message' in chunk and 'content' in chunk['message']:
+                            token = chunk['message']['content']
+                            full_content += token
+                            if token:
+                                stream_callback(token)
+                                
+                    content = full_content
+                else:
+                    # Non-streaming path (legacy/fast)
+                    response = self.client.chat(
+                        model=self.model_name,
+                        messages=valid_messages,
+                        options={
+                            "num_predict": max_new_tokens,
+                            "temperature": current_temp,
+                            "top_p": 0.9,
+                            "num_ctx": 8192,
+                        },
+                    )
+                    
+                    if not response:
+                        logger.error(f"❌ Ollama returned NO response object (attempt {attempt+1})")
+                        continue
+                        
+                    content = response.get("message", {}).get("content", "")
 
-                if not response:
-                    logger.error(f"❌ Ollama returned NO response object (attempt {attempt+1})")
-                    continue
-
-                content = response.get("message", {}).get("content", "")
                 if not content or not content.strip():
                     logger.error(f"⚠️ Ollama returned empty content (attempt {attempt+1})")
-                    logger.debug(f"FULL RESPONSE OBJECT: {response}")
                     current_temp += 0.2
                     continue
 
                 if json_mode:
-                    logger.info(f"Raw Ollama output (json_mode=True): {content}")
+                    logger.info(f"Raw Ollama output (json_mode=True): {content[:100]}...")
                     content = self._extract_json(content)
 
                 logger.info(f"✅ Generated {len(content)} characters (model: {self.model_name})")
@@ -200,8 +236,17 @@ class LLMQwen3:
         raise RuntimeError("Ollama failed to return content after retries")
 
     def _extract_json(self, text: str) -> str:
-        """Robustly extract JSON from text, handling potential markdown blocks."""
+        """Robustly extract JSON from text, handling potential markdown blocks and thinking tags."""
         text = text.strip()
+        
+        # Remove thinking blocks common in deep reasoning models
+        if "<think>" in text and "</think>" in text:
+            start_think = text.find("<think>")
+            end_think = text.find("</think>") + 8
+            if end_think > start_think:
+                # Remove the thinking block
+                text = (text[:start_think] + text[end_think:]).strip()
+        
         # Look for JSON code blocks
         if "```json" in text:
             start = text.find("```json") + 7

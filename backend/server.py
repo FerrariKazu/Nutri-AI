@@ -62,24 +62,7 @@ async def chat_endpoint(request: ChatRequest):
 async def health_check():
     return {"status": "healthy", "version": "1.0.0"}
 
-@app.on_event("startup")
-async def startup_event():
-    """
-    Pre-load heavy resources (FAISS Indices) on startup to prevent initial request timeout.
-    """
-    logger.info("🚀 Nutri API Starting up... Pre-loading resources.")
-    try:
-        # Access the retriever from the orchestrator's pipeline
-        retriever = orchestrator.pipeline.retriever
-        
-        # Iteratively load all configured search indexes
-        for index_type in retriever.SEARCH_INDEXES:
-            logger.info(f"WARMUP: Loading index {index_type.value}...")
-            retriever._load_retriever(index_type)
-            
-        logger.info("✅ Startup complete: All FAISS indices loaded into memory.")
-    except Exception as e:
-        logger.error(f"❌ Startup warmup failed: {e}")
+
 
 if __name__ == "__main__":
     import uvicorn

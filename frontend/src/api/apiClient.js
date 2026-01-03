@@ -553,7 +553,8 @@ export function streamNutriChat(
     preferences = { verbosity: 'medium', explanations: true, streaming: true },
     onPhase,
     onComplete,
-    onError
+    onError,
+    onStream = null
 ) {
     let aborted = false;
     const controller = new AbortController();
@@ -600,10 +601,20 @@ export function streamNutriChat(
 
                         try {
                             const parsed = JSON.parse(dataText);
+
+                            // IGNORE HEARTBEATS (Prevent UI clutter/errors)
+                            if (parsed.phase === 'heartbeat' || parsed.phase === 'keep-alive') {
+                                continue;
+                            }
+
                             if (parsed.phase === 'final') {
                                 onComplete(parsed.output);
                             } else if (parsed.error) {
                                 throw new Error(parsed.error);
+                            } else if (parsed.stream) {
+                                if (onStream) {
+                                    onStream(parsed.phase, parsed.stream);
+                                }
                             } else {
                                 onPhase(parsed);
                             }

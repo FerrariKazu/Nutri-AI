@@ -77,7 +77,7 @@ class SensoryPropertyMapper:
         }
         
         # 1. Retrieve from primary stores
-        docs = retriever.retrieve(f"{ingredient} chemical physical properties sugar muscle tissue protein", top_k=5)
+        docs = retriever.retrieve(f"{ingredient} chemical physical properties sugar muscle tissue protein", top_k=3)
         
         context_parts = []
         for doc in docs:
@@ -103,7 +103,8 @@ class SensoryPropertyMapper:
         ]
         
         try:
-            response = self.llm.generate_text(messages, max_new_tokens=512, temperature=0.0, json_mode=True)
+            # Increased max_new_tokens to 2048 to allow for "Thinking" process without truncation
+            response = self.llm.generate_text(messages, max_new_tokens=2048, temperature=0.0, json_mode=True)
             data = json.loads(response)
             
             props = PhysicalProperties(

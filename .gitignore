@@ -57,3 +57,4 @@ nutri-deploy/
 
 # Indices
 backend/indexes/
+vector_store/

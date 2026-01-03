@@ -213,16 +213,44 @@ class FoodSynthesisRetriever:
     ]
     
     # Map index types to document types
+    # Map index types to document types
     INDEX_TO_DOC_TYPE = {
         IndexType.CHEMISTRY: "chemistry",
         IndexType.SCIENCE: "technique",
         IndexType.USDA_FOUNDATION: "nutrition",
         IndexType.USDA_BRANDED: "nutrition",
+        IndexType.OPEN_NUTRITION: "nutrition",
+    }
+    
+    # Phase-Aware Routing Table
+    PHASE_INDEX_MAP = {
+        # Phase 1-2: Intent & Broad Feasibility (Fast, Low Mem)
+        1: [IndexType.SCIENCE, IndexType.USDA_FOUNDATION],
+        2: [IndexType.SCIENCE, IndexType.USDA_FOUNDATION],
+        
+        # Phase 3-5: Validation & Variant Gen (Needs specific products)
+        3: [IndexType.SCIENCE, IndexType.USDA_FOUNDATION, IndexType.USDA_BRANDED],
+        4: [IndexType.SCIENCE, IndexType.USDA_FOUNDATION, IndexType.USDA_BRANDED],
+        5: [IndexType.SCIENCE, IndexType.USDA_FOUNDATION, IndexType.USDA_BRANDED],
+        
+        # Phase 6-8: Optimization & Frontiers (Deep Science)
+        6: [IndexType.SCIENCE, IndexType.CHEMISTRY],
+        7: [IndexType.SCIENCE, IndexType.CHEMISTRY],
+        8: [IndexType.SCIENCE, IndexType.CHEMISTRY],
+        
+        # Phase 9-12: Scoring & Explanation (Full Spectrum minus Branded if heavy)
+        9: [IndexType.SCIENCE, IndexType.CHEMISTRY, IndexType.USDA_FOUNDATION, IndexType.OPEN_NUTRITION],
+        10: [IndexType.SCIENCE, IndexType.CHEMISTRY, IndexType.USDA_FOUNDATION],
+        11: [IndexType.SCIENCE, IndexType.CHEMISTRY, IndexType.USDA_FOUNDATION],
+        12: [IndexType.SCIENCE, IndexType.CHEMISTRY, IndexType.USDA_FOUNDATION],
+        
+        # Phase 13: Final Response (No Retrieval)
+        13: [] 
     }
     
     def __init__(self, project_root: Optional[Path] = None):
         """
-        Initialize the retriever.
+        Initialize the retriever with safe memory management.
         
         Args:
             project_root: Root directory of the project (auto-detected if None)
@@ -231,56 +259,66 @@ class FoodSynthesisRetriever:
             project_root = Path(__file__).parent.parent
         
         self.project_root = Path(project_root)
-        self.retrievers: Dict[IndexType, FaissRetriever] = {}
+        
+        # Use IndexManager for safe lazy-loading
+        from backend.retriever.index_manager import IndexManager
+        self.index_manager = IndexManager(self.project_root)
         
         logger.info(f"FoodSynthesisRetriever initialized at {self.project_root}")
     
-    def _load_retriever(self, index_type: IndexType) -> bool:
-        """Load a specific index retriever."""
-        if index_type in self.retrievers:
-            return True
-        
-        index_path = self.project_root / f"vector_store/{index_type.value}/index.faiss"
-        
-        if not index_path.exists():
-            logger.warning(f"Index not found: {index_path}")
-            return False
-        
-        try:
-            retriever = FaissRetriever(index_path)
-            retriever.load()
-            self.retrievers[index_type] = retriever
-            logger.info(f"Loaded index: {index_type.value}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to load index {index_type}: {e}")
-            return False
-    
-    def retrieve(
+    def retrieve_for_phase(
         self,
+        phase: int,
         query: str,
         top_k: int = 10,
         min_score: float = 0.3
     ) -> List[RetrievedDocument]:
         """
-        Retrieve relevant documents from chemistry, nutrition, and technique indexes.
+        Retrieve documents relevant for a specific pipeline phase.
+        Respects memory budgets by only loading phase-critical indices.
+        """
+        allowed_indices = self.PHASE_INDEX_MAP.get(phase, [IndexType.SCIENCE])
+        
+        logger.info(f"🔎 Phase {phase} Retrieval: Query='{query[:50]}...' Indices={[t.value for t in allowed_indices]}")
+        
+        return self.retrieve(
+            query=query,
+            top_k=top_k,
+            min_score=min_score,
+            target_indices=allowed_indices
+        )
+
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = 10,
+        min_score: float = 0.3,
+        target_indices: Optional[List[IndexType]] = None
+    ) -> List[RetrievedDocument]:
+        """
+        Retrieve relevant documents from specified (or default) indexes.
         
         Args:
             query: Search query
             top_k: Number of results per index
             min_score: Minimum similarity score threshold
+            target_indices: Specific indices to search. If None, uses defaults (NOT RECOMMENDED for memory safety).
             
         Returns:
             List of RetrievedDocument objects, sorted by score
         """
         all_results: List[RetrievedDocument] = []
         
-        for index_type in self.SEARCH_INDEXES:
-            if index_type not in self.retrievers:
-                if not self._load_retriever(index_type):
-                    continue
+        # Default to safe indices if none specified
+        if target_indices is None:
+            target_indices = [IndexType.SCIENCE, IndexType.USDA_FOUNDATION]
+            logger.warning("Implicit retrieval requested. Defaulting to safe indices (Science, Foundation).")
+        
+        for index_type in target_indices:
+            # Use IndexManager to get the retriever safely
+            # This handles lazy loading and eviction automatically
+            retriever = self.index_manager.get_retriever(index_type)
             
-            retriever = self.retrievers.get(index_type)
             if retriever is None:
                 continue
             
@@ -337,12 +375,13 @@ class IntentAgent:
         self.llm = LLMQwen3(model_name=model_name)
         logger.info("IntentAgent initialized")
     
-    def extract(self, user_input: str) -> IntentOutput:
+    def extract(self, user_input: str, stream_callback: Optional[callable] = None) -> IntentOutput:
         """
         Extract structured constraints from user input.
         
         Args:
             user_input: Raw user query
+            stream_callback: Optional callback for token streaming
             
         Returns:
             IntentOutput with extracted constraints
@@ -357,8 +396,9 @@ class IntentAgent:
         try:
             response = self.llm.generate_text(
                 messages=messages,
-                max_new_tokens=512,
-                temperature=0.1  # Low temperature for structured extraction
+                max_new_tokens=2048, # Increased from 512
+                temperature=0.1,  # Low temperature for structured extraction
+                stream_callback=stream_callback
             )
             
             # Log Agent 1 output (LOGGING REQUIREMENT)
@@ -444,7 +484,8 @@ class FoodSynthesisEngine:
         self,
         user_query: str,
         retrieved_docs: List[RetrievedDocument],
-        intent: Optional[IntentOutput] = None
+        intent: Optional[IntentOutput] = None,
+        stream_callback: Optional[callable] = None
     ) -> str:
         """
         Generate a novel recipe with chemical explanation.
@@ -453,6 +494,7 @@ class FoodSynthesisEngine:
             user_query: Original user request
             retrieved_docs: Documents from retriever
             intent: Optional structured constraints from Agent 1
+            stream_callback: Optional callback for token streaming
             
         Returns:
             Generated recipe with chemical reasoning
@@ -481,7 +523,8 @@ class FoodSynthesisEngine:
             response = self.llm.generate_text(
                 messages=messages,
                 max_new_tokens=4096,  # Increased for complete recipes
-                temperature=0.4  # Slightly creative but grounded
+                temperature=0.4,  # Slightly creative but grounded
+                stream_callback=stream_callback
             )
             
             # Log final reasoning output (LOGGING REQUIREMENT)
@@ -614,13 +657,14 @@ class NutriPipeline:
             retrieval_query = user_input
         
         # Retrieve relevant documents
-        retrieved_docs = self.retriever.retrieve(retrieval_query, top_k=3)
+        retrieved_docs = self.retriever.retrieve_for_phase(2, retrieval_query, top_k=2)
         
         # Synthesize recipe
         recipe = self.engine.synthesize(
             user_query=user_input,
             retrieved_docs=retrieved_docs,
-            intent=intent
+            intent=intent,
+            stream_callback=stream_callback
         )
         
         # Build result
@@ -685,7 +729,7 @@ class NutriPipeline:
             self._refinement_engine = RefinementEngine()
         
         # Retrieve additional knowledge based on feedback
-        retrieved_docs = self.retriever.retrieve(feedback, top_k=5)
+        retrieved_docs = self.retriever.retrieve_for_phase(3, feedback, top_k=5)
         docs_for_refinement = [
             {
                 "text": doc.text,

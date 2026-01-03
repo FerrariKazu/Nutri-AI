@@ -115,8 +115,8 @@ class NutritionVectorizer:
         logger.info(f"Vectorizing ingredient: {ingredient}")
         
         # Retrieve context (USDA Foundation/Branded preferred)
-        # We assume the retriever handles index selection or we search broad
-        docs = retriever.retrieve(f"{ingredient} nutrition data", top_k=3)
+        # Reduced top_k to 2 to save context for LLM output
+        docs = retriever.retrieve(f"{ingredient} nutrition data", top_k=2)
         context = "\n".join([d.text for d in docs])
         
         # Extract using LLM
@@ -126,7 +126,8 @@ class NutritionVectorizer:
         ]
         
         try:
-            response = self.llm.generate_text(messages, max_new_tokens=256, temperature=0.0)
+            # Increased to 1024 to allow for thinking
+            response = self.llm.generate_text(messages, max_new_tokens=1024, temperature=0.0)
             data = self._parse_json(response)
             
             vector = NutritionVector(
@@ -204,8 +205,8 @@ class IngredientExtractor:
         ]
         
         try:
-            # Attempt LLM extraction
-            response = self.llm.generate_text(messages, max_new_tokens=512, temperature=0.0)
+            # Attempt LLM extraction - Increased to 2048 for complex recipes
+            response = self.llm.generate_text(messages, max_new_tokens=2048, temperature=0.0)
             result = self._parse_json(response)
             if result:
                 return result

@@ -97,8 +97,8 @@ fi
 echo -e "${YELLOW}🚀 Establishing tunnel endpoint...${NC}"
 rm -f "$SCRIPT_DIR/tunnel.log"
 
-# A. LocalTunnel
-nohup lt --port 8000 > "$SCRIPT_DIR/tunnel.log" 2>&1 &
+# A. LocalTunnel (Delayed to prefer SSH tunnels)
+(sleep 5; nohup lt --port 8000 > "$SCRIPT_DIR/tunnel.log" 2>&1) &
 
 # B. Serveo
 nohup ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -R 80:localhost:8000 serveo.net >> "$SCRIPT_DIR/tunnel.log" 2>&1 &
@@ -110,7 +110,7 @@ nohup ssh -o StrictHostKeyChecking=no -R 80:localhost:8000 nokey@localhost.run >
 echo -ne "${YELLOW}⏳ Waiting for URL...${NC}"
 TUNNEL_URL=""
 for i in {1..35}; do
-    TUNNEL_URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.(loca\.lt|serveo\.net|serveousercontent\.com|lhr\.life|localhost\.run)' "$SCRIPT_DIR/tunnel.log" | head -n 1)
+    TUNNEL_URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.(loca\.lt|serveo\.net|serveousercontent\.com|lhr\.life|localhost\.run)' "$SCRIPT_DIR/tunnel.log" | grep -v "admin" | head -n 1)
     if [ -n "$TUNNEL_URL" ]; then break; fi
     echo -ne "."
     sleep 1

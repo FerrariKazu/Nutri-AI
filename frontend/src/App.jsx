@@ -62,6 +62,22 @@ function App() {
                 console.error(err);
                 setIsLoading(false);
                 setMessages(prev => prev.filter(m => m.id !== assistantId));
+            },
+            // onStream (NEW: Handle token streaming)
+            (phaseId, token) => {
+                setMessages(prev => prev.map(m => {
+                    if (m.id !== assistantId) return m;
+
+                    // Update the specific phase's partial output in place
+                    const updatedPhases = (m.phases || []).map(p => {
+                        if (p.phase === phaseId) {
+                            return { ...p, partial_output: (p.partial_output || '') + token };
+                        }
+                        return p;
+                    });
+
+                    return { ...m, phases: updatedPhases };
+                }));
             }
         );
     };
