@@ -144,7 +144,7 @@ class NutriOrchestrator:
             # PHASE 7-10: Optimization
             yield {"type": "reasoning", "content": "Performing Multi-Objective Optimization..."}
             frontier = None
-            async for event in run_phase(8, self.pipeline.generate_sensory_frontier, recipe, profile):
+            async for event in run_phase(8, self.pipeline.generate_sensory_frontier, recipe):
                 if event["type"] == "result": frontier = event["content"]
                 else: yield event
 

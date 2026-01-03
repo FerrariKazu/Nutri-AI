@@ -93,53 +93,34 @@ else
     echo -e "${RED}❌ Frontend directory not found!${NC}"
 fi
 
-# 4. Tunneling (Try multiple in parallel)
-echo -e "${YELLOW}🚀 Establishing tunnel endpoint...${NC}"
-rm -f "$SCRIPT_DIR/tunnel.log"
+# 4. Tunneling (Cloudflare Tunnel)
+echo -e "${YELLOW}🚀 Starting Cloudflare Tunnel (chatdps.dpdns.org)...${NC}"
+nohup ./run_tunnel.sh > "$SCRIPT_DIR/tunnel.log" 2>&1 &
 
-# A. LocalTunnel (Delayed to prefer SSH tunnels)
-(sleep 5; nohup lt --port 8000 > "$SCRIPT_DIR/tunnel.log" 2>&1) &
+# 5. Detect and Verify Health
+echo -ne "${YELLOW}⏳ Verifying System Health...${NC}"
+TUNNEL_URL="https://chatdps.dpdns.org"
 
-# B. Serveo
-nohup ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -R 80:localhost:8000 serveo.net >> "$SCRIPT_DIR/tunnel.log" 2>&1 &
-
-# C. Localhost.run
-nohup ssh -o StrictHostKeyChecking=no -R 80:localhost:8000 nokey@localhost.run >> "$SCRIPT_DIR/tunnel.log" 2>&1 &
-
-# 5. Detect URL
-echo -ne "${YELLOW}⏳ Waiting for URL...${NC}"
-TUNNEL_URL=""
-for i in {1..35}; do
-    TUNNEL_URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.(loca\.lt|serveo\.net|serveousercontent\.com|lhr\.life|localhost\.run)' "$SCRIPT_DIR/tunnel.log" | grep -v "admin" | head -n 1)
-    if [ -n "$TUNNEL_URL" ]; then break; fi
+for i in {1..30}; do
+    if curl -s "http://localhost:8000/health" | grep -q "healthy"; then
+        if curl -s "$TUNNEL_URL/health" | grep -q "healthy"; then
+            echo -e "\n${GREEN}✨ Nutri-AI is ONLINE!${NC}"
+            echo -e "🌍 Public URL: ${NC}${YELLOW}$TUNNEL_URL${NC}"
+            echo -e "⚙️  Local API: ${NC}http://localhost:8000"
+            echo -e "${GREEN}====================================================${NC}"
+            echo -e "${BLUE}INSTRUCTIONS FOR VERCEL:${NC}"
+            echo -e "1. Update ${YELLOW}VITE_API_URL${NC} to: ${CYAN}$TUNNEL_URL${NC}"
+            echo -e "2. Save and Redeploy."
+            echo -e "${BLUE}====================================================${NC}"
+            break
+        fi
+    fi
     echo -ne "."
-    sleep 1
+    sleep 2
 done
-echo ""
 
-if [ -z "$TUNNEL_URL" ]; then
-    echo -e "${YELLOW}⚠️ Major tunnel slow. Checking Ngrok as fallback...${NC}"
-    nohup ngrok http 8000 --log=stdout > "$SCRIPT_DIR/ngrok.log" 2>&1 &
-    for i in {1..20}; do
-        TUNNEL_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o 'https://[a-zA-Z0-9.-]*\.ngrok-free.app' | head -n 1)
-        if [ -n "$TUNNEL_URL" ]; then break; fi
-        echo -ne "."
-        sleep 1
-    done
-fi
-
-if [ -n "$TUNNEL_URL" ]; then
-    echo -e "${GREEN}====================================================${NC}"
-    echo -e "${GREEN}✨ Nutri-AI is ONLINE!${NC}"
-    echo -e "🌍 Public URL: ${NC}${YELLOW}$TUNNEL_URL${NC}"
-    echo -e "⚙️  Local API: ${NC}http://localhost:8000"
-    echo -e "${GREEN}====================================================${NC}"
-    echo -e "${BLUE}INSTRUCTIONS FOR VERCEL:${NC}"
-    echo -e "1. Update ${YELLOW}VITE_API_URL${NC} to: ${CYAN}$TUNNEL_URL${NC}"
-    echo -e "2. Save and Redeploy."
-    echo -e "${BLUE}====================================================${NC}"
-else
-    echo -e "${RED}❌ Failed to establish a tunnel. Check tunnel.log and ngrok.log${NC}"
+if [ $i -eq 30 ]; then
+    echo -e "\n${RED}❌ System health check timed out. Check api.log and tunnel.log${NC}"
 fi
 
 echo -e "${WHITE}⚠️  KEEP THIS TERMINAL OPEN TO MAINTAIN THE CONNECTION.${NC}"
