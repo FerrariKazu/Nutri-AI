@@ -56,7 +56,15 @@ async def chat_endpoint(request: ChatRequest):
             # SSE Format: data: <json>\n\n
             yield f"data: {chunk}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(), 
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Critical for Nginx/Proxies
+        }
+    )
 
 @app.get("/health")
 async def health_check():

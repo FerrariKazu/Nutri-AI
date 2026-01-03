@@ -582,6 +582,15 @@ export function streamNutriChat(
                 throw new APIError(`HTTP ${response.status}`, response.status);
             }
 
+            // TELEMETRY/GUARDS: Log headers for "Option B" verification
+            console.log('Stream Status:', response.status);
+            console.log('Content-Type:', response.headers.get('Content-Type'));
+            console.log('Transfer-Encoding:', response.headers.get('Transfer-Encoding'));
+
+            if (!response.body) {
+                throw new Error("Backend response does not support streaming (missing body)");
+            }
+
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
