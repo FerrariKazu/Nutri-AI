@@ -539,87 +539,101 @@ export function streamPrompt(
 }
 
 /**
- * Stream Nutri's 13-phase reasoning process (Phase 13 Integration)
- * 
- * @param {string} message - User input
- * @param {Object} preferences - { verbosity, explanations, streaming }
- * @param {Function} onPhase - Callback for phase updates: (phaseData) => void
- * @param {Function} onComplete - Callback when final output is ready: (finalOutput) => void
- * @param {Function} onError - Callback for errors
- * @returns {Function} - Abort function
+ * Production Nutri Chat Stream - Unified API
+ * Handles POST /api/chat with typed SSE events
  */
+
+import { getSessionId, getBackendURL } from './apiClient';
+
 export function streamNutriChat(
     message,
-    preferences = { verbosity: 'medium', explanations: true, streaming: true },
-    onPhase,
+    preferences = {
+        audience_mode: 'scientific',
+        optimization_goal: 'comfort',
+        verbosity: 'medium'
+    },
+    onReasoning,
+    onToken,
     onComplete,
-    onError,
-    onStream = null
+    onError
 ) {
     const sessionId = getSessionId();
-    let es = null;
+    const controller = new AbortController();
+    let aborted = false;
 
     (async () => {
         try {
             const baseURL = await getBackendURL();
-
-            // Construct GET URL for native EventSource
-            const params = new URLSearchParams({
-                session_id: sessionId,
-                message: message,
-                verbosity: preferences.verbosity || 'medium'
+            const response = await fetch(`${baseURL}/api/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'ngrok-skip-browser-warning': 'true',
+                },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    message: message,
+                    preferences: preferences
+                }),
+                signal: controller.signal
             });
 
-            const url = `${baseURL}/nutri/chat?${params.toString()}`;
-            console.log('🚀 Starting Pure SSE via EventSource:', url);
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errText}`);
+            }
 
-            es = new EventSource(url);
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let currentEvent = 'token';
 
-            es.onmessage = (event) => {
-                const dataText = event.data;
-                if (!dataText) return;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done || aborted) break;
 
-                try {
-                    const parsed = JSON.parse(dataText);
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
 
-                    // IGNORE HEARTBEATS
-                    if (parsed.phase === 'heartbeat' || parsed.phase === 'keep-alive') {
-                        return;
-                    }
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed) continue;
 
-                    if (parsed.phase === 'final') {
-                        onComplete(parsed.output);
-                        es.close(); // Success close
-                    } else if (parsed.error) {
-                        throw new Error(parsed.error);
-                    } else if (parsed.stream) {
-                        if (onStream) {
-                            onStream(parsed.phase, parsed.stream);
+                    if (trimmed.startsWith('event: ')) {
+                        currentEvent = trimmed.slice(7).trim();
+                    } else if (trimmed.startsWith('data: ')) {
+                        const data = trimmed.slice(6).trim();
+                        if (!data) continue;
+
+                        try {
+                            if (currentEvent === 'token') {
+                                onToken(data);
+                            } else if (currentEvent === 'reasoning') {
+                                onReasoning(data);
+                            } else if (currentEvent === 'final') {
+                                const parsed = JSON.parse(data);
+                                onComplete(parsed.content || parsed);
+                            } else if (currentEvent === 'error') {
+                                throw new Error(data);
+                            }
+                        } catch (e) {
+                            console.error('SSE Parse Error:', e, data);
                         }
-                    } else {
-                        onPhase(parsed);
                     }
-                } catch (e) {
-                    console.error('Failed to parse SSE chunk:', dataText, e);
                 }
-            };
-
-            es.onerror = (err) => {
-                console.error('SSE Connection Error:', err);
-                onError(new Error("Streaming connection failed (SSE Error)"));
-                es.close();
-            };
-
+            }
         } catch (error) {
-            onError(error);
+            if (!aborted) {
+                console.error('Stream Error:', error);
+                onError(error);
+            }
         }
     })();
 
     return () => {
-        if (es) {
-            console.log('🛑 Aborting SSE Connection');
-            es.close();
-        }
+        aborted = true;
+        controller.abort();
     };
 }
 
