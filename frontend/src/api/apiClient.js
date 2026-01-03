@@ -539,12 +539,17 @@ export function streamPrompt(
 }
 
 /**
- * Production Nutri Chat Stream - Unified API
- * Handles POST /api/chat with typed SSE events
+ * Stream Nutri's 13-phase reasoning process (Production API)
+ * Uses POST /api/chat with typed SSE events (token, reasoning, final, error)
+ * 
+ * @param {string} message - User input
+ * @param {Object} preferences - { audience_mode, optimization_goal, verbosity }
+ * @param {Function} onReasoning - Callback for reasoning updates: (statusMessage) => void
+ * @param {Function} onToken - Callback for LLM tokens: (token) => void
+ * @param {Function} onComplete - Callback when final output is ready: (finalOutput) => void
+ * @param {Function} onError - Callback for errors
+ * @returns {Function} - Abort function
  */
-
-import { getSessionId, getBackendURL } from './apiClient';
-
 export function streamNutriChat(
     message,
     preferences = {
