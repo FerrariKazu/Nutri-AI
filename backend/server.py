@@ -21,13 +21,19 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Nutri Unified API", description="Integrated 13-Phase Food Synthesis Engine")
 
-# CORS Configuration
+# CORS Configuration - Explicit domains for production SSE stability
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # For debugging, allow all origins
+    allow_origins=[
+        "https://nutri-ai-ochre.vercel.app",
+        "https://nutri-qte326vny-ferrarikazus-projects.vercel.app",
+        "http://localhost:5173",  # Local development
+        "http://localhost:3000",  # Alternative local port
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+    max_age=600,  # Cache preflight for 10 minutes
 )
 
 # Initialize Components
@@ -58,6 +64,9 @@ async def chat_endpoint(request: ChatRequest):
     pref_dict = request.preferences.dict()
     
     async def event_generator():
+        # CRITICAL: Send immediate heartbeat to prevent browser timeout
+        yield "event: status\ndata: {\"phase\": \"initializing\", \"message\": \"Connecting to Nutri backend...\"}\n\n"
+        
         last_heartbeat = asyncio.get_event_loop().time()
         
         # Execute streamed with execution_mode
