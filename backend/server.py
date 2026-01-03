@@ -51,18 +51,50 @@ class ChatRequest(BaseModel):
     preferences: Optional[ChatPreferences] = Field(default_factory=ChatPreferences)
     execution_mode: Optional[str] = None  # "fast", "sensory", "optimize", "research"
 
+@app.options("/api/chat")
+async def chat_options():
+    """Explicit OPTIONS handler for CORS preflight"""
+    return {
+        "status": "ok",
+        "methods": ["GET", "POST", "OPTIONS"],
+        "headers": ["Content-Type", "Authorization"]
+    }
+
 @app.post("/api/chat")
-async def chat_endpoint(request: ChatRequest):
+@app.get("/api/chat")  # Add GET support to eliminate preflight for EventSource
+async def chat_endpoint(request: Request, body: Optional[ChatRequest] = None):
     """
     Unified production chat endpoint for Nutri.
     Supports persistent session memory and typed SSE streaming.
+    Supports both GET (with query params) and POST (with body) for SSE.
     """
-    session_id = request.session_id or str(uuid.uuid4())
-    logger.info(f"Production chat request: {session_id}")
-
-    # Inject memory context into preferences for the orchestrator
-    pref_dict = request.preferences.dict()
+    # Handle GET vs POST
+    if request.method == "GET":
+        # Extract from query parameters
+        message = request.query_params.get("message", "")
+        session_id = request.query_params.get("session_id") or str(uuid.uuid4())
+        execution_mode = request.query_params.get("execution_mode")
+        
+        # Build preferences from query params
+        pref_dict = {
+            "audience_mode": request.query_params.get("audience_mode", "casual"),
+            "optimization_goal": request.query_params.get("optimization_goal", "comfort"),
+            "verbosity": request.query_params.get("verbosity", "medium")
+        }
+    else:
+        # POST: use body
+        if not body:
+            raise HTTPException(status_code=400, detail="Request body required for POST")
+        session_id = body.session_id or str(uuid.uuid4())
+        message = body.message
+        execution_mode = body.execution_mode
+        pref_dict = body.preferences.dict()
     
+    if not message:
+        raise HTTPException(status_code=400, detail="Message parameter required")
+    
+    logger.info(f"Production chat request ({request.method}): {session_id}")
+
     async def event_generator():
         # CRITICAL: Send immediate heartbeat to prevent browser timeout
         yield "event: status\ndata: {\"phase\": \"initializing\", \"message\": \"Connecting to Nutri backend...\"}\n\n"
