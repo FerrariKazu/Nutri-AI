@@ -33,13 +33,19 @@ function App() {
             role: 'assistant',
             content: '',
             phases: [],
-            isStreaming: true
+            isStreaming: true,
+            statusMessage: '' // NEW: Live status message
         }]);
 
         abortRef.current = streamNutriChat(
             query,
-            { verbosity: analysisDepth, explanations: true, streaming: true },
-            // onPhase
+            {
+                verbosity: analysisDepth,
+                explanations: true,
+                streaming: true,
+                execution_mode: null // Auto-detect from intent
+            },
+            //onReasoning
             (phase) => {
                 setMessages(prev => prev.map(m =>
                     m.id === assistantId
@@ -47,12 +53,20 @@ function App() {
                         : m
                 ));
             },
-            // onComplete
-            (output) => {
-                const finalContent = `### ${output.recipe?.slice(0, 100) || 'Optimized Recipe'}\n\n${output.explanation}`;
+            // onToken
+            (token) => {
                 setMessages(prev => prev.map(m =>
                     m.id === assistantId
-                        ? { ...m, content: finalContent, isStreaming: false }
+                        ? { ...m, content: m.content + token }
+                        : m
+                ));
+            },
+            // onComplete
+            (output) => {
+                const finalContent = output.recipe || output.explanation || JSON.stringify(output);
+                setMessages(prev => prev.map(m =>
+                    m.id === assistantId
+                        ? { ...m, content: finalContent, isStreaming: false, statusMessage: '' }
                         : m
                 ));
                 setIsLoading(false);
@@ -63,21 +77,16 @@ function App() {
                 setIsLoading(false);
                 setMessages(prev => prev.filter(m => m.id !== assistantId));
             },
-            // onStream (NEW: Handle token streaming)
-            (phaseId, token) => {
-                setMessages(prev => prev.map(m => {
-                    if (m.id !== assistantId) return m;
+            // onStatus (NEW: Phase progress updates)
+            (statusData) => {
+                const { phase, message, profile } = statusData;
+                const displayMessage = message || `Phase: ${phase}`;
 
-                    // Update the specific phase's partial output in place
-                    const updatedPhases = (m.phases || []).map(p => {
-                        if (p.phase === phaseId) {
-                            return { ...p, partial_output: (p.partial_output || '') + token };
-                        }
-                        return p;
-                    });
-
-                    return { ...m, phases: updatedPhases };
-                }));
+                setMessages(prev => prev.map(m =>
+                    m.id === assistantId
+                        ? { ...m, statusMessage: displayMessage }
+                        : m
+                ));
             }
         );
     };

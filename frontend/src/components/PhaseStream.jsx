@@ -66,7 +66,18 @@ const PhaseStream = ({ messages }) => {
                                 </div>
                             )}
 
-                            {msg.isStreaming && !msg.content && (
+                            {/* Live Status Message - NEW */}
+                            {msg.isStreaming && msg.statusMessage && (
+                                <div className="flex items-center gap-3 ml-2 py-2 px-4 bg-accent/5 border-l-2 border-accent/40 rounded-r">
+                                    <Binary className="w-4 h-4 text-accent animate-pulse-subtle" />
+                                    <span className="text-sm font-mono text-accent/90 animate-fade-in">
+                                        {msg.statusMessage}
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Legacy Fallback (if no statusMessage yet) */}
+                            {msg.isStreaming && !msg.content && !msg.statusMessage && (
                                 <div className="flex items-center gap-2 ml-2">
                                     <Binary className="w-4 h-4 text-accent animate-pulse-subtle" />
                                     <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">

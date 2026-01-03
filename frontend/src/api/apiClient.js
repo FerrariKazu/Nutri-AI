@@ -540,14 +540,15 @@ export function streamPrompt(
 
 /**
  * Stream Nutri's 13-phase reasoning process (Production API)
- * Uses POST /api/chat with typed SSE events (token, reasoning, final, error)
+ * Uses POST /api/chat with typed SSE events (status, token, reasoning, intermediate, final, error)
  * 
  * @param {string} message - User input
- * @param {Object} preferences - { audience_mode, optimization_goal, verbosity }
+ * @param {Object} preferences - { audience_mode, optimization_goal, verbosity, execution_mode }
  * @param {Function} onReasoning - Callback for reasoning updates: (statusMessage) => void
  * @param {Function} onToken - Callback for LLM tokens: (token) => void
  * @param {Function} onComplete - Callback when final output is ready: (finalOutput) => void
  * @param {Function} onError - Callback for errors
+ * @param {Function} onStatus - Callback for phase status updates: ({ phase, message, profile }) => void
  * @returns {Function} - Abort function
  */
 export function streamNutriChat(
@@ -555,12 +556,14 @@ export function streamNutriChat(
     preferences = {
         audience_mode: 'scientific',
         optimization_goal: 'comfort',
-        verbosity: 'medium'
+        verbosity: 'medium',
+        execution_mode: null  // Optional: 'fast', 'sensory', 'optimize', 'research'
     },
     onReasoning,
     onToken,
     onComplete,
-    onError
+    onError,
+    onStatus = null  // NEW: Optional status callback
 ) {
     const sessionId = getSessionId();
     const controller = new AbortController();
@@ -612,10 +615,28 @@ export function streamNutriChat(
                         if (!data) continue;
 
                         try {
-                            if (currentEvent === 'token') {
+                            if (currentEvent === 'status') {
+                                // NEW: Phase status update
+                                const statusData = JSON.parse(data);
+                                if (onStatus) {
+                                    onStatus(statusData);
+                                }
+                                // Also call onReasoning for backward compatibility
+                                if (onReasoning && statusData.message) {
+                                    onReasoning(statusData.message);
+                                }
+                            } else if (currentEvent === 'token') {
                                 onToken(data);
                             } else if (currentEvent === 'reasoning') {
                                 onReasoning(data);
+                            } else if (currentEvent === 'intermediate') {
+                                // Intermediate result (for OPTIMIZE profile)
+                                const parsed = JSON.parse(data);
+                                console.log('Intermediate result:', parsed);
+                                // Could trigger onReasoning or a separate callback
+                                if (onReasoning) {
+                                    onReasoning('Intermediate result ready, continuing optimization...');
+                                }
                             } else if (currentEvent === 'final') {
                                 const parsed = JSON.parse(data);
                                 onComplete(parsed.content || parsed);
