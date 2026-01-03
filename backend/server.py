@@ -42,6 +42,7 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = None
     message: str
     preferences: Optional[ChatPreferences] = Field(default_factory=ChatPreferences)
+    execution_mode: Optional[str] = None  # "fast", "sensory", "optimize", "research"
 
 @app.post("/api/chat")
 async def chat_endpoint(request: ChatRequest):
@@ -56,48 +57,72 @@ async def chat_endpoint(request: ChatRequest):
     pref_dict = request.preferences.dict()
     
     async def event_generator():
-        # 1. Start Reasoning Phase
-        yield "event: reasoning\ndata: Initializing Nutri scientific pipeline...\n\n"
+        last_heartbeat = asyncio.get_event_loop().time()
         
-        # 2. Execute Streamed
-        async for chunk in orchestrator.execute_streamed(session_id, request.message, pref_dict):
-            # The orchestrator should yield JSON strings
-            # We wrap them in SSE events
+        # Execute streamed with execution_mode
+        async for event_dict in orchestrator.execute_streamed(
+            session_id, 
+            request.message, 
+            pref_dict,
+            execution_mode=request.execution_mode
+        ):
             try:
-                data = json.loads(chunk)
-                if "stream" in data:
-                    yield f"event: token\ndata: {data['stream']}\n\n"
-                elif "phase" in data:
-                    yield f"event: reasoning\ndata: {data.get('title', 'Processing...')}\n\n"
-                elif "final" in data or "output" in data:
+                event_type = event_dict.get("type")
+                content = event_dict.get("content")
+                
+                if event_type == "status":
+                    # Status update (phase progress)
+                    yield f"event: status\ndata: {json.dumps(content)}\n\n"
+                    
+                elif event_type == "reasoning":
+                    # Legacy reasoning event
+                    yield f"event: reasoning\ndata: {content}\n\n"
+                    
+                elif event_type == "token":
+                    # LLM token stream
+                    yield f"event: token\ndata: {content}\n\n"
+                    
+                elif event_type == "intermediate":
+                    # Intermediate result (for OPTIMIZE profile)
+                    yield f"event: intermediate\ndata: {json.dumps(content)}\n\n"
+                    
+                elif event_type == "final":
                     # Final result
-                    output = data.get("output", data.get("final"))
-                    yield f"event: final\ndata: {json.dumps({'content': output})}\n\n"
-                elif "error" in data:
-                    yield f"event: error\ndata: {data['error']}\n\n"
-            except:
-                # Fallback for raw strings (if any)
-                yield f"data: {chunk}\n\n"
+                    yield f"event: final\ndata: {json.dumps(content)}\n\n"
+                    
+                elif event_type == "error":
+                    # Error
+                    yield f"event: error\ndata: {json.dumps({'error': content})}\n\n"
+                    
+                last_heartbeat = asyncio.get_event_loop().time()
+                    
+            except Exception as e:
+                logger.error(f"Event formatting error: {e}")
+                yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
         
-        # 3. Heartbeat logic is handled by the orchestrator or here?
-        # Better handled by a background task if needed, but for now we rely on orchestrator.
-
+        # Send heartbeat if needed (every 15s)
+        current_time = asyncio.get_event_loop().time()
+        if current_time - last_heartbeat > 15:
+            yield ":heartbeat\n\n"
+            last_heartbeat = current_time
+    
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
+            "X-Accel-Buffering": "no"
         }
     )
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "service": "nutri-backend", "version": "1.1.0"}
+    return {"status": "healthy", "service": "nutri-backend", "version": "1.2.0"}
 
 
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+```

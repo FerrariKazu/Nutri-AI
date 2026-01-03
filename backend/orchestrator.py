@@ -1,10 +1,14 @@
 import json
 import logging
 import asyncio
-from typing import AsyncGenerator, Dict, Any, List, Callable
+import time
+from typing import AsyncGenerator, Dict, Any, List, Callable, Optional
 from backend.food_synthesis import NutriPipeline
 from backend.memory import SessionMemoryStore
 from backend.sensory.sensory_types import UserPreferences, SensoryProfile
+from backend.execution_profiles import ExecutionProfile, ExecutionRouter
+from backend.execution_plan import ExecutionPlan
+from backend.memory_guard import MemoryGuard
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +47,22 @@ class NutriOrchestrator:
                 
         return await future
 
-    async def execute_streamed(self, session_id: str, user_message: str, preferences: Dict[str, Any]) -> AsyncGenerator[Dict[str, Any], None]:
+    async def execute_streamed(
+        self, 
+        session_id: str, 
+        user_message: str, 
+        preferences: Dict[str, Any],
+        execution_mode: Optional[str] = None
+    ) -> AsyncGenerator[Dict[str, Any], None]:
         """
-        Executes the 13-phase Nutri pipeline and yields structured event dictionaries.
-        Event types: 'reasoning' (phase info), 'token' (LLM stream), 'final' (structured result), 'error'.
+        Executes the Nutri pipeline with tiered execution and yields structured event dictionaries.
+        Event types: 'status', 'reasoning', 'token', 'intermediate', 'final', 'error'.
+        
+        Args:
+            session_id: Unique session identifier
+            user_message: User's natural language request
+            preferences: User preferences (audience_mode, optimization_goal, verbosity)
+            execution_mode: Optional explicit execution mode ("fast", "sensory", "optimize", "research")
         """
         loop = asyncio.get_running_loop()
         token_queue = asyncio.Queue()
@@ -56,12 +72,31 @@ class NutriOrchestrator:
             loop.call_soon_threadsafe(token_queue.put_nowait, token)
 
         try:
-            # 0. PRE-PHASE: Memory Injection
+            # 0. Determine execution profile and plan
+            raw_profile = ExecutionRouter.determine_profile(user_message, execution_mode)
+            profile = MemoryGuard.safe_profile(raw_profile)  # May downgrade if memory pressure
+            plan = ExecutionPlan.from_profile(profile)
+            
+            logger.info(f"Executing with profile: {profile.value} (requested: {raw_profile.value if raw_profile != profile else 'auto'})")
+            MemoryGuard.log_memory_stats()
+            
+            # Emit initial status
+            yield {
+                "type": "status",
+                "content": {
+                    "profile": profile.value,
+                    "phase": "starting",
+                    "message": f"Executing {profile.value.upper()} profile"
+                }
+            }
+            
+            # 1. PRE-PHASE: Memory Injection
             context = self.memory.get_context_string(session_id)
-            augmented_query = f"{context}\n\nUSER: {user_message}" if context else user_message
+            augmented_query = f"{context}\\n\\nUSER: {user_message}" if context else user_message
             
             # Helper: Consumes stream and yields event dicts
             async def run_phase(phase_id: int, func: Callable, *args, use_stream=False):
+                phase_start = time.time()
                 call_args = list(args)
                 if use_stream:
                     call_args.append(stream_callback)
@@ -96,67 +131,149 @@ class NutriOrchestrator:
                         yield {"type": "token", "content": token}
                 
                 # Final Result
-                yield {"type": "result", "content": await future}
+                result = await future
+                phase_duration = time.time() - phase_start
+                logger.info(f"Phase {phase_id} completed in {phase_duration:.2f}s")
+                yield {"type": "result", "content": result}
 
-            # PHASE 1: Intent & Extraction
-            yield {"type": "reasoning", "content": "Extracting Culinary Intent..."}
+            # 2. Execute IMMEDIATE phases
             intent = None
-            async for event in run_phase(1, self.pipeline.intent_agent.extract, augmented_query, use_stream=True):
-                if event["type"] == "result": intent = event["content"]
-                else: yield event
-            
-            # PHASE 2: Knowledge Retrieval
-            yield {"type": "reasoning", "content": "Retrieving Scientific Context..."}
             docs = None
-            async for event in run_phase(2, self.pipeline.retriever.retrieve_for_phase, 2, augmented_query, 2):
-                if event["type"] == "result": docs = event["content"]
-                else: yield event
-            
-            # PHASE 3: Synthesis
-            yield {"type": "reasoning", "content": "Synthesizing Core Concepts..."}
             recipe = None
-            async for event in run_phase(3, self.pipeline.engine.synthesize, augmented_query, docs, intent, use_stream=True):
-                if event["type"] == "result": recipe = event["content"]
-                else: yield event
-            
-            # Verification (Reasoning)
             verification = None
-            async for event in run_phase(3, self.pipeline.verify, recipe):
-                if event["type"] == "result": verification = event["content"]
-                else: yield event
-            
-            # PHASE 4: Sensory Dimension Modeling
-            # PHASE 4: Sensory modeling
-            yield {"type": "reasoning", "content": "Modeling Sensory Profile..."}
-            profile = None
-            async for event in run_phase(4, self.pipeline.predict_sensory, recipe):
-                if event["type"] == "result": profile = event["content"]
-                else: yield event
-
-            # PHASE 5-6: Trade-offs
-            yield {"type": "reasoning", "content": "Simulating Culinary Counterfactuals..."}
+            profile_obj = None
             explanation = None
-            audience = preferences.get("audience_mode", "scientific")
-            async for event in run_phase(6, self.pipeline.explain_sensory, profile, audience):
-                if event["type"] == "result": explanation = event["content"]
-                else: yield event
-
-            # PHASE 7-10: Optimization
-            yield {"type": "reasoning", "content": "Performing Multi-Objective Optimization..."}
             frontier = None
-            async for event in run_phase(8, self.pipeline.generate_sensory_frontier, recipe):
-                if event["type"] == "result": frontier = event["content"]
-                else: yield event
-
             selection = None
-            goal = preferences.get("optimization_goal", "balanced")
-            async for event in run_phase(9, self.pipeline.select_sensory_variant, frontier, UserPreferences(eating_style=goal)):
-                if event["type"] == "result": selection = event["content"]
-                else: yield event
+            
+            for phase_id in plan.immediate_phases:
+                # Emit status for this phase
+                yield {
+                    "type": "status",
+                    "content": {
+                        "phase": self._get_phase_name(phase_id),
+                        "message": self._get_phase_message(phase_id)
+                    }
+                }
+                
+                # Execute phase
+                if phase_id == 1:
+                    # Intent Extraction
+                    async for event in run_phase(1, self.pipeline.intent_agent.extract, augmented_query, use_stream=True):
+                        if event["type"] == "result": intent = event["content"]
+                        else: yield event
+                        
+                elif phase_id == 2:
+                    # Knowledge Retrieval
+                    async for event in run_phase(2, self.pipeline.retriever.retrieve_for_phase, 2, augmented_query, 2):
+                        if event["type"] == "result": docs = event["content"]
+                        else: yield event
+                        
+                elif phase_id == 3:
+                    # Synthesis
+                    async for event in run_phase(3, self.pipeline.engine.synthesize, augmented_query, docs, intent, use_stream=True):
+                        if event["type"] == "result": recipe = event["content"]
+                        else: yield event
+                    
+                    # Verification (always runs with synthesis)
+                    async for event in run_phase(3, self.pipeline.verify, recipe):
+                        if event["type"] == "result": verification = event["content"]
+                        else: yield event
+                        
+                elif phase_id == 4:
+                    # Sensory Modeling
+                    async for event in run_phase(4, self.pipeline.predict_sensory, recipe):
+                        if event["type"] == "result": profile_obj = event["content"]
+                        else: yield event
+                        
+                elif phase_id == 5:
+                    # Verification (if not already run)
+                    if not verification:
+                        async for event in run_phase(5, self.pipeline.verify, recipe):
+                            if event["type"] == "result": verification = event["content"]
+                            else: yield event
+                            
+                elif phase_id == 6:
+                    # Explanation Control
+                    audience = preferences.get("audience_mode", "scientific")
+                    async for event in run_phase(6, self.pipeline.explain_sensory, profile_obj, audience):
+                        if event["type"] == "result": explanation = event["content"]
+                        else: yield event
+                        
+                elif phase_id == 8:
+                    # Frontier Generation
+                    async for event in run_phase(8, self.pipeline.generate_sensory_frontier, recipe):
+                        if event["type"] == "result": frontier = event["content"]
+                        else: yield event
+                        
+                elif phase_id == 9:
+                    # Variant Selection
+                    goal = preferences.get("optimization_goal", "balanced")
+                    async for event in run_phase(9, self.pipeline.select_sensory_variant, frontier, UserPreferences(eating_style=goal)):
+                        if event["type"] == "result": selection = event["content"]
+                        else: yield event
 
-            # PHASE 11-13: Final Synthesis
+            # 3. Yield INTERMEDIATE result (for FAST/SENSORY profiles)
+            if not plan.is_fast_mode():
+                logger.info("Assembling intermediate result...")
+                intermediate_recipe = recipe
+                intermediate_explanation = explanation if explanation else "Recipe synthesized successfully."
+                
+                yield {
+                    "type": "intermediate",
+                    "content": {
+                        "recipe": intermediate_recipe,
+                        "explanation": intermediate_explanation,
+                        "profile": profile.value
+                    }
+                }
+
+            # 4. Execute DEFERRED phases (for OPTIMIZE profile)
+            if plan.deferred_phases:
+                yield {
+                    "type": "status",
+                    "content": {
+                        "phase": "deep_analysis",
+                        "message": "Enhancing with deep analysis..."
+                    }
+                }
+                
+                for phase_id in plan.deferred_phases:
+                    # Emit status for deferred phase
+                    yield {
+                        "type": "status",
+                        "content": {
+                            "phase": self._get_phase_name(phase_id),
+                            "message": self._get_phase_message(phase_id)
+                        }
+                    }
+                    
+                    # Execute deferred phase
+                    if phase_id == 4 and not profile_obj:
+                        async for event in run_phase(4, self.pipeline.predict_sensory, recipe):
+                            if event["type"] == "result": profile_obj = event["content"]
+                            else: yield event
+                            
+                    elif phase_id == 6 and not explanation:
+                        audience = preferences.get("audience_mode", "scientific")
+                        async for event in run_phase(6, self.pipeline.explain_sensory, profile_obj, audience):
+                            if event["type"] == "result": explanation = event["content"]
+                            else: yield event
+                            
+                    elif phase_id == 8 and not frontier:
+                        async for event in run_phase(8, self.pipeline.generate_sensory_frontier, recipe):
+                            if event["type"] == "result": frontier = event["content"]
+                            else: yield event
+                            
+                    elif phase_id == 9 and not selection:
+                        goal = preferences.get("optimization_goal", "balanced")
+                        async for event in run_phase(9, self.pipeline.select_sensory_variant, frontier, UserPreferences(eating_style=goal)):
+                            if event["type"] == "result": selection = event["content"]
+                            else: yield event
+
+            # 5. FINAL assembly
             logger.info("Assembling final structured response...")
-            yield {"type": "reasoning", "content": "Wrapping Final Structured Response..."}
+            yield {"type": "status", "content": {"phase": "finalizing", "message": "Wrapping final response..."}}
             
             final_recipe = recipe
             if selection and hasattr(selection, 'selected_variant') and selection.selected_variant:
@@ -168,7 +285,7 @@ class NutriOrchestrator:
             
             # Format results for serialization
             try:
-                profile_data = profile.__dict__ if hasattr(profile, "__dict__") else {}
+                profile_data = profile_obj.__dict__ if hasattr(profile_obj, "__dict__") else {}
                 verification_data = [v.__dict__ for v in verification.claims] if (verification and hasattr(verification, "claims")) else []
             except Exception as e:
                 logger.warning(f"Metadata serialization failed: {e}")
@@ -179,7 +296,8 @@ class NutriOrchestrator:
                 "recipe": final_recipe,
                 "sensory_profile": profile_data,
                 "explanation": final_explanation,
-                "verification_report": verification_data
+                "verification_report": verification_data,
+                "execution_profile": profile.value
             }
 
             logger.info("Saving session memory...")
@@ -194,8 +312,35 @@ class NutriOrchestrator:
             yield {"type": "final", "content": result}
 
         except Exception as e:
-            logger.error(f"Orchestration failure: {e}")
+            logger.error(f"Orchestration failure: {e}", exc_info=True)
             yield {"type": "error", "content": str(e)}
-
-
-
+    
+    def _get_phase_name(self, phase_id: int) -> str:
+        """Get human-readable phase name"""
+        names = {
+            1: "intent_extraction",
+            2: "knowledge_retrieval",
+            3: "synthesis",
+            4: "sensory_modeling",
+            5: "verification",
+            6: "explanation",
+            7: "optimization",
+            8: "frontier_generation",
+            9: "variant_selection"
+        }
+        return names.get(phase_id, f"phase_{phase_id}")
+    
+    def _get_phase_message(self, phase_id: int) -> str:
+        """Get user-friendly phase status message"""
+        messages = {
+            1: "Extracting culinary intent...",
+            2: "Retrieving scientific context...",
+            3: "Synthesizing core concepts...",
+            4: "Modeling sensory profile...",
+            5: "Verifying scientific accuracy...",
+            6: "Generating explanation...",
+            7: "Optimizing recipe...",
+            8: "Generating variants...",
+            9: "Selecting best variant..."
+        }
+        return messages.get(phase_id, "Processing...")
