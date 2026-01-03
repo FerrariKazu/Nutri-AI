@@ -207,7 +207,7 @@ class LLMQwen3:
                             "num_predict": max_new_tokens,
                             "temperature": current_temp,
                             "top_p": 0.9,
-                            "num_ctx": 8192,
+                            "num_ctx": 4096, # Reduced from 8192 to save VRAM on consumer GPUs
                         },
                     )
                     

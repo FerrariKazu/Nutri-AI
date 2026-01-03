@@ -155,21 +155,42 @@ class NutriOrchestrator:
                 else: yield event
 
             # PHASE 11-13: Final Synthesis
+            logger.info("Assembling final structured response...")
             yield {"type": "reasoning", "content": "Wrapping Final Structured Response..."}
-            final_recipe = selection.selected_variant.recipe if selection and selection.selected_variant else recipe
-            final_explanation = selection.reasoning[0] if selection and selection.reasoning else explanation
             
+            final_recipe = recipe
+            if selection and hasattr(selection, 'selected_variant') and selection.selected_variant:
+                final_recipe = selection.selected_variant.recipe
+            
+            final_explanation = explanation
+            if selection and hasattr(selection, 'reasoning') and selection.reasoning:
+                final_explanation = selection.reasoning[0]
+            
+            # Format results for serialization
+            try:
+                profile_data = profile.__dict__ if hasattr(profile, "__dict__") else {}
+                verification_data = [v.__dict__ for v in verification.claims] if (verification and hasattr(verification, "claims")) else []
+            except Exception as e:
+                logger.warning(f"Metadata serialization failed: {e}")
+                profile_data = {}
+                verification_data = []
+
             result = {
                 "recipe": final_recipe,
-                "sensory_profile": profile.__dict__ if hasattr(profile, "__dict__") else {},
+                "sensory_profile": profile_data,
                 "explanation": final_explanation,
-                "verification_report": [v.__dict__ for v in verification.claims] if (verification and hasattr(verification, "claims")) else []
+                "verification_report": verification_data
             }
 
-            self.memory.add_message(session_id, "user", user_message)
-            summary = f"RECIPE: {final_recipe[:50]}... | EXPLANATION: {final_explanation[:50]}..."
-            self.memory.add_message(session_id, "assistant", summary)
+            logger.info("Saving session memory...")
+            try:
+                self.memory.add_message(session_id, "user", user_message)
+                summary = f"RECIPE: {final_recipe[:50]}... | EXPLANATION: {final_explanation[:50]}..."
+                self.memory.add_message(session_id, "assistant", summary)
+            except Exception as e:
+                logger.error(f"Memory persistence failed: {e}")
 
+            logger.info("Orchestration complete. Yielding final event.")
             yield {"type": "final", "content": result}
 
         except Exception as e:
