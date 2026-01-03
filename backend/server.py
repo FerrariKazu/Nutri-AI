@@ -43,16 +43,38 @@ class ChatRequest(BaseModel):
     message: str
     preferences: Optional[ChatPreferences] = Field(default_factory=ChatPreferences)
 
+@app.get("/nutri/chat")
 @app.post("/nutri/chat")
-async def chat_endpoint(request: ChatRequest):
+async def chat_endpoint(request: Request):
     """
     Unified chat endpoint for Nutri. Supports streaming responses via SSE.
+    Accepts POST (JSON body) or GET (Query parameters) for EventSource compatibility.
     """
-    session_id = request.session_id or str(uuid.uuid4())
-    logger.info(f"Received chat request for session: {session_id}")
+    # 1. Extract inputs based on method
+    if request.method == "POST":
+        try:
+            body = await request.json()
+            message = body.get("message")
+            session_id = body.get("session_id")
+            preferences = body.get("preferences", {})
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+    else:
+        # GET (Native EventSource)
+        message = request.query_params.get("message")
+        session_id = request.query_params.get("session_id")
+        # Support optional preferences as individual flags or JSON string
+        verbosity = request.query_params.get("verbosity", "medium")
+        preferences = {"verbosity": verbosity, "explanations": True, "streaming": True}
+
+    if not message:
+        raise HTTPException(status_code=400, detail="Message is required")
+
+    session_id = session_id or str(uuid.uuid4())
+    logger.info(f"Received {request.method} chat request for session: {session_id}")
 
     async def event_generator():
-        async for chunk in orchestrator.execute_streamed(session_id, request.message, request.preferences.dict()):
+        async for chunk in orchestrator.execute_streamed(session_id, message, preferences):
             # SSE Format: data: <json>\n\n
             yield f"data: {chunk}\n\n"
 
