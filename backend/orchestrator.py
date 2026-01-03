@@ -43,10 +43,10 @@ class NutriOrchestrator:
                 
         return await future
 
-    async def execute_streamed(self, session_id: str, user_message: str, preferences: Dict[str, Any]) -> AsyncGenerator[str, None]:
+    async def execute_streamed(self, session_id: str, user_message: str, preferences: Dict[str, Any]) -> AsyncGenerator[Dict[str, Any], None]:
         """
-        Executes the 13-phase Nutri pipeline and yields SSE-ready JSON chunks.
-        Implementing True Token Streaming via Queue Bridge.
+        Executes the 13-phase Nutri pipeline and yields structured event dictionaries.
+        Event types: 'reasoning' (phase info), 'token' (LLM stream), 'final' (structured result), 'error'.
         """
         loop = asyncio.get_running_loop()
         token_queue = asyncio.Queue()
@@ -56,14 +56,12 @@ class NutriOrchestrator:
             loop.call_soon_threadsafe(token_queue.put_nowait, token)
 
         try:
-            # PRE-PHASE: Memory Injection
+            # 0. PRE-PHASE: Memory Injection
             context = self.memory.get_context_string(session_id)
             augmented_query = f"{context}\n\nUSER: {user_message}" if context else user_message
             
-            # Helper: Consumes stream and yields (is_result, data)
-            # data is JSON string if is_result=False, or Result Object if is_result=True
+            # Helper: Consumes stream and yields event dicts
             async def run_phase(phase_id: int, func: Callable, *args, use_stream=False):
-                # Inject callback if needed
                 call_args = list(args)
                 if use_stream:
                     call_args.append(stream_callback)
@@ -82,134 +80,101 @@ class NutriOrchestrator:
                         while not token_queue.empty():
                             try:
                                 token = token_queue.get_nowait()
-                                yield (False, json.dumps({"phase": phase_id, "stream": token}))
+                                yield {"type": "token", "content": token}
                             except asyncio.QueueEmpty:
                                 break
                     else:
-                         # Heartbeat wait
+                         # Heartbeat wait (Status logic)
                          await asyncio.sleep(2)
                          if not future.done():
-                             yield (False, json.dumps({"phase": "heartbeat", "partial_output": "Processing..."}))
+                             yield {"type": "reasoning", "content": "Analyzing data..."}
 
                 # Flush remaining tokens
                 if use_stream:
                     while not token_queue.empty():
                         token = await token_queue.get()
-                        yield (False, json.dumps({"phase": phase_id, "stream": token}))
+                        yield {"type": "token", "content": token}
                 
-                # Yield Result
-                yield (True, await future)
+                # Final Result
+                yield {"type": "result", "content": await future}
 
-            # PHASE 1: Intent & Constraint Extraction
-            yield self._format_chunk(1, "Intent & Constraint Extraction", "Analyzing culinary intent and dietary constraints...")
+            # PHASE 1: Intent & Extraction
+            yield {"type": "reasoning", "content": "Extracting Culinary Intent..."}
             intent = None
-            async for is_res, data in run_phase(1, self.pipeline.intent_agent.extract, augmented_query, use_stream=True):
-                if is_res: intent = data
-                else: yield data
+            async for event in run_phase(1, self.pipeline.intent_agent.extract, augmented_query, use_stream=True):
+                if event["type"] == "result": intent = event["content"]
+                else: yield event
             
-            # PHASE 2: Domain Feasibility Check
-            yield self._format_chunk(2, "Domain Feasibility Check", "Cross-referencing scientific knowledge and documents...")
+            # PHASE 2: Knowledge Retrieval
+            yield {"type": "reasoning", "content": "Retrieving Scientific Context..."}
             docs = None
-            async for is_res, data in run_phase(2, self.pipeline.retriever.retrieve_for_phase, 2, augmented_query, 2):
-                if is_res: docs = data
-                else: yield data
+            async for event in run_phase(2, self.pipeline.retriever.retrieve_for_phase, 2, augmented_query, 2):
+                if event["type"] == "result": docs = event["content"]
+                else: yield event
             
-            # PHASE 3: Culinary / Nutrition Rule Validation
-            yield self._format_chunk(3, "Culinary / Nutrition Rule Validation", "Generating baseline recipe and verifying claims...")
+            # PHASE 3: Synthesis
+            yield {"type": "reasoning", "content": "Synthesizing Core Concepts..."}
             recipe = None
-            # Synthesize (Streaming)
-            async for is_res, data in run_phase(3, self.pipeline.engine.synthesize, augmented_query, docs, intent, use_stream=True):
-                if is_res: recipe = data
-                else: yield data
+            async for event in run_phase(3, self.pipeline.engine.synthesize, augmented_query, docs, intent, use_stream=True):
+                if event["type"] == "result": recipe = event["content"]
+                else: yield event
             
-            # Verify
+            # Verification (Reasoning)
             verification = None
-            async for is_res, data in run_phase(3, self.pipeline.verify, recipe):
-                if is_res: verification = data
-                else: yield data
+            async for event in run_phase(3, self.pipeline.verify, recipe):
+                if event["type"] == "result": verification = event["content"]
+                else: yield event
             
             # PHASE 4: Sensory Dimension Modeling
-            yield self._format_chunk(4, "Sensory Dimension Modeling", "Predicting physical and sensory properties...")
+            # PHASE 4: Sensory modeling
+            yield {"type": "reasoning", "content": "Modeling Sensory Profile..."}
             profile = None
-            async for is_res, data in run_phase(4, self.pipeline.predict_sensory, recipe):
-                if is_res: profile = data
-                else: yield data
+            async for event in run_phase(4, self.pipeline.predict_sensory, recipe):
+                if event["type"] == "result": profile = event["content"]
+                else: yield event
 
-            # PHASE 5: Counterfactual Variant Generation
-            yield self._format_chunk(5, "Counterfactual Variant Generation", "Exploring recipe variations and sensitivity...")
-            cf_report = None
-            async for is_res, data in run_phase(5, self.pipeline.simulate_sensory_counterfactual, profile, "salt_pct", 0.1):
-                if is_res: cf_report = data
-                else: yield data
-
-            # PHASE 6: Trade-off Explanation
-            yield self._format_chunk(6, "Trade-off Explanation", "Analyzing sensory impacts and audience calibration...")
+            # PHASE 5-6: Trade-offs
+            yield {"type": "reasoning", "content": "Simulating Culinary Counterfactuals..."}
             explanation = None
-            async for is_res, data in run_phase(6, self.pipeline.explain_sensory, profile, "scientific"):
-                if is_res: explanation = data
-                else: yield data
+            audience = preferences.get("audience_mode", "scientific")
+            async for event in run_phase(6, self.pipeline.explain_sensory, profile, audience):
+                if event["type"] == "result": explanation = event["content"]
+                else: yield event
 
-            # PHASE 7: Multi-Objective Optimization
-            yield self._format_chunk(7, "Multi-Objective Optimization", "Balancing nutrition and sensory targets...")
-            optimization = {"status": "balanced"}
-
-            # PHASE 8: Sensory Pareto Frontier Construction
-            yield self._format_chunk(8, "Sensory Pareto Frontier Construction", "Generating optimal variant landscape...")
+            # PHASE 7-10: Optimization
+            yield {"type": "reasoning", "content": "Performing Multi-Objective Optimization..."}
             frontier = None
-            async for is_res, data in run_phase(8, self.pipeline.generate_sensory_frontier, recipe, profile):
-                if is_res: frontier = data
-                else: yield data
+            async for event in run_phase(8, self.pipeline.generate_sensory_frontier, recipe, profile):
+                if event["type"] == "result": frontier = event["content"]
+                else: yield event
 
-            # PHASE 9: Variant Scoring
-            yield self._format_chunk(9, "Variant Scoring", "Projecting user preferences onto sensory variants...")
-            user_prefs = UserPreferences(eating_style="balanced")
             selection = None
-            async for is_res, data in run_phase(9, self.pipeline.select_sensory_variant, frontier, user_prefs):
-                if is_res: selection = data
-                else: yield data
+            goal = preferences.get("optimization_goal", "balanced")
+            async for event in run_phase(9, self.pipeline.select_sensory_variant, frontier, UserPreferences(eating_style=goal)):
+                if event["type"] == "result": selection = event["content"]
+                else: yield event
 
-            # PHASE 10: Constraint Reconciliation
-            yield self._format_chunk(10, "Constraint Reconciliation", "Enforcing physical and chemical feasibility limits...")
-            feasibility = {"warnings": []}
-
-            # PHASE 11: Output Synthesis
-            yield self._format_chunk(11, "Output Synthesis", "Compiling final recipe instructions and science logs...")
-            final_recipe = selection.selected_variant.recipe if selection.selected_variant else recipe
-
-            # PHASE 12: Explanation Layer
-            yield self._format_chunk(12, "Explanation Layer", "Calibrating final feedback for chosen audience...")
-            final_explanation = selection.reasoning[0] if selection.reasoning else "Optimized for target balance."
-
-            # PHASE 13: Final Structured Response
-            yield self._format_chunk(13, "Final Structured Response", "Finalizing response structure...")
+            # PHASE 11-13: Final Synthesis
+            yield {"type": "reasoning", "content": "Wrapping Final Structured Response..."}
+            final_recipe = selection.selected_variant.recipe if selection and selection.selected_variant else recipe
+            final_explanation = selection.reasoning[0] if selection and selection.reasoning else explanation
             
             result = {
                 "recipe": final_recipe,
                 "sensory_profile": profile.__dict__ if hasattr(profile, "__dict__") else {},
                 "explanation": final_explanation,
-                "verification_report": [v.__dict__ for v in verification.claims] if hasattr(verification, "claims") else []
+                "verification_report": [v.__dict__ for v in verification.claims] if (verification and hasattr(verification, "claims")) else []
             }
 
-            # WRITE-BACK: Memory
             self.memory.add_message(session_id, "user", user_message)
-            self.memory.add_message(session_id, "assistant", f"Recipe: {final_recipe[:100]}...")
+            summary = f"RECIPE: {final_recipe[:50]}... | EXPLANATION: {final_explanation[:50]}..."
+            self.memory.add_message(session_id, "assistant", summary)
 
-            yield json.dumps({"phase": "final", "output": result})
+            yield {"type": "final", "content": result}
 
         except Exception as e:
             logger.error(f"Orchestration failure: {e}")
-            import traceback
-            traceback.print_exc()
-            yield json.dumps({"error": str(e)})
-
-    # Removed _consume_stream and _run_blocking_stream methods as they are replaced by run_phase closure
-    
-    def _format_chunk(self, phase_id: int, title: str, text: str) -> str:
-        return json.dumps({
-            "phase": phase_id,
-            "title": title,
-            "partial_output": text
-        })
+            yield {"type": "error", "content": str(e)}
 
 
 

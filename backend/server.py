@@ -34,63 +34,67 @@ memory_store = SessionMemoryStore()
 orchestrator = NutriOrchestrator(memory_store)
 
 class ChatPreferences(BaseModel):
-    verbosity: str = "medium"
-    explanations: bool = True
-    streaming: bool = True
+    audience_mode: str = "casual"  # culinary | scientific | casual | technical
+    optimization_goal: str = "comfort" # comfort | indulgent | performance
+    verbosity: str = "medium" # low | medium | high
 
 class ChatRequest(BaseModel):
     session_id: Optional[str] = None
     message: str
     preferences: Optional[ChatPreferences] = Field(default_factory=ChatPreferences)
 
-@app.get("/nutri/chat")
-@app.post("/nutri/chat")
-async def chat_endpoint(request: Request):
+@app.post("/api/chat")
+async def chat_endpoint(request: ChatRequest):
     """
-    Unified chat endpoint for Nutri. Supports streaming responses via SSE.
-    Accepts POST (JSON body) or GET (Query parameters) for EventSource compatibility.
+    Unified production chat endpoint for Nutri.
+    Supports persistent session memory and typed SSE streaming.
     """
-    # 1. Extract inputs based on method
-    if request.method == "POST":
-        try:
-            body = await request.json()
-            message = body.get("message")
-            session_id = body.get("session_id")
-            preferences = body.get("preferences", {})
-        except Exception:
-            raise HTTPException(status_code=400, detail="Invalid JSON body")
-    else:
-        # GET (Native EventSource)
-        message = request.query_params.get("message")
-        session_id = request.query_params.get("session_id")
-        # Support optional preferences as individual flags or JSON string
-        verbosity = request.query_params.get("verbosity", "medium")
-        preferences = {"verbosity": verbosity, "explanations": True, "streaming": True}
+    session_id = request.session_id or str(uuid.uuid4())
+    logger.info(f"Production chat request: {session_id}")
 
-    if not message:
-        raise HTTPException(status_code=400, detail="Message is required")
-
-    session_id = session_id or str(uuid.uuid4())
-    logger.info(f"Received {request.method} chat request for session: {session_id}")
-
+    # Inject memory context into preferences for the orchestrator
+    pref_dict = request.preferences.dict()
+    
     async def event_generator():
-        async for chunk in orchestrator.execute_streamed(session_id, message, preferences):
-            # SSE Format: data: <json>\n\n
-            yield f"data: {chunk}\n\n"
+        # 1. Start Reasoning Phase
+        yield "event: reasoning\ndata: Initializing Nutri scientific pipeline...\n\n"
+        
+        # 2. Execute Streamed
+        async for chunk in orchestrator.execute_streamed(session_id, request.message, pref_dict):
+            # The orchestrator should yield JSON strings
+            # We wrap them in SSE events
+            try:
+                data = json.loads(chunk)
+                if "stream" in data:
+                    yield f"event: token\ndata: {data['stream']}\n\n"
+                elif "phase" in data:
+                    yield f"event: reasoning\ndata: {data.get('title', 'Processing...')}\n\n"
+                elif "final" in data or "output" in data:
+                    # Final result
+                    output = data.get("output", data.get("final"))
+                    yield f"event: final\ndata: {json.dumps({'content': output})}\n\n"
+                elif "error" in data:
+                    yield f"event: error\ndata: {data['error']}\n\n"
+            except:
+                # Fallback for raw strings (if any)
+                yield f"data: {chunk}\n\n"
+        
+        # 3. Heartbeat logic is handled by the orchestrator or here?
+        # Better handled by a background task if needed, but for now we rely on orchestrator.
 
     return StreamingResponse(
-        event_generator(), 
+        event_generator(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # Critical for Nginx/Proxies
+            "X-Accel-Buffering": "no",
         }
     )
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "version": "1.0.0"}
+    return {"status": "healthy", "service": "nutri-backend", "version": "1.1.0"}
 
 
 
