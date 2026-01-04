@@ -283,20 +283,14 @@ class NutriOrchestrator:
             if selection and hasattr(selection, 'reasoning') and selection.reasoning:
                 final_explanation = selection.reasoning[0]
             
-            # Format results for serialization
-            try:
-                profile_data = profile_obj.__dict__ if hasattr(profile_obj, "__dict__") else {}
-                verification_data = [v.__dict__ for v in verification.claims] if (verification and hasattr(verification, "claims")) else []
-            except Exception as e:
-                logger.warning(f"Metadata serialization failed: {e}")
-                profile_data = {}
-                verification_data = []
-
+            # Format results
+            # sse_safe in the server layer will handle the recursive conversion of 
+            # profile_obj, verification, etc. to JSON-safe dictionaries.
             result = {
                 "recipe": final_recipe,
-                "sensory_profile": profile_data,
+                "sensory_profile": profile_obj,
                 "explanation": final_explanation,
-                "verification_report": verification_data,
+                "verification_report": verification,
                 "execution_profile": profile.value
             }
 

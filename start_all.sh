@@ -14,7 +14,7 @@ if [ -d "venv" ]; then
 fi
 # Use python3 as fallback if python is not found
 PY_CMD=$(command -v python3 || command -v python)
-nohup $PY_CMD api.py > api.log 2>&1 &
+nohup $PY_CMD -u api.py > api.log 2>&1 &
 BACKEND_PID=$!
 echo "✅ Backend started (PID: $BACKEND_PID)"
 

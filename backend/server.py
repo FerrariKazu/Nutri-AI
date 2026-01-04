@@ -92,6 +92,8 @@ async def chat_post(request: Request, payload: ChatRequest):
         payload.execution_mode
     )
 
+from backend.sse_utils import format_sse_event
+
 async def handle_chat_execution(
     request: Request,
     message: str,
@@ -102,12 +104,12 @@ async def handle_chat_execution(
     """Core logic to run the orchestrator and wrap it in a StreamingResponse with CORS"""
     
     async def event_generator():
-        # Immediate sync heartbeat
-        yield f"event: status\ndata: {json.dumps({'phase': 'initializing', 'message': 'Connecting to Nutri backend...'})}\n\n"
-        
-        last_heartbeat = asyncio.get_event_loop().time()
-        
         try:
+            # Immediate sync heartbeat
+            yield format_sse_event("status", {"phase": "initializing", "message": "Connecting to Nutri backend..."})
+            
+            last_heartbeat = asyncio.get_event_loop().time()
+            
             async for event_dict in orchestrator.execute_streamed(
                 session_id, 
                 message, 
@@ -117,20 +119,21 @@ async def handle_chat_execution(
                 event_type = event_dict.get("type", "token")
                 content = event_dict.get("content")
                 
-                # Format to SSE
-                if event_type in ["status", "intermediate", "final", "error"]:
-                    data = json.dumps(content)
-                else:
-                    data = content
-                
-                yield f"event: {event_type}\ndata: {data}\n\n"
+                yield format_sse_event(event_type, content)
                 last_heartbeat = asyncio.get_event_loop().time()
 
-        except Exception as e:
-            logger.error(f"Orchestration crash: {e}")
-            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+            # Successful completion
+            yield format_sse_event("done", {"ok": True, "message": "Stream completed"})
 
-        # Final heartbeat check
+        except Exception as e:
+            logger.exception("CRITICAL: SSE Global Generator failure")
+            yield format_sse_event("error", {
+                "message": str(e),
+                "type": type(e).__name__,
+                "recoverable": False
+            })
+
+        # Final heartbeat check (cleanup/connection stability)
         if asyncio.get_event_loop().time() - last_heartbeat > 15:
             yield ":ping\n\n"
 

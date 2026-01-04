@@ -58,3 +58,5 @@ nutri-deploy/
 # Indices
 backend/indexes/
 vector_store/
+.vercel
+.env*.local

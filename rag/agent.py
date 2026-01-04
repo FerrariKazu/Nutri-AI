@@ -60,9 +60,10 @@ class ScienceAgent:
         # Build sources section
         sources_text = []
         for i, chunk in enumerate(chunks, 1):
-            source_name = chunk['source'].replace('.txt', '').replace('_', ' ')
+            source_type = chunk.get('index_type', 'unknown').replace('_', ' ').upper()
+            source_info = chunk.get('metadata', {}).get('description', chunk.get('metadata', {}).get('name', chunk.get('source', 'unknown')))
             sources_text.append(
-                f"[Source {i}: {source_name}]\n{chunk['text']}\n"
+                f"[Source {i} | {source_type}]: {source_info}\nContent: {chunk['text']}\n"
             )
         
         # Complete prompt
@@ -85,31 +86,24 @@ Answer:"""
         
         return prompt
     
-    def extract_sources(self, chunks: List[Dict]) -> List[Dict]:
-        """
-        Extract source citations from chunks.
-        
-        Args:
-            chunks: Retrieved chunks
-        
-        Returns:
-            List of source dicts with filename and relevance score
-        """
-        # Group by source
+        # Group by source and index type
         source_map = {}
         for chunk in chunks:
-            source = chunk['source']
-            if source not in source_map:
-                source_map[source] = {
-                    'source': source.replace('.txt', '').replace('_', ' '),
-                    'filename': source,
-                    'max_score': chunk['score'],
+            index_type = chunk.get('index_type', 'unknown')
+            source_name = chunk.get('metadata', {}).get('source', chunk.get('source', 'unknown'))
+            key = f"{index_type}:{source_name}"
+            
+            if key not in source_map:
+                source_map[key] = {
+                    'index': index_type,
+                    'source': source_name,
+                    'max_score': chunk.get('score', 0.0),
                     'chunk_count': 0
                 }
-            source_map[source]['chunk_count'] += 1
-            source_map[source]['max_score'] = max(
-                source_map[source]['max_score'],
-                chunk['score']
+            source_map[key]['chunk_count'] += 1
+            source_map[key]['max_score'] = max(
+                source_map[key]['max_score'],
+                chunk.get('score', 0.0)
             )
         
         # Convert to sorted list
