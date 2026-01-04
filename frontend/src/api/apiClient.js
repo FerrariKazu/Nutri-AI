@@ -402,16 +402,16 @@ export function streamPrompt(
         try {
             const baseURL = await getBackendURL();
             debugLog('STREAM', `📡 Fetching from: ${baseURL}/api/chat/stream`);
-            const response = await fetch(`${baseURL}/api/chat/stream`, {
-                method: 'POST',
+            debugLog('STREAM', `📡 Fetching from: ${baseURL}/api/chat/stream`);
+            const params = new URLSearchParams({
+                message: prompt,
+                mode: mode
+            });
+            const response = await fetch(`${baseURL}/api/chat/stream?${params.toString()}`, {
+                method: 'GET',
                 headers: {
-                    'Content-Type': 'application/json',
                     'ngrok-skip-browser-warning': 'true',
                 },
-                body: JSON.stringify({
-                    message: prompt,
-                    mode: mode,
-                }),
                 signal: combinedSignal,
             });
 
@@ -572,86 +572,95 @@ export function streamNutriChat(
     (async () => {
         try {
             const baseURL = await getBackendURL();
-            const response = await fetch(`${baseURL}/api/chat`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'ngrok-skip-browser-warning': 'true',
-                },
-                body: JSON.stringify({
-                    session_id: sessionId,
-                    message: message,
-                    preferences: preferences
-                }),
-                signal: controller.signal
+
+            // Build Query Parameters for GET-based SSE (EventSource)
+            const params = new URLSearchParams({
+                message: message,
+                session_id: sessionId,
+                execution_mode: preferences.execution_mode || '',
+                audience_mode: preferences.audience_mode || 'scientific',
+                optimization_goal: preferences.optimization_goal || 'comfort',
+                verbosity: preferences.verbosity || 'medium'
             });
 
-            if (!response.ok) {
-                const errText = await response.text();
-                throw new Error(`HTTP ${response.status}: ${errText}`);
-            }
+            const url = `${baseURL}/api/chat/stream?${params.toString()}`;
+            debugLog('SSE', `🔗 Opening EventSource: ${url}`);
 
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-            let currentEvent = 'token';
+            const eventSource = new EventSource(url);
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done || aborted) break;
+            // Handle cross-context abort
+            const cleanup = () => {
+                debugLog('SSE', '🔌 Closing EventSource');
+                eventSource.close();
+            };
 
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
-                buffer = lines.pop() || '';
+            eventSource.onopen = () => {
+                debugLog('SSE', '🟢 Connection established');
+            };
 
-                for (const line of lines) {
-                    const trimmed = line.trim();
-                    if (!trimmed) continue;
+            eventSource.addEventListener('status', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (onStatus) onStatus(data);
+                    if (onReasoning && data.message) onReasoning(data.message);
+                } catch (err) {
+                    debugError('SSE', 'Status parse error', err);
+                }
+            });
 
-                    if (trimmed.startsWith('event: ')) {
-                        currentEvent = trimmed.slice(7).trim();
-                    } else if (trimmed.startsWith('data: ')) {
-                        const data = trimmed.slice(6).trim();
-                        if (!data) continue;
+            eventSource.addEventListener('token', (e) => {
+                onToken(e.data);
+            });
 
-                        try {
-                            if (currentEvent === 'status') {
-                                // NEW: Phase status update
-                                const statusData = JSON.parse(data);
-                                if (onStatus) {
-                                    onStatus(statusData);
-                                }
-                                // Also call onReasoning for backward compatibility
-                                if (onReasoning && statusData.message) {
-                                    onReasoning(statusData.message);
-                                }
-                            } else if (currentEvent === 'token') {
-                                onToken(data);
-                            } else if (currentEvent === 'reasoning') {
-                                onReasoning(data);
-                            } else if (currentEvent === 'intermediate') {
-                                // Intermediate result (for OPTIMIZE profile)
-                                const parsed = JSON.parse(data);
-                                console.log('Intermediate result:', parsed);
-                                // Could trigger onReasoning or a separate callback
-                                if (onReasoning) {
-                                    onReasoning('Intermediate result ready, continuing optimization...');
-                                }
-                            } else if (currentEvent === 'final') {
-                                const parsed = JSON.parse(data);
-                                onComplete(parsed.content || parsed);
-                            } else if (currentEvent === 'error') {
-                                throw new Error(data);
-                            }
-                        } catch (e) {
-                            console.error('SSE Parse Error:', e, data);
-                        }
+            eventSource.addEventListener('reasoning', (e) => {
+                onReasoning(e.data);
+            });
+
+            eventSource.addEventListener('intermediate', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (onReasoning) onReasoning('Optimization step complete...');
+                } catch (err) { }
+            });
+
+            eventSource.addEventListener('final', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    onComplete(data.content || data);
+                    cleanup();
+                } catch (err) {
+                    debugError('SSE', 'Final parse error', err);
+                }
+            });
+
+            eventSource.addEventListener('error', (e) => {
+                debugError('SSE', 'Connection collapsed or error received', e);
+                // EventSource treats any network failure or explicit error event as an "error"
+                // If it's a server error event, the data might contain json
+                if (e.data) {
+                    try {
+                        const errData = JSON.parse(e.data);
+                        onError(new Error(errData.error || 'Server error'));
+                    } catch (p) {
+                        onError(new Error('Connection error'));
+                    }
+                } else {
+                    // This often happens on clean close or network loss
+                    if (eventSource.readyState === EventSource.CLOSED) {
+                        debugLog('SSE', 'Connection closed normally');
+                    } else {
+                        onError(new Error('SSE connection failed'));
                     }
                 }
-            }
+                cleanup();
+            });
+
+            // Return the cleanup function for the caller to abort
+            controller.signal.addEventListener('abort', cleanup);
+
         } catch (error) {
             if (!aborted) {
-                console.error('Stream Error:', error);
+                console.error('Stream Setup Error:', error);
                 onError(error);
             }
         }
