@@ -557,23 +557,24 @@ export function streamNutriChat(
         audience_mode: 'scientific',
         optimization_goal: 'comfort',
         verbosity: 'medium',
-        execution_mode: null  // Optional: 'fast', 'sensory', 'optimize', 'research'
+        execution_mode: null
     },
     onReasoning,
     onToken,
     onComplete,
     onError,
-    onStatus = null  // NEW: Optional status callback
+    onStatus = null
 ) {
     const sessionId = getSessionId();
     const controller = new AbortController();
     let aborted = false;
+    let completed = false;
+    let eventSource = null;
 
     (async () => {
         try {
             const baseURL = await getBackendURL();
 
-            // Build Query Parameters for GET-based SSE (EventSource)
             const params = new URLSearchParams({
                 message: message,
                 session_id: sessionId,
@@ -586,21 +587,30 @@ export function streamNutriChat(
             const url = `${baseURL}/api/chat/stream?${params.toString()}`;
             debugLog('SSE', `🔗 Opening EventSource: ${url}`);
 
-            const eventSource = new EventSource(url);
+            eventSource = new EventSource(url);
 
-            // Handle cross-context abort
             const cleanup = () => {
-                debugLog('SSE', '🔌 Closing EventSource');
-                eventSource.close();
+                if (eventSource) {
+                    debugLog('SSE', '🔌 Closing EventSource');
+                    eventSource.close();
+                    eventSource = null;
+                }
             };
 
             eventSource.onopen = () => {
                 debugLog('SSE', '🟢 Connection established');
+                completed = false;
             };
+
+            // Custom "ping" from backend to keep connection alive
+            eventSource.addEventListener('ping', () => {
+                debugLog('SSE', '💓 Heartbeat received');
+            });
 
             eventSource.addEventListener('status', (e) => {
                 try {
                     const data = JSON.parse(e.data);
+                    debugLog('SSE', `📊 Status: ${data.phase}`, data);
                     if (onStatus) onStatus(data);
                     if (onReasoning && data.message) onReasoning(data.message);
                 } catch (err) {
@@ -609,58 +619,95 @@ export function streamNutriChat(
             });
 
             eventSource.addEventListener('token', (e) => {
-                onToken(e.data);
+                // Tokens are JSON-safe strings according to the new backend
+                try {
+                    const token = JSON.parse(e.data);
+                    onToken(token);
+                } catch (err) {
+                    // Fallback if it somehow isn't valid JSON
+                    onToken(e.data);
+                }
             });
 
             eventSource.addEventListener('reasoning', (e) => {
-                onReasoning(e.data);
+                try {
+                    const content = JSON.parse(e.data);
+                    onReasoning(content);
+                } catch (err) {
+                    onReasoning(e.data);
+                }
             });
 
             eventSource.addEventListener('intermediate', (e) => {
                 try {
                     const data = JSON.parse(e.data);
-                    if (onReasoning) onReasoning('Optimization step complete...');
+                    debugLog('SSE', '🧬 Intermediate update', data);
+                    // Use onStatus to push intermediate results if needed
+                    if (onStatus) onStatus({ phase: 'intermediate', ...data });
                 } catch (err) { }
             });
 
+            // The 'final' event brings the aggregate result object
             eventSource.addEventListener('final', (e) => {
                 try {
                     const data = JSON.parse(e.data);
-                    onComplete(data.content || data);
-                    cleanup();
+                    debugLog('SSE', '🏁 Final result received', data);
+                    onComplete(data);
                 } catch (err) {
                     debugError('SSE', 'Final parse error', err);
                 }
             });
 
-            eventSource.addEventListener('error', (e) => {
-                debugError('SSE', 'Connection collapsed or error received', e);
-                // EventSource treats any network failure or explicit error event as an "error"
-                // If it's a server error event, the data might contain json
-                if (e.data) {
-                    try {
-                        const errData = JSON.parse(e.data);
-                        onError(new Error(errData.error || 'Server error'));
-                    } catch (p) {
-                        onError(new Error('Connection error'));
-                    }
-                } else {
-                    // This often happens on clean close or network loss
-                    if (eventSource.readyState === EventSource.CLOSED) {
-                        debugLog('SSE', 'Connection closed normally');
-                    } else {
-                        onError(new Error('SSE connection failed'));
-                    }
+            // The 'done' event signals clean termination
+            eventSource.addEventListener('done', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    debugLog('SSE', `✅ Done signal: ${data.status}`, data);
+                    completed = true;
+                    // We don't close immediately to allow 'final' to process if it arrived just before
+                    setTimeout(cleanup, 100);
+                } catch (err) {
+                    completed = true;
+                    cleanup();
                 }
-                cleanup();
             });
 
-            // Return the cleanup function for the caller to abort
+            // Explicit backend error event
+            eventSource.addEventListener('error_event', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    debugError('SSE', `❌ Backend reported error: ${data.message}`, data);
+                    onError(new Error(data.message || 'Backend execution failed'));
+                    completed = true; // Mark as "handled"
+                    cleanup();
+                } catch (err) { }
+            });
+
+            // Generic EventSource error (usually network/timeout/closure)
+            eventSource.onerror = (e) => {
+                if (completed || aborted) {
+                    debugLog('SSE', 'ℹ️ Connection closed after completion or abort (expected)');
+                    return;
+                }
+
+                debugError('SSE', '⚠️ Connection lost prematurely', e);
+
+                // If it's closed but we haven't received 'done', it's a failure
+                if (eventSource && eventSource.readyState === EventSource.CLOSED) {
+                    onError(new Error('Connection lost before processing completed.'));
+                } else if (!eventSource) {
+                    // Already cleaned up
+                } else {
+                    // Reconnecting... (EventSource behavior)
+                    debugLog('SSE', '🔄 EventSource attempting to reconnect...');
+                }
+            };
+
             controller.signal.addEventListener('abort', cleanup);
 
         } catch (error) {
             if (!aborted) {
-                console.error('Stream Setup Error:', error);
+                console.error('SSE Setup Error:', error);
                 onError(error);
             }
         }

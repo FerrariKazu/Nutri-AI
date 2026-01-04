@@ -101,53 +101,76 @@ async def handle_chat_execution(
     preferences: Dict[str, Any],
     execution_mode: Optional[str]
 ):
-    """Core logic to run the orchestrator and wrap it in a StreamingResponse with CORS"""
+    """Core logic with concurrent heartbeat to survive long LLM phases"""
     
     async def event_generator():
-        try:
-            # Immediate sync heartbeat
-            yield format_sse_event("status", {"phase": "initializing", "message": "Connecting to Nutri backend..."})
-            
-            last_heartbeat = asyncio.get_event_loop().time()
-            
-            async for event_dict in orchestrator.execute_streamed(
-                session_id, 
-                message, 
-                preferences,
-                execution_mode=execution_mode
-            ):
-                event_type = event_dict.get("type", "token")
-                content = event_dict.get("content")
+        queue = asyncio.Queue()
+        
+        # Immediate initialization event
+        yield format_sse_event("status", {"phase": "initializing", "message": "Connecting to Nutri backend..."})
+
+        async def run_orchestrator():
+            try:
+                async for event_dict in orchestrator.execute_streamed(
+                    session_id, 
+                    message, 
+                    preferences,
+                    execution_mode=execution_mode
+                ):
+                    await queue.put(event_dict)
                 
+                # Mandatory done event
+                await queue.put({"type": "done", "content": {"status": "completed"}})
+            except Exception as e:
+                logger.exception("Orchestrator task failed")
+                await queue.put({
+                    "type": "error_event", 
+                    "content": {"message": str(e), "phase": "orchestration", "status": "failed"}
+                })
+            finally:
+                await queue.put(None) # Sentinel
+
+        async def heartbeat():
+            try:
+                while True:
+                    await asyncio.sleep(12) # Cloudflare-safe interval
+                    await queue.put({"type": "ping", "content": {}})
+            except asyncio.CancelledError:
+                pass
+
+        # Start background tasks
+        o_task = asyncio.create_task(run_orchestrator())
+        h_task = asyncio.create_task(heartbeat())
+
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                
+                event_type = item.get("type", "token")
+                content = item.get("content")
                 yield format_sse_event(event_type, content)
-                last_heartbeat = asyncio.get_event_loop().time()
-
-            # Successful completion
-            yield format_sse_event("done", {"ok": True, "message": "Stream completed"})
-
-        except Exception as e:
-            logger.exception("CRITICAL: SSE Global Generator failure")
-            yield format_sse_event("error", {
-                "message": str(e),
-                "type": type(e).__name__,
-                "recoverable": False
-            })
-
-        # Final heartbeat check (cleanup/connection stability)
-        if asyncio.get_event_loop().time() - last_heartbeat > 15:
-            yield ":ping\n\n"
+        finally:
+            h_task.cancel()
+            o_task.cancel()
+            try:
+                await h_task
+                await o_task
+            except asyncio.CancelledError:
+                pass
 
     response = StreamingResponse(
         event_generator(),
         media_type="text/event-stream"
     )
     
-    # SSE Hardening Headers
+    # Cloudflare/Nginx Tuning Headers
     response.headers["Cache-Control"] = "no-cache"
     response.headers["Connection"] = "keep-alive"
     response.headers["X-Accel-Buffering"] = "no"
+#    response.headers["Transfer-Encoding"] = "chunked" # StreamingResponse usually handles this
     
-    # Attach CORS manually
     return add_cors_headers(response, request)
 
 @app.get("/health")
