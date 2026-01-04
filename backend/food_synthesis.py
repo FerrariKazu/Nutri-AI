@@ -947,7 +947,13 @@ Keep the same format as the original."""
             name = ing.get("name")
             amount = ing.get("amount_g", 0)
             if name and amount > 0:
-                props, provenance = self._sensory_mapper.map_ingredient(name, amount, self.retriever)
+                props, provenance = self._sensory_mapper.map_ingredient(
+                    name, 
+                    amount, 
+                    self.retriever,
+                    idx=i+1,
+                    total=len(ingredients_list)
+                )
                 properties_list.append(props)
                 if provenance["used_recipes_store"]: aggregated_provenance["used_recipes_store"] = True
                 if provenance["used_open_nutrition"]: aggregated_provenance["used_open_nutrition"] = True
@@ -978,11 +984,17 @@ Keep the same format as the original."""
         aggregated_provenance = {"used_recipes_store": False, "used_open_nutrition": False}
         
         if ingredients:
-            for ing in ingredients:
+            for i, ing in enumerate(ingredients):
                 name = ing.get("name")
                 amount = ing.get("amount_g", 0)
                 if name and amount > 0:
-                    props, provenance = self._sensory_mapper.map_ingredient(name, amount, self.retriever)
+                    props, provenance = self._sensory_mapper.map_ingredient(
+                        name, 
+                        amount, 
+                        self.retriever,
+                        idx=i+1,
+                        total=len(ingredients)
+                    )
                     properties_list.append(props)
                     if provenance["used_recipes_store"]: aggregated_provenance["used_recipes_store"] = True
                     if provenance["used_open_nutrition"]: aggregated_provenance["used_open_nutrition"] = True

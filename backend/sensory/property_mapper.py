@@ -61,12 +61,15 @@ class SensoryPropertyMapper:
         self, 
         ingredient: str, 
         amount_g: float, 
-        retriever: Any
+        retriever: Any,
+        idx: Optional[int] = None,
+        total: Optional[int] = None
     ) -> (PhysicalProperties, Dict[str, bool]):
         """
         Maps an ingredient to its physical properties using policy-governed retrieval.
         """
-        logger.info(f"Mapping properties for {ingredient} ({amount_g}g)")
+        progress = f"[{idx}/{total}] " if idx and total else ""
+        logger.info(f"{progress}Mapping properties for {ingredient} ({amount_g}g)")
         
         # Policy: Primary stores (Chemistry, Science, USDA)
         # Secondary: open_nutrition
