@@ -58,8 +58,14 @@ async function detectBackend() {
     if (import.meta.env.VITE_API_URL) {
         const envUrl = import.meta.env.VITE_API_URL.replace(/\/$/, ''); // Remove trailing slash
         debugLog('BACKEND', `🌍 Using VITE_API_URL: ${envUrl}`);
-        console.log(`🌍 Using VITE_API_URL: ${envUrl}`);
         return envUrl;
+    }
+
+    // 1. Localhost Proxy Guard
+    // If we are on localhost:5173, force empty string to use Vite Proxy
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        debugLog('BACKEND', '🛡️ Localhost detected. Forcing relative URLs to use Vite Proxy (CORS-free).');
+        return ''; // Returning empty string makes fetch('/api/...') use the relative path
     }
 
     // 1. Try local URLs first
@@ -94,7 +100,10 @@ let backendUrlPromise = null;
 
 function getBackendURL() {
     if (!backendUrlPromise) {
-        backendUrlPromise = detectBackend();
+        backendUrlPromise = detectBackend().then(url => {
+            console.log(`📡 [API] Final Backend URL selected: "${url}" ${url === '' ? '(Using Vite Proxy)' : ''}`);
+            return url;
+        });
     }
     return backendUrlPromise;
 }
@@ -186,7 +195,11 @@ async function retry(fn, maxRetries, baseDelay) {
 /**
  * Parse JSON safely
  */
-function parseJSON(text) {
+/**
+ * Parse JSON safely without crashing
+ */
+function safeParseJSON(text) {
+    if (!text || typeof text !== 'string') return null;
     try {
         return JSON.parse(text);
     } catch (e) {
@@ -256,7 +269,7 @@ export async function sendPrompt(prompt, mode = 'standard', signal = null) {
             // Handle HTTP errors
             if (!res.ok) {
                 const errorText = await res.text();
-                const errorData = parseJSON(errorText);
+                const errorData = safeParseJSON(errorText);
 
                 debugError('API', `HTTP ERROR: ${res.status} ${res.statusText}`, {
                     status: res.status,
@@ -469,40 +482,31 @@ export function streamPrompt(
                             break;
                         }
 
-                        try {
-                            const parsed = JSON.parse(data);
-                            const type = parsed.type || 'token';
+                        // SAFE PARSING: Only parse if it looks like JSON
+                        const parsed = data.trim().startsWith('{') ? safeParseJSON(data) : null;
+                        const type = parsed?.type || 'token';
 
-                            if (type === 'status') {
-                                // Inform UI of status change (e.g., "Model warming up...")
-                                onToken(parsed.message, 'status');
-                            } else if (type === 'ping') {
-                                // Pings are just to keep the connection alive
-                                debugLog('STREAM', '💓 Ping received');
-                            } else if (type === 'token' || type === 'content') {
-                                const token = parsed.content || parsed.token || '';
-                                if (token) {
-                                    tokenCount++;
-                                    // Add to RAW buffer
-                                    rawBuffer += token;
+                        if (type === 'status' || parsed?.message) {
+                            // Inform UI of status change
+                            onToken(parsed?.message || data, 'status');
+                        } else if (type === 'ping') {
+                            debugLog('STREAM', '💓 Ping received');
+                        } else if (type === 'token' || type === 'content' || !parsed) {
+                            const token = parsed?.content || parsed?.token || data || '';
+                            if (token) {
+                                tokenCount++;
+                                rawBuffer += token;
+                                const cleanBuffer = cleanResponse(rawBuffer);
 
-                                    // Clean the entire raw buffer
-                                    const cleanBuffer = cleanResponse(rawBuffer);
-
-                                    // If cleaning resulted in new content, emit it
-                                    if (cleanBuffer.length > previousCleanLength) {
-                                        const newContent = cleanBuffer.slice(previousCleanLength);
-                                        fullResponse += newContent;
-                                        onToken(newContent, 'token');
-                                        previousCleanLength = cleanBuffer.length;
-                                    }
+                                if (cleanBuffer.length > previousCleanLength) {
+                                    const newContent = cleanBuffer.slice(previousCleanLength);
+                                    fullResponse += newContent;
+                                    onToken(newContent, 'token');
+                                    previousCleanLength = cleanBuffer.length;
                                 }
-                            } else if (type === 'error') {
-                                throw new Error(parsed.message || 'Stream error');
                             }
-
-                        } catch (e) {
-                            debugError('STREAM', 'JSON parse error in chunk', { data, error: e.message });
+                        } else if (type === 'error') {
+                            throw new Error(parsed.message || 'Stream error');
                         }
                     }
                 }
@@ -539,8 +543,79 @@ export function streamPrompt(
 }
 
 /**
+ * Get system stats
+ */
+export async function getConversationsList() {
+    debugLog('API', '🔄 Fetching conversation list...');
+    try {
+        const baseURL = await getBackendURL();
+        const response = await fetch(`${baseURL}/api/conversations`, {
+            headers: { 'ngrok-skip-browser-warning': 'true' }
+        });
+
+        if (!response.ok) throw new Error(`Failed to fetch list: ${response.status}`);
+
+        const data = await response.json();
+        debugLog('API', `📥 Received ${data.conversations?.length || 0} conversations`);
+        return data.conversations || [];
+    } catch (error) {
+        debugError('API', 'List fetch failed', error);
+        return [];
+    }
+}
+
+export async function createNewSession() {
+    debugLog('API', '🆕 Creating new session...');
+    try {
+        const baseURL = await getBackendURL();
+        const response = await fetch(`${baseURL}/api/conversation`, {
+            method: 'POST',
+            headers: { 'ngrok-skip-browser-warning': 'true' }
+        });
+
+        if (!response.ok) throw new Error('Creation failed');
+
+        const data = await response.json();
+
+        // Update local storage
+        localStorage.setItem('nutri_session_id', data.session_id);
+
+        return data.session_id;
+    } catch (error) {
+        debugError('API', 'Create failed', error);
+        // Fallback to random client-side ID
+        return getSessionId();
+    }
+}
+
+/**
+ * Get the current canonical conversation memory from the backend.
+ * Essential for UI hydration on page load.
+ */
+export async function getConversation(sessionId) {
+    debugLog('API', `🔄 Fetching conversation history for session: ${sessionId}`);
+    try {
+        const baseURL = await getBackendURL();
+        const response = await fetch(`${baseURL}/api/conversation?session_id=${sessionId}`, {
+            headers: { 'ngrok-skip-browser-warning': 'true' }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch history: ${response.status}`);
+        }
+
+        const data = await response.json();
+        debugLog('API', `📥 History received: ${data.messages?.length || 0} messages`);
+        return data;
+    } catch (error) {
+        debugError('API', 'History fetch failed', error);
+        return { messages: [], current_mode: 'conversation' };
+    }
+}
+
+/**
  * Stream Nutri's 13-phase reasoning process (Production API)
- * Uses POST /api/chat with typed SSE events (status, token, reasoning, intermediate, final, error)
+ * Uses GET /api/chat/stream with typed SSE events
  * 
  * @param {string} message - User input
  * @param {Object} preferences - { audience_mode, optimization_goal, verbosity, execution_mode }
@@ -585,122 +660,84 @@ export function streamNutriChat(
             });
 
             const url = `${baseURL}/api/chat/stream?${params.toString()}`;
-            debugLog('SSE', `🔗 Opening EventSource: ${url}`);
+            debugLog('SSE', `🔗 [OPEN] Opening EventSource: ${url}`);
 
             eventSource = new EventSource(url);
 
             const cleanup = () => {
                 if (eventSource) {
-                    debugLog('SSE', '🔌 Closing EventSource');
+                    debugLog('SSE', '🔌 [CLOSE] Closing EventSource');
                     eventSource.close();
                     eventSource = null;
                 }
             };
 
             eventSource.onopen = () => {
-                debugLog('SSE', '🟢 Connection established');
+                debugLog('SSE', '🟢 [CONNECT] Connection established');
                 completed = false;
             };
 
             // Custom "ping" from backend to keep connection alive
             eventSource.addEventListener('ping', () => {
-                debugLog('SSE', '💓 Heartbeat received');
+                debugLog('SSE', '💓 [PING] Heartbeat received');
             });
 
             eventSource.addEventListener('status', (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    debugLog('SSE', `📊 Status: ${data.phase}`, data);
-                    if (onStatus) onStatus(data);
-                    if (onReasoning && data.message) onReasoning(data.message);
-                } catch (err) {
-                    debugError('SSE', 'Status parse error', err);
-                }
+                const parsed = safeParseJSON(e.data);
+                const statusData = parsed || { message: e.data, phase: 'update' };
+
+                debugLog('SSE', `📊 [STATUS] ${statusData.phase}: ${statusData.message}`);
+
+                if (onStatus) onStatus(statusData);
+                if (onReasoning) onReasoning(statusData.message || e.data);
             });
 
             eventSource.addEventListener('token', (e) => {
-                // Tokens are JSON-safe strings according to the new backend
-                try {
-                    const token = JSON.parse(e.data);
-                    onToken(token);
-                } catch (err) {
-                    // Fallback if it somehow isn't valid JSON
-                    onToken(e.data);
+                // Tokens are raw or JSON-wrapped tokens
+                let token = e.data;
+                if (token.trim().startsWith('{')) {
+                    const parsed = safeParseJSON(token);
+                    token = parsed?.content || parsed?.token || token;
                 }
+                onToken(token);
             });
 
-            eventSource.addEventListener('reasoning', (e) => {
-                try {
-                    const content = JSON.parse(e.data);
-                    onReasoning(content);
-                } catch (err) {
-                    onReasoning(e.data);
-                }
-            });
-
-            eventSource.addEventListener('intermediate', (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    debugLog('SSE', '🧬 Intermediate update', data);
-                    // Use onStatus to push intermediate results if needed
-                    if (onStatus) onStatus({ phase: 'intermediate', ...data });
-                } catch (err) { }
-            });
-
-            // The 'final' event brings the aggregate result object
-            eventSource.addEventListener('final', (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    debugLog('SSE', '🏁 Final result received', data);
-                    onComplete(data);
-                } catch (err) {
-                    debugError('SSE', 'Final parse error', err);
-                }
-            });
-
-            // The 'done' event signals clean termination
             eventSource.addEventListener('done', (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    debugLog('SSE', `✅ Done signal: ${data.status}`, data);
-                    completed = true;
-                    // We don't close immediately to allow 'final' to process if it arrived just before
-                    setTimeout(cleanup, 100);
-                } catch (err) {
-                    completed = true;
-                    cleanup();
+                debugLog('SSE', '✅ [DONE] Completion signal received');
+                completed = true;
+
+                let statusInfo = { status: 'success' };
+                if (e.data && e.data.trim().startsWith('{')) {
+                    const parsed = safeParseJSON(e.data);
+                    if (parsed) statusInfo = parsed;
                 }
+
+                if (onComplete) onComplete(statusInfo);
+                cleanup();
             });
 
             // Explicit backend error event
             eventSource.addEventListener('error_event', (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    debugError('SSE', `❌ Backend reported error: ${data.message}`, data);
-                    onError(new Error(data.message || 'Backend execution failed'));
-                    completed = true; // Mark as "handled"
-                    cleanup();
-                } catch (err) { }
+                const parsed = safeParseJSON(e.data);
+                const errorMsg = parsed?.message || e.data || 'Backend execution failed';
+                debugError('SSE', `❌ [ERROR_EVENT] ${errorMsg}`);
+                onError(new Error(errorMsg));
+                completed = true;
+                cleanup();
             });
 
             // Generic EventSource error (usually network/timeout/closure)
+            // Generic EventSource error (usually network/timeout/closure)
             eventSource.onerror = (e) => {
-                if (completed || aborted) {
-                    debugLog('SSE', 'ℹ️ Connection closed after completion or abort (expected)');
-                    return;
-                }
+                if (completed || aborted) return;
 
-                debugError('SSE', '⚠️ Connection lost prematurely', e);
+                debugError('SSE', '⚠️ [CONNECTION_ERROR] Stream failed or closed.');
 
-                // If it's closed but we haven't received 'done', it's a failure
-                if (eventSource && eventSource.readyState === EventSource.CLOSED) {
-                    onError(new Error('Connection lost before processing completed.'));
-                } else if (!eventSource) {
-                    // Already cleaned up
-                } else {
-                    // Reconnecting... (EventSource behavior)
-                    debugLog('SSE', '🔄 EventSource attempting to reconnect...');
-                }
+                // CRITICAL: Prevent EventSource from auto-retrying (which would restart generation)
+                // We treat any stream interruption as a fatal error for this turn.
+                cleanup();
+
+                onError(new Error('Stream connection interrupted.'));
             };
 
             controller.signal.addEventListener('abort', cleanup);

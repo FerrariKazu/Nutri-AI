@@ -1,0 +1,30 @@
+# Huge directories
+vector_store/
+backend/
+venv/
+data_sources/
+data/
+processed/
+data_ingestion/
+rag/
+llm_runtime/
+llama_build_temp/
+tests/
+scripts/
+models/
+
+# Explicit Binaries (The Cause of 2GB Failures)
+llama-server
+llama.tar.gz
+postgres-data/
+
+# Logs and DBs
+*.log
+*.db
+*.sqlite
+__pycache__/
+.cache/
+.DS_Store
+
+# Git
+.git/

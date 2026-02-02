@@ -37,6 +37,7 @@ from backend.sensory.property_mapper import SensoryPropertyMapper
 from backend.sensory.predictor import SensoryPredictor
 from backend.sensory.optimizer import SensoryOptimizer
 from backend.sensory.frontier import SensoryParetoOptimizer
+from backend.presentation.agent import FinalPresentationAgent
 from backend.sensory.selector import VariantSelector
 from backend.sensory.explainer import ExplanationLayer
 from backend.sensory.counterfactual_engine import CounterfactualEngine
@@ -77,6 +78,15 @@ You must think in this order:
 6. Explain WHY the recipe works chemically
 
 If something is not possible, you must say so and explain why.
+
+─────────────────────────────────────────────────────────────
+OUTPUT FORMAT (MANDATORY)
+─────────────────────────────────────────────────────────────
+
+Output the final answer DIRECTLY in clean Markdown.
+DO NOT include internal reasoning, analysis, or "thinking" steps.
+DO NOT use closing tags, XML markers, or any meta-tokens.
+Just output the recipe or explanation immediately.
 
 ─────────────────────────────────────────────────────────────
 SCIENTIFIC ACCURACY RULES (MANDATORY)
@@ -365,7 +375,7 @@ class IntentAgent:
     Does NO food reasoning - only extraction and normalization.
     """
     
-    def __init__(self, model_name: str = "qwen3:8b"):
+    def __init__(self, model_name: str = "qwen3:4b"):
         """
         Initialize the intent extraction agent.
         
@@ -470,7 +480,7 @@ class FoodSynthesisEngine:
     Uses retrieved knowledge to invent chemically feasible meals.
     """
     
-    def __init__(self, model_name: str = "qwen3:8b"):
+    def __init__(self, model_name: str = "qwen3:4b"):
         """
         Initialize the synthesis engine.
         
@@ -485,7 +495,8 @@ class FoodSynthesisEngine:
         user_query: str,
         retrieved_docs: List[RetrievedDocument],
         intent: Optional[IntentOutput] = None,
-        stream_callback: Optional[callable] = None
+        stream_callback: Optional[callable] = None,
+        boundary_token: Optional[str] = None
     ) -> str:
         """
         Generate a novel recipe with chemical explanation.
@@ -524,7 +535,8 @@ class FoodSynthesisEngine:
                 messages=messages,
                 max_new_tokens=4096,  # Increased for complete recipes
                 temperature=0.4,  # Slightly creative but grounded
-                stream_callback=stream_callback
+                stream_callback=stream_callback,
+                boundary_token=boundary_token
             )
             
             # Log final reasoning output (LOGGING REQUIREMENT)
@@ -582,7 +594,14 @@ Invent a novel dish following the reasoning steps in your instructions."""
         context: str
     ) -> str:
         """Build Phase 2 query with structured constraints."""
-        constraints = intent.to_dict()
+        # Defensive: Handle both IntentOutput object and dict
+        if hasattr(intent, "to_dict"):
+            constraints = intent.to_dict()
+        elif isinstance(intent, dict):
+            constraints = intent
+        else:
+            logger.warning(f"Unknown intent type: {type(intent)}. Defaulting to empty constraints.")
+            constraints = {}
         
         return f"""Based on the following scientific knowledge:
 
@@ -613,7 +632,7 @@ class NutriPipeline:
     
     def __init__(
         self,
-        model_name: str = "qwen3:8b",
+        model_name: str = "qwen3:4b",
         use_phase2: bool = True
     ):
         """
@@ -626,6 +645,7 @@ class NutriPipeline:
         self.retriever = FoodSynthesisRetriever()
         self.engine = FoodSynthesisEngine(model_name=model_name)
         self.intent_agent = IntentAgent(model_name=model_name) if use_phase2 else None
+        self.presentation_agent = FinalPresentationAgent(self.engine.llm)
         self.use_phase2 = use_phase2
         
         logger.info(f"NutriPipeline initialized (Phase {'2' if use_phase2 else '1'})")
@@ -664,7 +684,8 @@ class NutriPipeline:
             user_query=user_input,
             retrieved_docs=retrieved_docs,
             intent=intent,
-            stream_callback=stream_callback
+            stream_callback=stream_callback,
+            boundary_token=boundary_token
         )
         
         # Build result

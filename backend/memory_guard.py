@@ -1,6 +1,6 @@
 """
 Nutri Memory Guard - Circuit Breaker for Memory Pressure
-Prevents system thrashing by downgrading execution profile under high swap usage.
+Prevents system thrashing by downgrading execution profile or capping generation.
 """
 
 import logging
@@ -14,8 +14,8 @@ class MemoryGuard:
     """Circuit breaker for memory pressure detection"""
     
     # Thresholds
-    SWAP_THRESHOLD_MB = 1500  # Downgrade if swap usage > 1.5GB
-    SWAP_CRITICAL_MB = 2500   # Force FAST mode if swap > 2.5GB
+    SWAP_THRESHOLD_MB = 1500  # Downgrade/Cap if swap usage > 1.5GB
+    SWAP_CRITICAL_MB = 2500   # Force FAST / Heavy Cap if swap > 2.5GB
     
     @staticmethod
     def check_pressure() -> tuple[bool, float]:
@@ -74,6 +74,26 @@ class MemoryGuard:
         # FAST and SENSORY are already lightweight
         return requested
     
+    @staticmethod
+    def get_safe_token_limit(requested_tokens: int) -> int:
+        """
+        Cap max_new_tokens if system is under pressure.
+        """
+        is_pressure, swap_mb = MemoryGuard.check_pressure()
+        
+        if not is_pressure:
+            return requested_tokens
+            
+        limit = 4096
+        if swap_mb > MemoryGuard.SWAP_CRITICAL_MB:
+            limit = 2048
+            
+        if requested_tokens > limit:
+            logger.warning(f"Memory Pressure: Capping tokens {requested_tokens} -> {limit}")
+            return limit
+            
+        return requested_tokens
+
     @staticmethod
     def log_memory_stats():
         """Log current memory statistics for observability"""

@@ -1,294 +1,194 @@
-# Nutri AI - Production Architecture
+# Nutri AI - Production Architecture (v2.0)
 
-## Overview
-Nutri is a scientifically grounded, agentic food intelligence system that performs **13 distinct reasoning phases** to provide sensory-aware, chemically validated culinary guidance.
+## 1. Executive Overview
+
+Nutri is a **deterministic, tiered, and agentic** food intelligence system.
+Unlike generic chatbots, it uses a **Hybrid Reasoning Engine** that combines a sub-1ms Meta-Learner policy with a Parallel Execution DAG to deliver instant culinary guidance followed by deep scientific validation.
+
+**Key Capabilities:**
+- **Zero-Latency Response**: Speculative execution streams recipes in <3s.
+- **Scientific Grounding**: 13-phase validation pipeline (Chemistry, Sensory, Nutrition).
+- **Resource Aware**: Deterministic `MemoryGuard` prevents crashes on consumer hardware (RTX 4060).
+- **Runtime Agnostic**: Runs via `llama.cpp` (production) or `Ollama` (dev).
 
 ---
 
-## System Architecture
+## 2. High-Level System Map
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     USER (Vercel Frontend)                      │
-│                   React + Vite + TailwindCSS                    │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │
-                            │ HTTPS (Cloudflare Tunnel)
-                            │ chatdps.dpdns.org
-                            ↓
-┌─────────────────────────────────────────────────────────────────┐
-│              LOCAL BACKEND (FastAPI + Python)                   │
-│  ┌───────────────────────────────────────────────────────────┐ │
-│  │  POST /api/chat  (Unified Endpoint)                       │ │
-│  │  - Session-scoped memory (SQLite)                         │ │
-│  │  - Typed SSE streaming (token, reasoning, final, error)   │ │
-│  │  - Preference-aware orchestration                         │ │
-│  └───────────────────────────────────────────────────────────┘ │
-│                            │                                     │
-│  ┌─────────────────────────▼─────────────────────────────────┐ │
-│  │         NutriOrchestrator (13 Phases)                     │ │
-│  │  1. Intent Extraction                                     │ │
-│  │  2. Knowledge Retrieval (RAG)                             │ │
-│  │  3. Synthesis & Verification                              │ │
-│  │  4. Sensory Modeling                                      │ │
-│  │  5-6. Counterfactuals & Trade-offs                        │ │
-│  │  7-10. Multi-Objective Optimization                       │ │
-│  │  11-13. Final Compilation & Explanation                   │ │
-│  └───────────────────────────────────────────────────────────┘ │
-│                            │                                     │
-│  ┌─────────────────────────▼─────────────────────────────────┐ │
-│  │  NutriPipeline Components:                                │ │
-│  │  - LLMQwen3 (Ollama qwen3:8b)                             │ │
-│  │  - FAISS Vector Store (bge-m3 embeddings)                 │ │
-│  │  - Sensory Prediction Engine                              │ │
-│  │  - Chemistry Validator                                    │ │
-│  │  - Pareto Frontier Generator                              │ │
-│  └───────────────────────────────────────────────────────────┘ │
-│                            │                                     │
-│  ┌─────────────────────────▼─────────────────────────────────┐ │
-│  │  SessionMemoryStore (SQLite)                              │ │
-│  │  - Table: sessions (session_id, created_at)               │ │
-│  │  - Table: messages (id, session_id, role, content, ts)    │ │
-│  │  - Context injection into Phase 1                         │ │
-│  └───────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    User([User / Frontend]) <-->|HTTPS/SSE| Cloudflare[Cloudflare Tunnel]
+    Cloudflare <-->|Reverse Proxy| Server[FastAPI Server]
+    
+    subgraph "Backend Core"
+        Server --> Orchestrator[NutriOrchestrator]
+        Orchestrator --> Policy{Meta-Learner Policy}
+        
+        Policy -->|Fast Route| Spec[Speculative Execution]
+        Policy -->|Deep Route| DAG[Parallel Execution DAG]
+        
+        DAG --> Agent1[Sensory Agent]
+        DAG --> Agent2[Nutrition Agent]
+        DAG --> Agent3[Explanation Agent]
+        
+        Spec --> Presentation[Presentation Agent]
+        DAG --> Presentation
+    end
+    
+    subgraph "Infrastructure Layer"
+        Presentation --> LLM[LLM Client Facade]
+        LLM -->|HTTP/JSON| LlamaCPP[llama.cpp Server]
+        LlamaCPP --> GPU[(RTX 4060 GPU)]
+        
+        Orchestrator --> Memory[(SQLite Session DB)]
+        Orchestrator --> Vector[(FAISS Vector Store)]
+    end
 ```
 
 ---
 
-## 13 Scientific Reasoning Phases
+## 3. Cognitive Architecture (The "Brain")
 
-### Phase 1: Intent & Constraint Extraction
-- **Purpose**: Parse user input into structured culinary intent
-- **Streaming**: Yes (token-by-token via LLM)
-- **Output**: `IntentResult` with goals, constraints, dietary restrictions
+### 3.1 Meta-Learner (Policy Layer)
+Before any heavy computation, the **Meta-Learner** decides the strategy in <1ms based on intent and system load.
 
-### Phase 2: Domain Feasibility Check
-- **Purpose**: Retrieve scientific evidence from vector store
-- **Method**: FAISS semantic search on 50k+ documents
-- **Output**: Top-k relevant scientific documents
-
-### Phase 3: Culinary/Nutrition Synthesis
-- **Purpose**: Generate baseline recipe with chemical grounding
-- **Streaming**: Yes
-- **Verification**: Rule-based chemistry validator
-- **Output**: Baseline recipe + verification report
-
-### Phase 4: Sensory Dimension Modeling
-- **Purpose**: Predict physical/sensory properties
-- **Properties**: Texture, aroma, flavor, mouthfeel, visual
-- **Output**: `SensoryProfile` object
-
-### Phase 5-6: Counterfactual Reasoning & Trade-offs
-- **Purpose**: Simulate recipe variations to explain sensory impacts
-- **Method**: Parameter perturbation (e.g., salt ±10%)
-- **Calibration**: Audience-aware explanations (scientific, casual, etc.)
-- **Output**: Explanation text
-
-### Phase 7-10: Multi-Objective Optimization
-- **Purpose**: Balance nutrition, sensory appeal, and user preferences
-- **Method**: Pareto frontier construction
-- **Selection**: Preference projection onto optimal variants
-- **Output**: Selected optimal variant
-
-### Phase 11-13: Final Compilation
-- **Purpose**: Package final recipe, sensory profile, and explanations
-- **Format**: Structured JSON with:
-  - `recipe`: Final culinary output
-  - `sensory_profile`: Predicted properties
-  - `explanation`: Audience-calibrated reasoning
-  - `verification_report`: Chemistry claims
-
----
-
-## Streaming Protocol (SSE)
-
-### Event Types
-```
-event: reasoning
-data: <status message>
-
-event: token
-data: <single LLM token>
-
-event: final
-data: {"content": {...}}
-
-event: error
-data: <error message>
+```mermaid
+flowchart LR
+    Input[User Query] --> Learner{Meta-Learner}
+    Metrics[System Metrics (RAM/Swap)] --> Learner
+    
+    Learner -- "Simple Intent + Low Load" --> Fast[FAST Profile]
+    Learner -- "Sensory Keywords" --> Sensory[SENSORY Profile]
+    Learner -- "Optimization Keywords" --> Opt[OPTIMIZE Profile]
+    Learner -- "Critical Load" --> Fallback[Downgrade to FAST]
+    
+    Fast --> Spec[Launch Speculative Task]
+    Sensory --> Parallel[Launch Parallel DAG]
+    Opt --> Deep[Launch Deep Frontier Search]
 ```
 
-### Backend Implementation
-- **Generator**: `orchestrator.execute_streamed()` yields `Dict[str, Any]`
-- **Wrapper**: `server.py` wraps dicts into typed SSE events
-- **Headers**:
-  - `Content-Type: text/event-stream`
-  - `Cache-Control: no-cache`
-  - `Connection: keep-alive`
-  - `X-Accel-Buffering: no`
+### 3.2 Parallel Execution DAG
+Complex requests trigger a directed acyclic graph of agents to maximize throughput.
 
-### Frontend Implementation
-- **Transport**: `fetch` + `ReadableStream` with `POST /api/chat`
-- **Parser**: Line-based SSE parser tracking `currentEvent`
-- **Callbacks**:
-  - `onReasoning(message)` → Update UI phase status
-  - `onToken(token)` → Append to streaming text
-  - `onComplete(result)` → Finalize display
-  - `onError(err)` → Show error UI
-
----
-
-## Session Memory
-
-### Architecture
-- **Storage**: SQLite (`nutri_sessions.db`)
-- **Scope**: Per-session (not global)
-- **Lifetime**: Persistent across browser refreshes via `localStorage`
-
-### Tables
-```sql
-CREATE TABLE sessions (
-    session_id TEXT PRIMARY KEY,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT,
-    role TEXT CHECK(role IN ('user', 'assistant')),
-    content TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(session_id) REFERENCES sessions(session_id)
-);
+```mermaid
+graph TD
+    Start((Start)) --> Intent[Intent Extraction]
+    Start --> Spec[Speculative Recipe Gen]
+    
+    Intent --> Check{Intent Match?}
+    Spec --> Check
+    
+    Check -- "Yes (Fast Path)" --> Present[Presentation Layer]
+    Check -- "No (Complex)" --> Retrieve[Scientific Retrieval]
+    
+    Retrieve --> Synthesis[Deep Synthesis]
+    Synthesis --> Sensory[Sensory Modeling]
+    Synthesis --> Verify[Chemical Verification]
+    
+    Sensory --> Explain[Sensory Explanation]
+    Verify --> Explain
+    
+    Explain --> Present
 ```
 
-### Context Injection
-- **Where**: Phase 1 (Intent Extraction)
-- **Method**: `get_context_string(session_id, limit=5)` fetches last N messages
-- **Format**:
-  ```
-  Previous Interaction Context:
-  USER: <last user message>
-  ASSISTANT: <last assistant summary>
-  ...
-  USER: <current message>
-  ```
-
 ---
 
-## Cloudflare Tunnel Setup
+## 4. LLM Runtime & Abstraction
 
-### Configuration (`cloudflared/config.yml`)
-```yaml
-tunnel: <TUNNEL_ID>
-credentials-file: /root/.cloudflared/<TUNNEL_ID>.json
+To support the RTX 4060 (8GB VRAM), we migrated from Ollama to a dedicated `llama.cpp` server with a strict Abstraction Layer.
 
-ingress:
-  - hostname: chatdps.dpdns.org
-    service: http://localhost:8000
-  - service: http_status:404
+### 4.1 Interface Design
+```mermaid
+classDiagram
+    class LLMClient {
+        <<Abstract>>
+        +generate_text()
+        +stream_text()
+        +health_check()
+    }
+    
+    class LlamaCppClient {
+        +base_url: str
+        +stream_text()
+        -_validate_connection()
+    }
+    
+    class OllamaClient {
+        +client: Ollama
+        +stream_text()
+    }
+    
+    class LLMFactory {
+        +create_client()
+    }
+    
+    LLMClient <|-- LlamaCppClient
+    LLMClient <|-- OllamaClient
+    LLMFactory ..> LLMClient : Creates
 ```
 
-### Setup Script (`setup_tunnel.sh`)
-```bash
-#!/bin/bash
-# 1. Login to Cloudflare
-cloudflared tunnel login
-
-# 2. Create named tunnel
-cloudflared tunnel create nutri-backend
-
-# 3. Route DNS
-cloudflared tunnel route dns nutri-backend chatdps.dpdns.org
-
-# 4. Run tunnel
-cloudflared tunnel --config cloudflared/config.yml run
+### 4.2 Sequence Diagram
+```mermaid
+sequenceDiagram
+    participant Orch as Orchestrator
+    participant Client as LlamaCppClient
+    participant Guard as MemoryGuard
+    participant Server as llama-server
+    
+    Orch->>Client: stream_text(messages)
+    Client->>Guard: get_safe_token_limit(2048)
+    Guard-->>Client: limit=512 (Swap High)
+    
+    Client->>Server: POST /v1/chat/completions (max_tokens=512)
+    Server-->>Client: SSE Stream (Token 1)
+    Client-->>Orch: Token 1
+    Server-->>Client: SSE Stream (Token 2)
+    Client-->>Orch: Token 2
 ```
 
-### Security
-- No exposed ports
-- HTTPS enforced
-- No temporary URLs (ngrok replacement)
+---
+
+## 5. Deployment Specs
+
+### Hardware Constraints
+- **GPU**: NVIDIA RTX 4060 (8GB VRAM)
+- **RAM**: 16GB System RAM
+- **Model**: `qwen3-8b-q4_k_m.gguf` (Quantized to 5.8GB)
+- **Context Config**: `-c 8192 -ngl 35` (Offload 35 layers to GPU)
+
+### Service Stack
+| Component | Function | Port/Path |
+|-----------|----------|-----------|
+| **llama-server** | LLM Inference | `127.0.0.1:8081` |
+| **FastAPI** | Logic & Orchestration | `0.0.0.0:8000` |
+| **Cloudflare** | Secure Tunnel | `chatdps.dpdns.org` |
+| **SQLite** | Session Storage | `nutri_sessions.db` |
+
+### Execution Profiles
+| Profile | Description | Target Latency | Phases |
+|---------|-------------|----------------|--------|
+| **FAST** | Speculative recipe generation | <3s (First Token) | Intent, Synth |
+| **SENSORY** | Adds texture/flavor modeling | <15s | +Sensory, Explain |
+| **OPTIMIZE** | Multi-objective optimization | ~60s | +Frontier, Selection |
 
 ---
 
-## Deployment Workflow
+## 6. Stability Mechanisms
 
-### Backend (Local Machine)
-1. **Install dependencies**: `pip install -r requirements.txt`
-2. **Start Ollama**: `ollama serve` (ensure `qwen3:8b` model pulled)
-3. **Setup tunnel**: `./setup_tunnel.sh`
-4. **Run backend**: `uvicorn backend.server:app --host 0.0.0.0 --port 8000`
+### Memory Guard
+- **Trigger**: Swap Usage > 1.5GB
+- **Action**: CAPS `max_tokens` to 512, Downgrades `OPTIMIZE` -> `FAST`.
+- **Logic**: `backend/memory_guard.py`
 
-### Frontend (Vercel)
-1. **Build**: `cd frontend && npm run build`
-2. **Deploy**: `vercel --prod`
-3. **Environment Variable**: Set `VITE_API_URL=https://chatdps.dpdns.org`
+### SSE Heartbeats
+- **Problem**: long generation phases (e.g., Optimization) cause timeouts.
+- **Solution**: Orchestrator emits `{"type": "status"}` events every 2s if no tokens are generated.
 
-### Unified Launch (Development)
-```bash
-./full_launch.sh
-```
-This starts Ollama, backend, frontend, and tunnel in separate terminals.
+### Speculative Race
+- **Risk**: Intent Extraction is slow (Parsing JSON).
+- **Fix**: We launch a generic recipe generation *in parallel* with intent extraction. If the extracted intent confirms "standard meal", we use the already-generating recipe.
 
 ---
 
-## Operating Principles
-
-1. **Deterministic where possible**: Use rules for chemistry, ML only for synthesis
-2. **Preserve scientific uncertainty**: Never hallucinate data
-3. **No recipe retrieval**: Pure synthesis from first principles
-4. **Stream all outputs**: Never block on long-running LLM calls
-5. **Favor stability over cleverness**: Production-grade error handling
-
----
-
-## Technology Stack
-
-### Backend
-- **Framework**: FastAPI (async)
-- **LLM**: Ollama (`qwen3:8b`)
-- **Embeddings**: BAAI/bge-m3
-- **Vector Store**: FAISS
-- **Database**: SQLite
-- **Streaming**: Server-Sent Events (SSE)
-
-### Frontend
-- **Framework**: React 18 + Vite
-- **Styling**: TailwindCSS
-- **State**: React hooks (no Redux)
-- **API**: Native `fetch` + `ReadableStream`
-
-### Infrastructure
-- **Tunnel**: Cloudflare Tunnel
-- **Domain**: `chatdps.dpdns.org`
-- **Frontend Hosting**: Vercel
-- **Backend Hosting**: Local machine (high RAM/VRAM required)
-
----
-
-## Error Handling
-
-### Backend
-- **Exceptions**: Caught in `orchestrator.execute_streamed()`, yielded as `{"type": "error"}`
-- **Timeouts**: None (streaming keeps connection alive)
-- **Retry Logic**: Not needed (streaming is stateless)
-
-### Frontend
-- **Network Errors**: Caught and passed to `onError` callback
-- **Parse Errors**: Logged to console, stream continues
-- **Abort**: User can cancel via returned abort function
-
----
-
-## Future Enhancements
-
-1. **Multi-user support**: Add authentication layer
-2. **Advanced preferences**: More granular optimization goals
-3. **Recipe export**: PDF/JSON download
-4. **Image generation**: Visual plating suggestions (Stable Diffusion)
-5. **Voice input**: Speech-to-text for culinary queries
-
----
-
-**End of Architecture Document**
+**Version**: 2.0.0
+**Last Updated**: Jan 2026

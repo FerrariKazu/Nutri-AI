@@ -3,50 +3,40 @@ import logging
 import asyncio
 import time
 from typing import AsyncGenerator, Dict, Any, List, Callable, Optional
-from backend.food_synthesis import NutriPipeline
+
+from backend.food_synthesis import NutriPipeline, IntentOutput
 from backend.memory import SessionMemoryStore
 from backend.sensory.sensory_types import UserPreferences, SensoryProfile
 from backend.execution_profiles import ExecutionProfile, ExecutionRouter
+from backend.utils.response_formatter import ResponseFormatter
 from backend.execution_plan import ExecutionPlan
 from backend.memory_guard import MemoryGuard
+
+# New Architecture Modules
+from backend.meta_learner import MetaLearner, ExecutionPolicy
+from backend.execution_dag import DAGScheduler, AgentNode
+
+# Unified Persona Modules
+from backend.response_modes import ResponseMode
+from backend.mode_classifier import classify_response_mode
+from backend.nutri_engine import NutriEngine
 
 logger = logging.getLogger(__name__)
 
 class NutriOrchestrator:
-    """Orchestrates 13 distinct phases of Nutri reasoning with streaming support."""
+    """
+    Orchestrates Nutri reasoning using a specific architecture:
+    Meta-Learner Policy -> Speculative Execution -> Parallel DAG -> Progressive Streaming
+    """
 
     def __init__(self, memory_store: SessionMemoryStore):
         self.pipeline = NutriPipeline(use_phase2=True)
         self.memory = memory_store
-
-    async def _run_blocking(self, func: Callable, *args, phase_id: int = 0, title: str = "Processing") -> Any:
-        """
-        Run a blocking synchronous function in a thread pool while yielding keep-alive signals.
-        This prevents 504 Gateway Timeouts during long LLM generation steps.
-        """
-        loop = asyncio.get_running_loop()
-        future = loop.run_in_executor(None, func, *args)
+        self.meta_learner = MetaLearner()
         
-        while not future.done():
-            try:
-                # Wait for 5 seconds or until done
-                await asyncio.wait_for(asyncio.shield(future), timeout=5.0)
-            except asyncio.TimeoutError:
-                # Still running, yield keep-alive
-                logger.debug(f"Phase {phase_id} still processing... sending heartbeat.")
-                # We yield a special non-rendering update or just a log message? 
-                # For SSE, comments like ": keep-alive" are best, but our format uses JSON data.
-                # We'll send a status update that doesn't change the UI much.
-                pass 
-                # Actually, the generator can't yield from here easily without being an async generator itself.
-                # Use a different pattern: the caller handles the yield loop? 
-                # No, let's just await the future. The 'await' yields control to the loop, 
-                # but doesn't send data to the client. 
-                # The StreamingResponse needs ACTUAL DATA to keep the connection open? 
-                # Most proxies timeout if NO DATA is received.
-                
-        return await future
-
+        # Unified Response Engine
+        self.engine = NutriEngine(self.pipeline.engine.llm, memory_store)
+        
     async def execute_streamed(
         self, 
         session_id: str, 
@@ -55,286 +45,146 @@ class NutriOrchestrator:
         execution_mode: Optional[str] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
-        Executes the Nutri pipeline with tiered execution and yields structured event dictionaries.
-        Event types: 'status', 'reasoning', 'token', 'intermediate', 'final', 'error'.
-        
-        Args:
-            session_id: Unique session identifier
-            user_message: User's natural language request
-            preferences: User preferences (audience_mode, optimization_goal, verbosity)
-            execution_mode: Optional explicit execution mode ("fast", "sensory", "optimize", "research")
+        Executes the Nutri pipeline with true non-blocking streaming.
+        Uses a background task to drive generation while the generator drains an event queue.
         """
         loop = asyncio.get_running_loop()
-        token_queue = asyncio.Queue()
+        event_queue = asyncio.Queue()
         
+        def push_event(event_type: str, content: Any):
+            logger.debug(f"[ORCH] push_event: {event_type}")
+            # Safe way to put into queue from ANY thread
+            asyncio.run_coroutine_threadsafe(
+                event_queue.put({"type": event_type, "content": content}), 
+                loop
+            )
+
         def stream_callback(token: str):
-            """Callback for sync LLM threads to push tokens to async queue"""
-            loop.call_soon_threadsafe(token_queue.put_nowait, token)
+            # This is called from the executor thread
+            push_event("token", token)
 
-        try:
-            # 0. Determine execution profile and plan
-            raw_profile = ExecutionRouter.determine_profile(user_message, execution_mode)
-            profile = MemoryGuard.safe_profile(raw_profile)  # May downgrade if memory pressure
-            plan = ExecutionPlan.from_profile(profile)
-            
-            logger.info(f"Executing with profile: {profile.value} (requested: {raw_profile.value if raw_profile != profile else 'auto'})")
-            MemoryGuard.log_memory_stats()
-            
-            # Emit initial status
-            yield {
-                "type": "status",
-                "content": {
-                    "profile": profile.value,
-                    "phase": "starting",
-                    "message": f"Executing {profile.value.upper()} profile"
-                }
-            }
-            
-            # 1. PRE-PHASE: Memory Injection
-            context = self.memory.get_context_string(session_id)
-            augmented_query = f"{context}\\n\\nUSER: {user_message}" if context else user_message
-            
-            # Helper: Consumes stream and yields event dicts
-            async def run_phase(phase_id: int, func: Callable, *args, use_stream=False):
-                phase_start = time.time()
-                call_args = list(args)
-                if use_stream:
-                    call_args.append(stream_callback)
-                
-                future = loop.run_in_executor(None, func, *call_args)
-                
-                while not future.done():
-                    if use_stream:
-                        # Wait for token or future
-                        done, pending = await asyncio.wait(
-                            [asyncio.create_task(token_queue.get()), asyncio.wrap_future(future)],
-                            return_when=asyncio.FIRST_COMPLETED
-                        )
-                        
-                        # Process tokens
-                        while not token_queue.empty():
-                            try:
-                                token = token_queue.get_nowait()
-                                yield {"type": "token", "content": token}
-                            except asyncio.QueueEmpty:
-                                break
-                    else:
-                         # Heartbeat wait (Status logic)
-                         await asyncio.sleep(2)
-                         if not future.done():
-                             yield {"type": "reasoning", "content": "Analyzing data..."}
+        async def run_sync(func, *args, **kwargs):
+            return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
 
-                # Flush remaining tokens
-                if use_stream:
-                    while not token_queue.empty():
-                        token = await token_queue.get()
-                        yield {"type": "token", "content": token}
-                
-                # Final Result
-                result = await future
-                phase_duration = time.time() - phase_start
-                logger.info(f"Phase {phase_id} completed in {phase_duration:.2f}s")
-                yield {"type": "result", "content": result}
+        async def orchestration_task():
+            logger.info("[ORCH] Background task started.")
+            done_emitted = False
 
-            # 2. Execute IMMEDIATE phases
-            intent = None
-            docs = None
-            recipe = None
-            verification = None
-            profile_obj = None
-            explanation = None
-            frontier = None
-            selection = None
-            
-            for phase_id in plan.immediate_phases:
-                # Emit status for this phase
-                yield {
-                    "type": "status",
-                    "content": {
-                        "phase": self._get_phase_name(phase_id),
-                        "message": self._get_phase_message(phase_id)
-                    }
-                }
-                
-                # Execute phase
-                if phase_id == 1:
-                    # Intent Extraction
-                    async for event in run_phase(1, self.pipeline.intent_agent.extract, augmented_query, use_stream=True):
-                        if event["type"] == "result": intent = event["content"]
-                        else: yield event
-                        
-                elif phase_id == 2:
-                    # Knowledge Retrieval
-                    async for event in run_phase(2, self.pipeline.retriever.retrieve_for_phase, 2, augmented_query, 2):
-                        if event["type"] == "result": docs = event["content"]
-                        else: yield event
-                        
-                elif phase_id == 3:
-                    # Synthesis
-                    async for event in run_phase(3, self.pipeline.engine.synthesize, augmented_query, docs, intent, use_stream=True):
-                        if event["type"] == "result": recipe = event["content"]
-                        else: yield event
-                    
-                    # Verification (always runs with synthesis)
-                    async for event in run_phase(3, self.pipeline.verify, recipe):
-                        if event["type"] == "result": verification = event["content"]
-                        else: yield event
-                        
-                elif phase_id == 4:
-                    # Sensory Modeling
-                    async for event in run_phase(4, self.pipeline.predict_sensory, recipe):
-                        if event["type"] == "result": profile_obj = event["content"]
-                        else: yield event
-                        
-                elif phase_id == 5:
-                    # Verification (if not already run)
-                    if not verification:
-                        async for event in run_phase(5, self.pipeline.verify, recipe):
-                            if event["type"] == "result": verification = event["content"]
-                            else: yield event
-                            
-                elif phase_id == 6:
-                    # Explanation Control
-                    audience = preferences.get("audience_mode", "scientific")
-                    async for event in run_phase(6, self.pipeline.explain_sensory, profile_obj, audience):
-                        if event["type"] == "result": explanation = event["content"]
-                        else: yield event
-                        
-                elif phase_id == 8:
-                    # Frontier Generation
-                    async for event in run_phase(8, self.pipeline.generate_sensory_frontier, recipe):
-                        if event["type"] == "result": frontier = event["content"]
-                        else: yield event
-                        
-                elif phase_id == 9:
-                    # Variant Selection
-                    goal = preferences.get("optimization_goal", "balanced")
-                    async for event in run_phase(9, self.pipeline.select_sensory_variant, frontier, UserPreferences(eating_style=goal)):
-                        if event["type"] == "result": selection = event["content"]
-                        else: yield event
+            def push_done(status: str, message: str = ""):
+                nonlocal done_emitted
+                if not done_emitted:
+                    push_event("done", {"status": status, "message": message})
+                    done_emitted = True
 
-            # 3. Yield INTERMEDIATE result (for FAST/SENSORY profiles)
-            if not plan.is_fast_mode():
-                logger.info("Assembling intermediate result...")
-                intermediate_recipe = recipe
-                intermediate_explanation = explanation if explanation else "Recipe synthesized successfully."
-                
-                yield {
-                    "type": "intermediate",
-                    "content": {
-                        "recipe": intermediate_recipe,
-                        "explanation": intermediate_explanation,
-                        "profile": profile.value
-                    }
-                }
-
-            # 4. Execute DEFERRED phases (for OPTIMIZE profile)
-            if plan.deferred_phases:
-                yield {
-                    "type": "status",
-                    "content": {
-                        "phase": "deep_analysis",
-                        "message": "Enhancing with deep analysis..."
-                    }
-                }
-                
-                for phase_id in plan.deferred_phases:
-                    # Emit status for deferred phase
-                    yield {
-                        "type": "status",
-                        "content": {
-                            "phase": self._get_phase_name(phase_id),
-                            "message": self._get_phase_message(phase_id)
-                        }
-                    }
-                    
-                    # Execute deferred phase
-                    if phase_id == 4 and not profile_obj:
-                        async for event in run_phase(4, self.pipeline.predict_sensory, recipe):
-                            if event["type"] == "result": profile_obj = event["content"]
-                            else: yield event
-                            
-                    elif phase_id == 6 and not explanation:
-                        audience = preferences.get("audience_mode", "scientific")
-                        async for event in run_phase(6, self.pipeline.explain_sensory, profile_obj, audience):
-                            if event["type"] == "result": explanation = event["content"]
-                            else: yield event
-                            
-                    elif phase_id == 8 and not frontier:
-                        async for event in run_phase(8, self.pipeline.generate_sensory_frontier, recipe):
-                            if event["type"] == "result": frontier = event["content"]
-                            else: yield event
-                            
-                    elif phase_id == 9 and not selection:
-                        goal = preferences.get("optimization_goal", "balanced")
-                        async for event in run_phase(9, self.pipeline.select_sensory_variant, frontier, UserPreferences(eating_style=goal)):
-                            if event["type"] == "result": selection = event["content"]
-                            else: yield event
-
-            # 5. FINAL assembly
-            logger.info("Assembling final structured response...")
-            yield {"type": "status", "content": {"phase": "finalizing", "message": "Wrapping final response..."}}
-            
-            final_recipe = recipe
-            if selection and hasattr(selection, 'selected_variant') and selection.selected_variant:
-                final_recipe = selection.selected_variant.recipe
-            
-            final_explanation = explanation
-            if selection and hasattr(selection, 'reasoning') and selection.reasoning:
-                final_explanation = selection.reasoning[0]
-            
-            # Format results
-            # sse_safe in the server layer will handle the recursive conversion of 
-            # profile_obj, verification, etc. to JSON-safe dictionaries.
-            result = {
-                "recipe": final_recipe,
-                "sensory_profile": profile_obj,
-                "explanation": final_explanation,
-                "verification_report": verification,
-                "execution_profile": profile.value
-            }
-
-            logger.info("Saving session memory...")
             try:
-                self.memory.add_message(session_id, "user", user_message)
-                summary = f"RECIPE: {final_recipe[:50]}... | EXPLANATION: {final_explanation[:50]}..."
-                self.memory.add_message(session_id, "assistant", summary)
+                # 0. Meta-Learner Policy Decision
+                policy = self.meta_learner.decide_policy(user_message, execution_mode)
+                
+                def emit_status(phase: str, msg: str):
+                    if phase and msg and msg.strip():
+                        logger.debug(f"[ORCH] Status update: {phase}")
+                        push_event("status", {"phase": phase, "message": msg})
+
+                logger.info(f"Orchestrating with Policy: {policy.profile.value}")
+                emit_status("initializing", "Connecting to Nutri engine...")
+                emit_status("starting", f"Thinking ({policy.profile.value})...")
+
+                # 1. Context Preparation
+                context = self.memory.get_context_string(session_id)
+                augmented_query = f"{context}\n\nUSER: {user_message}" if context else user_message
+
+                # 2. Intent Extraction
+                emit_status("intent", "Understanding...")
+                intent_raw = await run_sync(self.pipeline.intent_agent.extract, augmented_query)
+                logger.info("[ORCH] Intent extracted.")
+                
+                if isinstance(intent_raw, dict):
+                    try:
+                        intent = IntentOutput(**intent_raw)
+                    except Exception:
+                        intent = IntentOutput()
+                else:
+                    intent = intent_raw
+
+                # 3. Unified Mode Classification
+                previous_mode = self.memory.get_response_mode(session_id)
+                mode = classify_response_mode(user_message, intent, previous_mode)
+                logger.info(f"🎯 Response Mode: {mode.value}")
+
+                # 4. Mode-Based Execution
+                if mode == ResponseMode.CONVERSATION:
+                    emit_status("conversation", "Chatting...")
+                    logger.info("[ORCH] Generating conversation response...")
+                    await run_sync(self.engine.generate, session_id, user_message, mode, None, stream_callback=stream_callback)
+                    logger.info("[ORCH] Generation finished.")
+                    push_done("success")
+                    return
+
+                # B. DIAGNOSTIC or PROCEDURAL
+                emit_status("retrieval", "Researching...")
+                docs = await run_sync(self.pipeline.retriever.retrieve_for_phase, 2, augmented_query, 2)
+                
+                emit_status("synthesis", "Analyzing..." if mode == ResponseMode.DIAGNOSTIC else "Creating...")
+                recipe_result = await run_sync(self.pipeline.engine.synthesize, augmented_query, docs, intent, stream_callback=None)
+                
+                # 5. Parallel DAG
+                dag_results = {}
+                if policy.profile != ExecutionProfile.FAST:
+                    emit_status("enhancement", "Analyzing & Refining...")
+                    dag = DAGScheduler()
+                    
+                    if "sensory_model" in policy.enabled_agents:
+                        dag.add_node(AgentNode(name="sensory", func=run_sync, args=[self.pipeline.predict_sensory, recipe_result]))
+                    
+                    dag.add_node(AgentNode(name="verification", func=run_sync, args=[self.pipeline.verify, recipe_result]))
+                    
+                    if "explanation" in policy.enabled_agents:
+                        audience = preferences.get("audience_mode", "scientific")
+                        dag.add_node(AgentNode(name="explanation", func=run_sync, args=[self.pipeline.explain_sensory, "sensory", audience], depends_on={"sensory"}))
+                    
+                    if "frontier" in policy.enabled_agents:
+                        dag.add_node(AgentNode(name="frontier", func=run_sync, args=[self.pipeline.generate_sensory_frontier, recipe_result], is_luxury=True))
+                        goal = preferences.get("optimization_goal", "balanced")
+                        dag.add_node(AgentNode(name="selector", func=run_sync, args=[self.pipeline.select_sensory_variant, "frontier", UserPreferences(eating_style=goal)], depends_on={"frontier"}, is_luxury=True))
+
+                    dag_results = await dag.execute()
+                    
+                    if "sensory" in dag_results:
+                        push_event("enhancement", {"sensory_profile": dag_results["sensory"], "message": "Sensory profile modeled."})
+                    if "explanation" in dag_results:
+                        push_event("enhancement", {"explanation": dag_results["explanation"], "message": "Scientific explanation added."})
+
+                # 6. Final Presentation
+                emit_status("presentation", "Polishing...")
+                final_data = {
+                    "recipe": recipe_result,
+                    "analysis": dag_results.get("explanation"),
+                    "sensory": dag_results.get("sensory"),
+                    "verification": dag_results.get("verification")
+                }
+
+                logger.info(f"[ORCH] Generating final tailored response in mode {mode.value}...")
+                await run_sync(self.engine.generate, session_id, user_message, mode, final_data, stream_callback=stream_callback)
+                logger.info("[ORCH] Generation complete.")
+                push_done("success")
+
             except Exception as e:
-                logger.error(f"Memory persistence failed: {e}")
+                logger.error(f"Orchestration failure: {e}", exc_info=True)
+                push_event("error_event", {"message": str(e), "phase": "orchestration", "status": "failed"})
+                push_done("error", str(e))
+            finally:
+                logger.info("[ORCH] Ending task and pushing sentinels.")
+                push_done("success") # Failsafe
+                loop.call_soon_threadsafe(event_queue.put_nowait, None) # Sentinel
 
-            logger.info("Orchestration complete. Yielding final event.")
-            yield {"type": "final", "content": result}
+        # Start the background task - KEEP REFERENCE
+        task = asyncio.create_task(orchestration_task())
 
-        except Exception as e:
-            logger.error(f"Orchestration failure: {e}", exc_info=True)
-            yield {"type": "error", "content": str(e)}
-    
-    def _get_phase_name(self, phase_id: int) -> str:
-        """Get human-readable phase name"""
-        names = {
-            1: "intent_extraction",
-            2: "knowledge_retrieval",
-            3: "synthesis",
-            4: "sensory_modeling",
-            5: "verification",
-            6: "explanation",
-            7: "optimization",
-            8: "frontier_generation",
-            9: "variant_selection"
-        }
-        return names.get(phase_id, f"phase_{phase_id}")
-    
-    def _get_phase_message(self, phase_id: int) -> str:
-        """Get user-friendly phase status message"""
-        messages = {
-            1: "Extracting culinary intent...",
-            2: "Retrieving scientific context...",
-            3: "Synthesizing core concepts...",
-            4: "Modeling sensory profile...",
-            5: "Verifying scientific accuracy...",
-            6: "Generating explanation...",
-            7: "Optimizing recipe...",
-            8: "Generating variants...",
-            9: "Selecting best variant..."
-        }
-        return messages.get(phase_id, "Processing...")
+        # Drain the event queue
+        while True:
+            event = await event_queue.get()
+            if event is None:
+                logger.info("[ORCH] Generator received sentinel, exiting.")
+                break
+            logger.debug(f"[ORCH] Yielding event: {event.get('type')}")
+            yield event

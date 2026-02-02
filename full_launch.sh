@@ -44,6 +44,8 @@ kill_services() {
     pkill -f "ngrok" || true
     pkill -f "vite" || true
     pkill -f "ollama serve" || true
+    pkill -f "llama-server" || true
+    pkill -f "run_llama_server.sh" || true
     pkill -f "lt --port" || true
     pkill -f "ssh -o ServerAliveInterval=60 -R" || true
     pkill -f "ssh -R 80:localhost:8000" || true
@@ -64,12 +66,13 @@ sleep 3
 
 echo -e "${YELLOW}⚙️  Starting services in background...${NC}"
 
-# 1. Ollama (Only if not running)
-if ! curl -s http://localhost:11434/api/tags > /dev/null; then
-    nohup ollama serve > "$SCRIPT_DIR/ollama.log" 2>&1 &
-    echo -e "${GREEN}🤖 Ollama started (logs: ollama.log)${NC}"
+# 1. Llama.cpp Server (Replacing Ollama)
+# Check if running on port 8081 (default for run_llama_server.sh)
+if ! lsof -i :8081 > /dev/null; then
+    nohup ./run_llama_server.sh > "$SCRIPT_DIR/llama.log" 2>&1 &
+    echo -e "${GREEN}🦙 Llama Server started (logs: llama.log)${NC}"
 else
-    echo -e "${GREEN}🤖 Ollama is already running.${NC}"
+    echo -e "${GREEN}🦙 Llama Server is already running.${NC}"
 fi
 
 # 2. Backend
@@ -80,6 +83,8 @@ else
     exit 1
 fi
 export PYTHONPATH=$PYTHONPATH:.
+export LLM_BACKEND="llama_cpp"
+export LLAMA_PORT=8081
 nohup python -u backend/server.py > "$SCRIPT_DIR/api.log" 2>&1 &
 echo -e "${GREEN}⚙️  Backend started (logs: api.log)${NC}"
 
@@ -101,7 +106,7 @@ nohup ./run_tunnel.sh > "$SCRIPT_DIR/tunnel.log" 2>&1 &
 echo -ne "${YELLOW}⏳ Verifying System Health...${NC}"
 TUNNEL_URL="https://chatdps.dpdns.org"
 
-for i in {1..30}; do
+for i in {1..60}; do
     if curl -s "http://localhost:8000/health" | grep -q "healthy"; then
         if curl -s "$TUNNEL_URL/health" | grep -q "healthy"; then
             echo -e "\n${GREEN}✨ Nutri-AI is ONLINE!${NC}"
@@ -119,8 +124,9 @@ for i in {1..30}; do
     sleep 2
 done
 
-if [ $i -eq 30 ]; then
-    echo -e "\n${RED}❌ System health check timed out. Check api.log and tunnel.log${NC}"
+if [ $i -eq 60 ]; then
+    echo -e "\n${RED}❌ System health check timed out. Check api.log and llama.log${NC}"
+    echo -e "${YELLOW}Note: llama-server may still be loading the model (can take up to 120s)${NC}"
 fi
 
 echo -e "${WHITE}⚠️  KEEP THIS TERMINAL OPEN TO MAINTAIN THE CONNECTION.${NC}"

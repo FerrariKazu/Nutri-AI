@@ -49,6 +49,8 @@ api.log
 backend_restart*.log
 ollama.log
 .orchids/
+nutri_sessions.db
+benchmark_4b.json
 
 # Nested git repos
 .git/
@@ -58,5 +60,6 @@ nutri-deploy/
 # Indices
 backend/indexes/
 vector_store/
+data_sources/
 .vercel
 .env*.local

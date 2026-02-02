@@ -1,3 +1,9 @@
+import os
+# FORCE OVERRIDE FOR PRODUCTION STABILITY (MUST BE BEFORE IMPORTS)
+os.environ["LLM_BACKEND"] = "llama_cpp"
+os.environ["LLAMA_PORT"] = "8081"
+print(f"🚨 FORCED LLM BACKEND (print): {os.environ['LLM_BACKEND']} port {os.environ['LLAMA_PORT']}")
+
 import uuid
 import logging
 import asyncio
@@ -17,28 +23,34 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Nutri Unified API", description="Integrated 13-Phase Food Synthesis Engine")
 
-# Production CORS Whitelist
-ALLOWED_ORIGINS = [
+# Explicit CORS for production and development
+origins = [
     "https://nutri-ai-ochre.vercel.app",
-    "https://nutri-qte326vny-ferrarikazus-projects.vercel.app",
     "http://localhost:5173",
-    "http://localhost:3000"
+    "http://127.0.0.1:5173",
 ]
 
-def add_cors_headers(response: Response, request: Request) -> Response:
-    """Explicitly inject CORS headers based on request origin"""
-    origin = request.headers.get("Origin")
-    if origin in ALLOWED_ORIGINS or "*" in ALLOWED_ORIGINS:
-        response.headers["Access-Control-Allow-Origin"] = origin or "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Max-Age"] = "86400"
-    return response
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
 
 # Initialize Components
 memory_store = SessionMemoryStore()
 orchestrator = NutriOrchestrator(memory_store)
+
+from backend.llm_qwen3 import LLMQwen3
+from backend.nutri_engine import NutriEngine
+from backend.mode_classifier import classify_response_mode
+from backend.response_modes import ResponseMode
+
+# Initialize Unified NutriEngine (replaces FoodConversationAgent)
+llm_client = LLMQwen3()
+nutri_engine = NutriEngine(llm_client, memory_store)
 
 class ChatPreferences(BaseModel):
     audience_mode: str = "casual"
@@ -51,12 +63,44 @@ class ChatRequest(BaseModel):
     preferences: Optional[ChatPreferences] = Field(default_factory=ChatPreferences)
     execution_mode: Optional[str] = None
 
-@app.options("/api/chat")
-@app.options("/api/chat/stream")
-async def chat_preflight(request: Request):
-    """Explicit manual preflight handler to bypass middleware limitations"""
-    response = Response(status_code=200)
-    return add_cors_headers(response, request)
+
+@app.get("/api/conversation")
+async def get_conversation(request: Request, session_id: Optional[str] = Query(None)):
+    """
+    Returns the canonical conversation history and state for hydration.
+    """
+    logger.debug(f"GET /api/conversation?session_id={session_id}")
+    if not session_id:
+        return JSONResponse({"messages": [], "status": "new_session"})
+    try:
+        data = memory_store.get_conversation(session_id)
+        return JSONResponse(data)
+    except Exception as e:
+        logger.error(f"Failed to fetch conversation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/conversations")
+async def list_conversations(request: Request):
+    """
+    List all available conversation sessions.
+    """
+    try:
+        data = memory_store.list_sessions()
+        return JSONResponse({"conversations": data})
+    except Exception as e:
+        logger.error(f"Failed to list sessions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/conversation")
+async def create_conversation(request: Request):
+    """
+    Explicitly create a new session ID.
+    """
+    new_id = f"sess_{uuid.uuid4().hex[:12]}_{int(uuid.uuid1().time)}"
+    # Pre-warm the session in DB
+    memory_store._update_activity(new_id)
+    
+    return JSONResponse({"session_id": new_id, "status": "created"})
 
 @app.get("/api/chat/stream")
 async def chat_stream(
@@ -71,7 +115,9 @@ async def chat_stream(
     """
     GET-based SSE endpoint for EventSource compatibility. Eliminates preflight.
     """
-    session_id = session_id or str(uuid.uuid4())
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id is required")
+        
     pref_dict = {
         "audience_mode": audience_mode,
         "optimization_goal": optimization_goal,
@@ -83,11 +129,14 @@ async def chat_stream(
 @app.post("/api/chat")
 async def chat_post(request: Request, payload: ChatRequest):
     """Standard POST endpoint for rich payloads"""
+    if not payload.session_id:
+        raise HTTPException(status_code=400, detail="session_id is required")
+        
     pref_dict = payload.preferences.dict() if payload.preferences else {}
     return await handle_chat_execution(
         request, 
         payload.message, 
-        payload.session_id or str(uuid.uuid4()), 
+        payload.session_id, 
         pref_dict, 
         payload.execution_mode
     )
@@ -101,16 +150,22 @@ async def handle_chat_execution(
     preferences: Dict[str, Any],
     execution_mode: Optional[str]
 ):
-    """Core logic with concurrent heartbeat to survive long LLM phases"""
+    """Core logic with concurrent heartbeat and deterministic termination."""
     
     async def event_generator():
         queue = asyncio.Queue()
+        done_sent = False
+        first_token_sent = False
         
-        # Immediate initialization event
-        yield format_sse_event("status", {"phase": "initializing", "message": "Connecting to Nutri backend..."})
+        logger.info("[SSE] Stream opened. Waiting for events...")
 
         async def run_orchestrator():
             try:
+                # 0. Check for decay BEFORE starting
+                decayed = memory_store.check_and_reset_decay(session_id)
+                if decayed:
+                    await queue.put({"type": "status", "content": {"phase": "reset", "message": "New environment initialized."}})
+
                 async for event_dict in orchestrator.execute_streamed(
                     session_id, 
                     message, 
@@ -119,21 +174,20 @@ async def handle_chat_execution(
                 ):
                     await queue.put(event_dict)
                 
-                # Mandatory done event
-                await queue.put({"type": "done", "content": {"status": "completed"}})
             except Exception as e:
                 logger.exception("Orchestrator task failed")
                 await queue.put({
                     "type": "error_event", 
                     "content": {"message": str(e), "phase": "orchestration", "status": "failed"}
                 })
+                await queue.put({"type": "done", "content": {"status": "error", "message": str(e)}})
             finally:
-                await queue.put(None) # Sentinel
+                await queue.put(None) # Sentinel for the queue loop
 
         async def heartbeat():
             try:
                 while True:
-                    await asyncio.sleep(12) # Cloudflare-safe interval
+                    await asyncio.sleep(1) # Aggressive heartbeat for proxies
                     await queue.put({"type": "ping", "content": {}})
             except asyncio.CancelledError:
                 pass
@@ -146,17 +200,51 @@ async def handle_chat_execution(
             while True:
                 item = await queue.get()
                 if item is None:
+                    logger.info("[SSE] Sentinel received from orchestrator.")
                     break
                 
                 event_type = item.get("type", "token")
                 content = item.get("content")
-                yield format_sse_event(event_type, content)
+                
+                # Log first token for TTT measurement
+                if event_type == "token" and not first_token_sent:
+                    logger.info("[SSE] First token sent to client.")
+                    first_token_sent = True
+
+                if event_type == "done":
+                    done_sent = True
+                    logger.info(f"[SSE] Emitting DONE event: {content}")
+
+                formatted_chunk = format_sse_event(event_type, content)
+                logger.debug(f"[SSE] YIELDING: {repr(formatted_chunk)}")
+                yield formatted_chunk
+                
+        except GeneratorExit:
+            logger.warning("[SSE] Client disconnected (GeneratorExit).")
+            if not done_sent:
+                logger.warning("[SSE] Emitting emergency DONE event after disconnect.")
+                yield format_sse_event("done", {})
+            raise
+        except Exception as e:
+            logger.error(f"[SSE] Critical Stream Error: {e}")
+            yield format_sse_event("error_event", {"message": str(e)})
+            if not done_sent:
+                yield format_sse_event("done", {"status": "error", "message": str(e)})
+            raise
         finally:
+            # The Final Safety Net
+            if not done_sent:
+                logger.warning("[SSE] Loop finished without DONE. Forcing emission.")
+                try:
+                    yield format_sse_event("done", {})
+                except Exception as final_e:
+                    logger.error(f"[SSE] Failed to emit final DONE: {final_e}")
+            
+            logger.info("[SSE] Stream closing. Cleaning up tasks...")
             h_task.cancel()
             o_task.cancel()
             try:
-                await h_task
-                await o_task
+                await asyncio.gather(h_task, o_task, return_exceptions=True)
             except asyncio.CancelledError:
                 pass
 
@@ -165,18 +253,17 @@ async def handle_chat_execution(
         media_type="text/event-stream"
     )
     
-    # Cloudflare/Nginx Tuning Headers
+    # Tuning Headers
     response.headers["Cache-Control"] = "no-cache"
     response.headers["Connection"] = "keep-alive"
     response.headers["X-Accel-Buffering"] = "no"
-#    response.headers["Transfer-Encoding"] = "chunked" # StreamingResponse usually handles this
     
-    return add_cors_headers(response, request)
+    return response
 
 @app.get("/health")
 async def health_check(request: Request):
     response = JSONResponse({"status": "healthy", "service": "nutri-backend", "version": "1.3.0"})
-    return add_cors_headers(response, request)
+    return response
 
 if __name__ == "__main__":
     import uvicorn

@@ -46,13 +46,13 @@ const MessageBubble = ({ role, content, isStreaming, isWarmingUp, phase }) => {
                 `}
             >
                 {/* Phase Status Indicator */}
-                {isStreaming && phase && (
+                {isStreaming && phase && phase.message && phase.message.trim() && (
                     <div className="flex items-center gap-2 mb-2 p-2 rounded-lg bg-orange-100/50 dark:bg-orange-950/30 border border-orange-200/50 dark:border-orange-400/20">
                         <div className="flex space-x-1 items-center">
                             <div className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse"></div>
                         </div>
                         <div className="text-xs font-semibold text-orange-800 dark:text-orange-300 uppercase tracking-tight">
-                            Phase {phase.phase}: {phase.title}
+                            PHASE {phase.phase}: {phase.message}
                         </div>
                     </div>
                 )}
@@ -68,7 +68,7 @@ const MessageBubble = ({ role, content, isStreaming, isWarmingUp, phase }) => {
 
                 {/* Content */}
                 {content && typeof content === 'string' && (
-                    <div className={`prose prose-sm dark:prose-invert max-w-none ${isWarmingUp ? 'italic opacity-70 animate-pulse' : ''}`}>
+                    <div className={`prose prose-sm dark:prose-invert max-w-none ${!isUser ? 'font-serif' : ''} ${isWarmingUp ? 'italic opacity-70 animate-pulse' : ''}`}>
                         <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             components={components}

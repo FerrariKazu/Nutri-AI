@@ -69,7 +69,11 @@ class FaissRetriever(BaseRetriever):
         if self.metadata_path.exists():
             if self._is_sqlite_meta:
                 logger.info(f"Using SQLite metadata: {self.metadata_path}")
-                self._meta_conn = sqlite3.connect(f"file:{self.metadata_path}?mode=ro", uri=True)
+                self._meta_conn = sqlite3.connect(
+                    f"file:{self.metadata_path}?mode=ro", 
+                    uri=True,
+                    check_same_thread=False
+                )
             else:
                 with open(self.metadata_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)

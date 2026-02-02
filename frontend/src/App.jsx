@@ -1,60 +1,195 @@
+
 import { useState, useEffect, useRef } from 'react';
-import { streamNutriChat, getSessionId, clearSession } from './api/apiClient';
-import ControlRail from './components/ControlRail';
+import { streamNutriChat, getSessionId, clearSession, getConversation, getConversationsList, createNewSession } from './api/apiClient';
+
 import SystemStatus from './components/SystemStatus';
 import ReasoningConsole from './components/ReasoningConsole';
 import PhaseStream from './components/PhaseStream';
 import ErrorBoundary from './components/ErrorBoundary';
+import Sidebar from './components/Sidebar';
+import ChatHeader from './components/ChatHeader';
+
+// Input value setter for starter prompts
+let inputValueSetter = null;
 
 function App() {
     const [messages, setMessages] = useState([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [analysisDepth, setAnalysisDepth] = useState('standard');
+
+    // State Machine: 'IDLE' | 'HYDRATING' | 'STREAMING' | 'DONE' | 'ERROR'
+    const [streamStatus, setStreamStatus] = useState('HYDRATING'); // Start hydrating
+
+
     const [sessionId, setSessionId] = useState('');
+    const [conversations, setConversations] = useState([]);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
     const [turnCount, setTurnCount] = useState(0);
+    const [memoryScope, setMemoryScope] = useState('new'); // 'new', 'session', 'decayed'
 
     const abortRef = useRef(null);
+    const timeoutRef = useRef(null);
 
+    // Initial Load: Fetch List & Hydrate Most Recent
     useEffect(() => {
-        setSessionId(getSessionId());
+        const init = async () => {
+            setStreamStatus('HYDRATING');
+            try {
+                // 1. Get List
+                const list = await getConversationsList();
+                setConversations(list);
+
+                let targetSid = getSessionId();
+
+                // 2. Decide Session ID
+                if (!targetSid && list.length > 0) {
+                    // Auto-select most recent
+                    targetSid = list[0].session_id;
+                    localStorage.setItem('nutri_session_id', targetSid);
+                } else if (!targetSid) {
+                    // Create new if truly nothing
+                    targetSid = await createNewSession();
+                }
+
+                setSessionId(targetSid);
+                await hydrateSession(targetSid);
+
+            } catch (e) {
+                console.error('Init failed:', e);
+                setStreamStatus('IDLE');
+            }
+        };
+        init();
     }, []);
 
-    const handleSend = (query) => {
-        setIsLoading(true);
+    // Helper: Hydrate a specific session
+    const hydrateSession = async (sid) => {
+        setStreamStatus('HYDRATING');
+        setMessages([]); // Clear UI immediately
+        try {
+            const data = await getConversation(sid);
+
+            if (data.messages && data.messages.length > 0) {
+                setMessages(data.messages.map((m, i) => ({
+                    ...m,
+                    id: `hist - ${i} `,
+                    isStreaming: false
+                })));
+                setTurnCount(data.messages.filter(m => m.role === 'user').length);
+                setMemoryScope('session');
+
+                if (data.current_mode) {
+                    console.log(`[HYDRATE] Resuming in mode: ${data.current_mode} `);
+                }
+            } else {
+                setMessages([]);
+                setTurnCount(0);
+                setMemoryScope('new');
+            }
+        } catch (e) {
+            console.error('[HYDRATE] Failed to hydrate:', e);
+            // Show error in logs but allow user to try typing
+        } finally {
+            setStreamStatus('IDLE');
+        }
+    };
+
+    const handleSwitchSession = async (sid) => {
+        if (streamStatus === 'STREAMING') return; // Prevent switch during stream
+        if (sid === sessionId) return;
+
+        setSessionId(sid);
+        localStorage.setItem('nutri_session_id', sid);
+        await hydrateSession(sid);
+        setIsSidebarOpen(false); // Close sidebar after switching
+    };
+
+    const handleNewChat = async () => {
+        if (streamStatus === 'STREAMING') return;
+
+        const newSid = await createNewSession();
+        setSessionId(newSid);
+
+        // Optimistic update of list (will be empty/new entry)
+        const newConv = { session_id: newSid, title: 'New Conversation', last_active: new Date().toISOString(), preview: 'Ready to start' };
+        setConversations(prev => [newConv, ...prev]);
+
+        await hydrateSession(newSid);
+        setIsSidebarOpen(false);
+    };
+
+    const cleanupStream = (finalStatus = 'IDLE') => {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        setStreamStatus(finalStatus);
+    };
+
+    const handleSend = async (query) => {
+        // Circuit Breaker: Force-stop any existing stream
+        if (abortRef.current) {
+            console.warn('[CIRCUIT BREAKER] Aborting previous stream.');
+            abortRef.current();
+            abortRef.current = null;
+        }
+
+        // Reset to IDLE briefly to ensure clean slate (React 18 automatic batching handles this,
+        // but explicit ordering helps logic clarity)
+        cleanupStream('IDLE');
+
+        setStreamStatus('STREAMING');
         setTurnCount(prev => prev + 1);
 
         // Add user query
-        setMessages(prev => [...prev, { role: 'user', content: query }]);
+        setMessages(prev => [...prev, { role: 'user', content: query, id: Date.now() + '-user' }]);
 
-        // Add assistant placeholder with initial phase data
-        const assistantId = Date.now();
+        // Add assistant placeholder
+        const assistantId = Date.now() + '-assistant';
         setMessages(prev => [...prev, {
             id: assistantId,
             role: 'assistant',
             content: '',
             phases: [],
             isStreaming: true,
-            statusMessage: '' // NEW: Live status message
+            statusMessage: ''
         }]);
+
+        // Failsafe: 180s max dead-stream duration
+        const FAILSAFE_TIMEOUT = 180000;
+        const resetFailsafe = () => {
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            timeoutRef.current = setTimeout(() => {
+                console.warn('[SSE] Failsafe timeout — forcing unlock');
+                if (abortRef.current) abortRef.current();
+
+                setMessages(prev => prev.map(m =>
+                    m.id === assistantId
+                        ? { ...m, isStreaming: false, statusMessage: 'Connection timed out.' }
+                        : m
+                ));
+                cleanupStream('IDLE');
+            }, FAILSAFE_TIMEOUT);
+        };
+
+        resetFailsafe();
 
         abortRef.current = streamNutriChat(
             query,
             {
-                verbosity: analysisDepth,
+                verbosity: 'standard', // Hardcoded default as ControlRail is removed
                 explanations: true,
                 streaming: true,
-                execution_mode: null // Auto-detect from intent
+                execution_mode: null
             },
-            //onReasoning
-            (phase) => {
+            // onReasoning
+            (phaseMessage) => {
+                resetFailsafe();
                 setMessages(prev => prev.map(m =>
                     m.id === assistantId
-                        ? { ...m, phases: [...(m.phases || []), phase] }
+                        ? { ...m, statusMessage: phaseMessage }
                         : m
                 ));
             },
             // onToken
             (token) => {
+                resetFailsafe();
                 setMessages(prev => prev.map(m =>
                     m.id === assistantId
                         ? { ...m, content: m.content + token }
@@ -62,29 +197,90 @@ function App() {
                 ));
             },
             // onComplete
-            (output) => {
-                const finalContent = output.recipe || output.explanation || JSON.stringify(output);
-                setMessages(prev => prev.map(m =>
-                    m.id === assistantId
-                        ? { ...m, content: finalContent, isStreaming: false, statusMessage: '' }
-                        : m
-                ));
-                setIsLoading(false);
+            (statusData) => {
+                console.log(`[SSE] Completed logically via [DONE] with status: ${statusData?.status}`);
+
+                setMessages(prev => {
+                    const updated = prev.map(m => {
+                        if (m.id === assistantId) {
+                            // Empty Stream Logic
+                            if (!m.content || m.content.trim() === '') {
+                                return {
+                                    ...m,
+                                    isStreaming: false,
+                                    statusMessage: 'Response was empty. (Hint: Try a simpler query)'
+                                };
+                            }
+                            return {
+                                ...m,
+                                isStreaming: false,
+                                statusMessage: statusData?.status === 'error' ? `Error: ${statusData.message}` : ''
+                            };
+                        }
+                        return m;
+                    });
+
+                    // One-time identity footer after first assistant response
+                    let isFirstResponse = false;
+                    try {
+                        isFirstResponse = !sessionStorage.getItem('nutri_identity_footer_shown');
+                        if (isFirstResponse) {
+                            sessionStorage.setItem('nutri_identity_footer_shown', 'true');
+                        }
+                    } catch (e) {
+                        console.warn('[STORAGE] sessionStorage inaccessible:', e);
+                    }
+
+                    if (isFirstResponse) {
+                        return [
+                            ...updated,
+                            {
+                                id: Date.now() + '-identity-footer',
+                                role: 'system',
+                                content: 'Nutri answers by modeling cooking as a physical system.'
+                            }
+                        ];
+                    }
+
+                    return updated;
+                });
+
+                // Transition to IDLE immediately to unlock input
+                setStreamStatus('IDLE');
+                setMemoryScope('session');
+
+                if (timeoutRef.current) clearTimeout(timeoutRef.current);
             },
             // onError
             (err) => {
-                console.error(err);
-                setIsLoading(false);
-                setMessages(prev => prev.filter(m => m.id !== assistantId));
-            },
-            // onStatus (NEW: Phase progress updates)
-            (statusData) => {
-                const { phase, message, profile } = statusData;
-                const displayMessage = message || `Phase: ${phase}`;
-
+                console.error('[SSE] Error detected:', err);
                 setMessages(prev => prev.map(m =>
                     m.id === assistantId
-                        ? { ...m, statusMessage: displayMessage }
+                        ? { ...m, content: m.content + `\n\n[System Error: ${err.message}]`, isStreaming: false }
+                        : m
+                ));
+                cleanupStream('IDLE'); // Unlock even on error
+            },
+            // onStatus
+            (statusData) => {
+                resetFailsafe();
+                const { phase, message } = statusData;
+                if (phase === 'reset') {
+                    setMemoryScope('decayed');
+                    // Session Expiry UX: Soft system message
+                    setMessages(prev => [
+                        ...prev,
+                        {
+                            id: Date.now() + '-sys',
+                            role: 'system',
+                            content: 'Session expired due to inactivity. Memory has been reset.'
+                        }
+                    ]);
+                    setTurnCount(0);
+                }
+                setMessages(prev => prev.map(m =>
+                    m.id === assistantId
+                        ? { ...m, statusMessage: message || phase }
                         : m
                 ));
             }
@@ -93,46 +289,72 @@ function App() {
 
     const handleNewSession = () => {
         clearSession();
-        setSessionId(getSessionId());
+        const sid = getSessionId();
+        setSessionId(sid);
         setMessages([]);
         setTurnCount(0);
+        setStreamStatus('IDLE');
+        setMemoryScope('new');
     };
 
     return (
         <ErrorBoundary>
             <div className="flex h-screen w-screen bg-neutral-950 text-neutral-100 font-sans overflow-hidden selection:bg-accent/30">
-                {/* Control Rail - Left */}
-                <ControlRail
-                    selectedDepth={analysisDepth}
-                    onDepthChange={setAnalysisDepth}
+
+                {/* 1. Sidebar (Persistent on Desktop, Drawer on Mobile) */}
+                <Sidebar
+                    isOpen={isSidebarOpen}
+                    setIsOpen={setIsSidebarOpen}
+                    conversations={conversations}
+                    currentSessionId={sessionId}
+                    onSelectSession={handleSwitchSession}
+                    onNewChat={handleNewChat}
                 />
 
                 {/* Main Content Area */}
-                <div className="flex-1 flex flex-col h-full bg-neutral-900/20">
-                    {/* System Telemetry - Top */}
-                    <SystemStatus
-                        sessionId={sessionId}
-                        turnCount={turnCount}
+                <div className="flex-1 flex flex-col h-full bg-neutral-900/20 relative">
+
+                    {/* 2. Chat Header (Fixed Top) */}
+                    <ChatHeader
+                        title={conversations.find(c => c.session_id === sessionId)?.title}
+                        lastActive={conversations.find(c => c.session_id === sessionId)?.last_active}
+                        onOpenSidebar={() => setIsSidebarOpen(true)}
                     />
 
+                    {/* System Telemetry - Top (Just below header) */}
+                    <div className="mt-16">
+                        <SystemStatus
+                            sessionId={sessionId}
+                            turnCount={turnCount}
+                        />
+                    </div>
+
                     {/* Reasoning Stream - Scrollable */}
-                    <PhaseStream messages={messages} />
+                    <PhaseStream
+                        messages={messages}
+                        streamStatus={streamStatus}
+                        onPromptSelect={(text) => {
+                            if (inputValueSetter) inputValueSetter(text);
+                        }}
+                    />
 
                     {/* Reasoning Console - Bottom */}
                     <ReasoningConsole
                         onSend={handleSend}
-                        isLoading={isLoading}
-                        isMemoryActive={turnCount > 0}
+                        isLoading={streamStatus === 'STREAMING' || streamStatus === 'HYDRATING'}
+                        isMemoryActive={memoryScope === 'session' || turnCount > 0}
+                        setInputValue={(setter) => { inputValueSetter = setter; }}
                     />
+
+                    {/* Memory Transparency Signal */}
+                    {memoryScope === 'session' && messages.length > 0 && streamStatus === 'IDLE' && (
+                        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-neutral-900/80 border border-neutral-800 px-3 py-1 rounded-full text-[9px] font-mono uppercase tracking-widest text-neutral-500 animate-fade-in pointer-events-none z-10">
+                            Nutri remembers this conversation
+                        </div>
+                    )}
                 </div>
 
-                {/* New Session Action - Sharp & Instrumental */}
-                <button
-                    onClick={handleNewSession}
-                    className="absolute top-2.5 right-6 transform transition-all opacity-20 hover:opacity-100 text-[10px] font-mono uppercase tracking-[0.2em] border border-neutral-800 hover:border-accent/40 px-3 py-1 rounded bg-neutral-900/50 hover:bg-accent/5 hover:text-accent shadow-sm"
-                >
-                    Reset Environment
-                </button>
+                {/* Control Rail - REMOVED (Dead Code) */}
             </div>
         </ErrorBoundary>
     );

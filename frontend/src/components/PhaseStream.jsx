@@ -1,26 +1,61 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ChevronDown, ChevronRight, Binary, Fingerprint } from 'lucide-react';
+import StarterPrompts from './StarterPrompts';
 
 /**
  * PhaseStream - Collapsible, phase-aware reasoning output.
  * Renders the deterministic lineage of Nutri's internal steps.
+ * 
+ * HARDENING:
+ * - Smart Scroll: Only auto-scrolls if user was already at bottom.
+ * - Forced Scroll: On hydration or DONE state.
+ * - Starter Prompts: Show only when zero user messages.
  */
-const PhaseStream = ({ messages }) => {
+const PhaseStream = ({ messages, streamStatus, onPromptSelect }) => {
+    const scrollRef = useRef(null);
+    const [isAtBottom, setIsAtBottom] = useState(true);
+
+    // Lifecycle: Count user messages
+    const userMessageCount = messages.filter(m => m.role === 'user').length;
+
+    // Scroll Handler
+    const handleScroll = () => {
+        if (!scrollRef.current) return;
+        const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+        const atBottom = scrollHeight - scrollTop - clientHeight < 50; // 50px threshold
+        setIsAtBottom(atBottom);
+    };
+
+    // Auto-Scroll Effect
+    useEffect(() => {
+        if (!scrollRef.current) return;
+
+        // Force scroll scenarios
+        const forceScroll = streamStatus === 'DONE' || streamStatus === 'HYDRATING';
+
+        if (isAtBottom || forceScroll) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }, [messages, streamStatus, isAtBottom]);
+
     return (
-        <div className="flex-1 overflow-y-auto p-8 space-y-12 relative">
-            {/* Idle-State Cognitive Anchor */}
-            {messages.length === 0 && (
-                <div className="absolute inset-0 flex items-center justify-center p-8 pointer-events-none">
-                    <div className="max-w-2xl text-center space-y-4 opacity-20 transition-opacity duration-1000 animate-fade-in">
-                        <h1 className="text-3xl md:text-4xl font-serif font-normal text-neutral-100 leading-tight">
-                            Nutri analyzes dishes as physical systems — heat, structure, chemistry, and perception.
-                        </h1>
-                        <p className="text-sm font-mono uppercase tracking-[0.2em] text-neutral-400">
-                            Describe a dish, constraint, or sensory goal.
-                        </p>
-                    </div>
+        <div
+            ref={scrollRef}
+            onScroll={handleScroll}
+            className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 md:space-y-12 relative scroll-smooth"
+        >
+            {/* Idle-State: Identity Statement + Starter Prompts (LIFECYCLE RULE: userMessageCount === 0) */}
+            {userMessageCount === 0 && (
+                <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 md:gap-8">
+                    {/* Identity Statement */}
+                    <p className="text-xs md:text-sm text-neutral-600 font-mono tracking-wide max-w-2xl text-center px-4 uppercase opacity-60">
+                        Nutri models culinary data as physical systems.
+                    </p>
+
+                    {/* Starter Prompts */}
+                    <StarterPrompts onSelectPrompt={onPromptSelect} />
                 </div>
             )}
 
@@ -36,9 +71,33 @@ const PhaseStream = ({ messages }) => {
                         </div>
                     )}
 
+                    {/* System Message - Visually Subordinate Footer */}
+                    {msg.role === 'system' && (
+                        <div className="flex flex-col items-center justify-center py-4 md:py-6 gap-2 opacity-50 animate-fade-in">
+                            <div className="h-px w-12 bg-neutral-800"></div>
+                            <span className="text-xs text-neutral-600 font-mono uppercase tracking-wider text-center px-4">
+                                {msg.content}
+                            </span>
+                        </div>
+                    )}
+
                     {/* Assistant Response - Phase Container */}
                     {msg.role === 'assistant' && (
-                        <div className="flex flex-col gap-4">
+                        <div className="flex flex-col gap-4 py-2 md:py-4">
+                            {/* Thinking Indicator (STREAMING state, no content yet) */}
+                            {msg.isStreaming && !msg.content && (!msg.phases || msg.phases.length === 0) && (
+                                <div className="flex items-center gap-2 text-neutral-500 animate-pulse">
+                                    <div className="flex gap-1">
+                                        <span className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                                        <span className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                                        <span className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                                    </div>
+                                    <span className="text-xs font-mono uppercase tracking-wider">
+                                        Nutri is thinking...
+                                    </span>
+                                </div>
+                            )}
+
                             {/* Intermediate Phases (if streaming) */}
                             {msg.phases && msg.phases.map((phase) => (
                                 <details
@@ -68,21 +127,29 @@ const PhaseStream = ({ messages }) => {
 
                             {/* Live Status Message - NEW */}
                             {msg.isStreaming && msg.statusMessage && (
-                                <div className="flex items-center gap-3 ml-2 py-2 px-4 bg-accent/5 border-l-2 border-accent/40 rounded-r">
-                                    <Binary className="w-4 h-4 text-accent animate-pulse-subtle" />
-                                    <span className="text-sm font-mono text-accent/90 animate-fade-in">
+                                <div className="flex items-center gap-3 ml-2 py-2 px-4 bg-accent/5 border-l-2 border-accent/40 rounded-r animate-fade-in">
+                                    <Binary className="w-4 h-4 text-accent animate-pulse" />
+                                    <span className="text-sm font-mono text-accent/90">
                                         {msg.statusMessage}
                                     </span>
                                 </div>
                             )}
 
-                            {/* Legacy Fallback (if no statusMessage yet) */}
-                            {msg.isStreaming && !msg.content && !msg.statusMessage && (
-                                <div className="flex items-center gap-2 ml-2">
-                                    <Binary className="w-4 h-4 text-accent animate-pulse-subtle" />
-                                    <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">
-                                        Computational sequence in progress...
-                                    </span>
+                            {/* Minimal Pulse Indicator (if streaming content but no status message) */}
+                            {msg.isStreaming && !msg.statusMessage && (
+                                <div className="flex items-center gap-1.5 ml-2 mt-2 opacity-50">
+                                    <div className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce delay-0"></div>
+                                    <div className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce delay-100"></div>
+                                    <div className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce delay-200"></div>
+                                </div>
+                            )}
+
+                            {/* Coming Soon: Regenerate */}
+                            {!msg.isStreaming && msg.content && (
+                                <div className="pl-0 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button disabled className="text-[10px] text-neutral-700 font-mono uppercase tracking-widest cursor-not-allowed hover:text-neutral-600">
+                                        Regenerate Response (Soon)
+                                    </button>
                                 </div>
                             )}
                         </div>
