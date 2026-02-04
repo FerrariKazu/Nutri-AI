@@ -53,6 +53,37 @@ class SessionMemoryStore:
                 )
             """)
             conn.commit()
+            
+            # User preferences table (USER-SCOPED)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS user_preferences (
+                    user_id TEXT PRIMARY KEY,
+                    skill_level TEXT,
+                    equipment TEXT,
+                    dietary_constraints TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Session context table (SESSION-SCOPED, ephemeral)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS session_context (
+                    session_id TEXT PRIMARY KEY,
+                    current_dish TEXT,
+                    key_ingredients TEXT,
+                    technique TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(session_id) REFERENCES sessions(session_id)
+                )
+            """)
+            
+            # Link sessions to users
+            try:
+                cursor.execute("SELECT user_id FROM sessions LIMIT 1")
+            except sqlite3.OperationalError:
+                cursor.execute("ALTER TABLE sessions ADD COLUMN user_id TEXT")
+            
+            conn.commit()
 
     def check_and_reset_decay(self, session_id: str) -> bool:
         """
@@ -244,3 +275,142 @@ class SessionMemoryStore:
             )
             conn.commit()
         logger.debug(f"Session {session_id}: Mode set to {mode_val}")
+
+    # --- User Preferences (USER-SCOPED) ---
+    
+    def get_user_id(self, session_id: str) -> Optional[str]:
+        """Get user_id associated with this session."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT user_id FROM sessions WHERE session_id = ?", (session_id,))
+            row = cursor.fetchone()
+            return row['user_id'] if row and row['user_id'] else None
+    
+    def set_user_id(self, session_id: str, user_id: str):
+        """Associate a user_id with this session."""
+        self._update_activity(session_id)
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE sessions SET user_id = ? WHERE session_id = ?",
+                (user_id, session_id)
+            )
+            conn.commit()
+        logger.debug(f"Session {session_id}: Linked to user {user_id}")
+    
+    def get_preferences(self, user_id: str):
+        """Retrieve persistent user preferences by user_id."""
+        from backend.selective_memory import UserPreferences
+        
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM user_preferences WHERE user_id = ?", (user_id,))
+            row = cursor.fetchone()
+            
+            if not row:
+                return UserPreferences()
+            
+            return UserPreferences(
+                skill_level=row['skill_level'],
+                equipment=json.loads(row['equipment']) if row['equipment'] else [],
+                dietary_constraints=json.loads(row['dietary_constraints']) if row['dietary_constraints'] else []
+            )
+    
+    def update_preferences(self, user_id: str, prefs: Dict[str, Any]):
+        """Update user preferences (merge, don't replace)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Get existing preferences
+            cursor.execute("SELECT * FROM user_preferences WHERE user_id = ?", (user_id,))
+            existing = cursor.fetchone()
+            
+            if existing:
+                # Merge with existing
+                current_skill = existing[1]  # skill_level
+                current_equipment = json.loads(existing[2]) if existing[2] else []
+                current_dietary = json.loads(existing[3]) if existing[3] else []
+                
+                new_skill = prefs.get('skill_level', current_skill)
+                new_equipment = prefs.get('equipment', current_equipment)
+                new_dietary = prefs.get('dietary_constraints', current_dietary)
+                
+                # Merge equipment and dietary (deduplicate)
+                if isinstance(new_equipment, list) and current_equipment:
+                    new_equipment = list(set(current_equipment + new_equipment))
+                if isinstance(new_dietary, list) and current_dietary:
+                    new_dietary = list(set(current_dietary + new_dietary))
+                
+                cursor.execute("""
+                    UPDATE user_preferences 
+                    SET skill_level = ?, equipment = ?, dietary_constraints = ?, updated_at = ?
+                    WHERE user_id = ?
+                """, (
+                    new_skill,
+                    json.dumps(new_equipment) if new_equipment else None,
+                    json.dumps(new_dietary) if new_dietary else None,
+                    datetime.now().isoformat(),
+                    user_id
+                ))
+            else:
+                # Insert new
+                cursor.execute("""
+                    INSERT INTO user_preferences (user_id, skill_level, equipment, dietary_constraints, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (
+                    user_id,
+                    prefs.get('skill_level'),
+                    json.dumps(prefs.get('equipment', [])) if prefs.get('equipment') else None,
+                    json.dumps(prefs.get('dietary_constraints', [])) if prefs.get('dietary_constraints') else None,
+                    datetime.now().isoformat()
+                ))
+            
+            conn.commit()
+        logger.info(f"[MEMORY] Updated preferences for user {user_id}: {prefs}")
+    
+    # --- Session Context (SESSION-SCOPED) ---
+    
+    def get_context(self, session_id: str):
+        """Retrieve ephemeral session context."""
+        from backend.selective_memory import SessionContext
+        
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM session_context WHERE session_id = ?", (session_id,))
+            row = cursor.fetchone()
+            
+            if not row:
+                return SessionContext()
+            
+            return SessionContext(
+                current_dish=row['current_dish'],
+                key_ingredients=json.loads(row['key_ingredients']) if row['key_ingredients'] else [],
+                technique=row['technique']
+            )
+    
+    def update_context(self, session_id: str, context):
+        """Replace session context (not merged). Guard: only overwrite if context is non-null."""
+        if context is None:
+            return  # Don't wipe valid context with empty extraction
+        
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Upsert (replace if exists)
+            cursor.execute("""
+                INSERT OR REPLACE INTO session_context 
+                (session_id, current_dish, key_ingredients, technique, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                session_id,
+                context.current_dish,
+                json.dumps(context.key_ingredients) if context.key_ingredients else None,
+                context.technique,
+                datetime.now().isoformat()
+            ))
+            
+            conn.commit()
+        logger.debug(f"[MEMORY] Updated context for session {session_id}")

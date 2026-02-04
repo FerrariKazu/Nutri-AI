@@ -1,6 +1,6 @@
 """
 Qwen3 LLM Engine (Facade)
-Acts as a shim to route requests to the active LLM Backend (Ollama or llama.cpp)
+Acts as a shim to route requests to the active LLM Backend
 via the LLMFactory. Preserves API compatibility for the codebase.
 """
 
@@ -10,9 +10,9 @@ from backend.llm.factory import LLMFactory
 class LLMQwen3:
     """Facade for LLM Client (Backwards Compatibility Shim)"""
     
-    def __init__(self, model_name: str = "qwen3:8b"):
-        self.client = LLMFactory.create_client(model_name)
-        self.model_name = model_name 
+    def __init__(self, agent_name: str = "orchestrator", model_name: Optional[str] = None):
+        self.client = LLMFactory.create_client(agent_name, model_name)
+        self.model_name = self.client.model_name if hasattr(self.client, 'model_name') else "unknown" 
 
     def stream_text(self, *args, **kwargs):
         """Delegate streaming to active backend"""

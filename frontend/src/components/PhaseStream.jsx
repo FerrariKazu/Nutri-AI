@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ChevronDown, ChevronRight, Binary, Fingerprint } from 'lucide-react';
+import { ChevronDown, ChevronRight, Binary, Fingerprint, ShieldCheck, Hash, Activity, Book, FileText, AlertTriangle, Info } from 'lucide-react';
 import StarterPrompts from './StarterPrompts';
 
 /**
@@ -138,9 +138,117 @@ const PhaseStream = ({ messages, streamStatus, onPromptSelect }) => {
                             {/* Minimal Pulse Indicator (if streaming content but no status message) */}
                             {msg.isStreaming && !msg.statusMessage && (
                                 <div className="flex items-center gap-1.5 ml-2 mt-2 opacity-50">
-                                    <div className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce delay-0"></div>
-                                    <div className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce delay-100"></div>
                                     <div className="w-1.5 h-1.5 bg-accent rounded-full animate-bounce delay-200"></div>
+                                </div>
+                            )}
+
+                            {/* 🥗 Tier 1 Intelligence Report (Hardened Verification) */}
+                            {msg.nutritionVerification && (
+                                <div className="mt-8 space-y-6 animate-fade-in group/v">
+                                    {/* Header: Overall Confidence & Summary */}
+                                    <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-neutral-900/50 border border-neutral-800">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-lg ${msg.nutritionVerification.final_confidence >= 0.7 ? 'bg-green-500/20' : 'bg-amber-500/20'}`}>
+                                                <ShieldCheck className={`w-5 h-5 ${msg.nutritionVerification.final_confidence >= 0.7 ? 'text-green-400' : 'text-amber-400'}`} />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300">
+                                                    Nutrition Intelligence Verified
+                                                </h3>
+                                                <p className="text-[10px] text-neutral-500 font-mono">
+                                                    PROOF: {msg.nutritionVerification.proof_hash}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-4">
+                                            <div className="text-right">
+                                                <div className="text-xl font-mono font-bold text-neutral-200">
+                                                    {(msg.nutritionVerification.final_confidence * 100).toFixed(0)}%
+                                                </div>
+                                                <div className="text-[10px] text-neutral-500 uppercase tracking-tighter">
+                                                    CONFIDENCE
+                                                </div>
+                                            </div>
+                                            {msg.nutritionVerification.conflicts_detected && (
+                                                <div className="p-2 rounded-full bg-amber-500/10 text-amber-500" title="Conflicting sources detected; higher-priority evidence used">
+                                                    <AlertTriangle className="w-4 h-4" />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Claim Cards Grid */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {msg.nutritionVerification.claims && msg.nutritionVerification.claims.map((claim, cidx) => (
+                                            <div key={claim.claim_id || cidx} className="p-3 rounded-lg bg-neutral-900/30 border border-neutral-800/50 hover:border-neutral-700 transition-colors flex flex-col gap-2">
+                                                <div className="flex items-start justify-between">
+                                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-tighter ${claim.status_label === 'Verified' ? 'bg-green-500/10 text-green-500' :
+                                                        claim.status_label.includes('Supporting') ? 'bg-amber-500/10 text-amber-500' :
+                                                            'bg-neutral-800 text-neutral-500'
+                                                        }`}>
+                                                        {claim.status_label === 'Verified' ? '✅ Verified' :
+                                                            claim.status_label.includes('Supporting') ? '🟡 Supporting' : '⚪ Info'}
+                                                    </span>
+                                                    <div className="flex items-center gap-1 opacity-40 group-hover:opacity-100 transition-opacity">
+                                                        {claim.source === 'pubchem' && <ShieldCheck className="w-3 h-3 text-green-400" />}
+                                                        {claim.source === 'usda' && <Book className="w-3 h-3 text-blue-400" />}
+                                                        {claim.source === 'peer_reviewed_rag' && <FileText className="w-3 h-3 text-purple-400" />}
+                                                        <span className="text-[9px] font-mono text-neutral-500 uppercase">{claim.source}</span>
+                                                    </div>
+                                                </div>
+                                                <p className="text-xs text-neutral-300 leading-snug">
+                                                    {claim.text}
+                                                </p>
+                                                {claim.explanation && (
+                                                    <p className="text-[9px] text-neutral-600 italic">
+                                                        {claim.explanation}
+                                                    </p>
+                                                )}
+                                                {claim.claim_id === msg.nutritionVerification.weakest_link_id && (
+                                                    <div className="mt-1 flex items-center gap-1 text-[8px] text-amber-500/60 font-mono uppercase">
+                                                        <Activity className="w-2 h-2" />
+                                                        Weakest Link
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Uncertainty Accordion */}
+                                    <details className="group p-3 rounded-lg bg-neutral-900/20 border border-neutral-800/30">
+                                        <summary className="list-none cursor-pointer flex items-center justify-between font-mono text-[10px] text-neutral-500 uppercase tracking-widest hover:text-neutral-300 transition-colors">
+                                            <div className="flex items-center gap-2">
+                                                <Info className="w-3 h-3" />
+                                                What affects this confidence?
+                                            </div>
+                                            <ChevronRight className="w-3 h-3 group-open:rotate-90 transition-transform" />
+                                        </summary>
+                                        <div className="mt-4 space-y-3">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {msg.nutritionVerification.variance_drivers && Object.entries(msg.nutritionVerification.variance_drivers).map(([driver, penalty]) => (
+                                                    <div key={driver} className="flex items-center justify-between text-[11px] text-neutral-400">
+                                                        <span className="capitalize">{driver.replace(/_/g, ' ')}</span>
+                                                        <span className="text-orange-500/70 font-mono">-{Math.round(penalty * 100)}%</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <div className="pt-2 border-t border-neutral-800/50">
+                                                <p className="text-xs text-neutral-500 italic">
+                                                    {msg.nutritionVerification.uncertainty_explanation || "Our confidence score measures potential variance in nutritional outcomes based on measurable evidence gaps."}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </details>
+
+                                    {/* All Unverified Banner */}
+                                    {msg.nutritionVerification.final_confidence < 0.4 && (
+                                        <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 text-center">
+                                            <p className="text-[11px] text-amber-500/80 font-medium italic">
+                                                This answer contains informational content without verified nutrition data.
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 

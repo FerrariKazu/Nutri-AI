@@ -159,9 +159,9 @@ class FeedbackParser:
     structured constraint deltas.
     """
     
-    def __init__(self, model_name: str = "qwen3:8b"):
+    def __init__(self, model_name: Optional[str] = None):
         """Initialize feedback parser."""
-        self.llm = LLMQwen3(model_name=model_name)
+        self.llm = LLMQwen3(agent_name="feedback_parser", model_name=model_name)
         logger.info("FeedbackParser initialized")
     
     def parse(self, feedback: str) -> FeedbackDelta:
@@ -399,19 +399,9 @@ Examples to OMIT:
 
 
 class RefinementEngine:
-    """
-    Phase 3 Refinement Engine.
-    
-    Orchestrates re-synthesis with:
-    - Merged constraints
-    - Previous recipe context
-    - Chemical justification enforcement
-    - Change tracking
-    """
-    
-    def __init__(self, model_name: str = "qwen3:8b"):
-        """Initialize refinement engine."""
-        self.llm = LLMQwen3(model_name=model_name)
+    """Phase 3: Recipe Refinement Engine"""
+    def __init__(self, model_name: Optional[str] = None):
+        self.llm = LLMQwen3(agent_name="refinement_agent", model_name=model_name)
         self.feedback_parser = FeedbackParser(model_name=model_name)
         self.constraint_merger = ConstraintMerger()
         logger.info("RefinementEngine initialized")

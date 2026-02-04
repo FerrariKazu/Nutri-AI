@@ -46,6 +46,16 @@ from backend.sensory.counterfactual_multi_engine import MultiCounterfactualEngin
 from backend.sensory.explanation_interactive import InteractiveExplainer
 from backend.sensory.interactive_design_loop import InteractiveDesignLoop
 
+# PubChem Enforcement
+from backend.nutrition_enforcer import (
+    CompoundResolver,
+    calculate_confidence_score,
+    generate_proof_hash,
+    NutritionEnforcementMode,
+    ResolvedCompound
+)
+from backend.pubchem_client import PubChemError
+
 logger = logging.getLogger(__name__)
 
 
@@ -375,14 +385,14 @@ class IntentAgent:
     Does NO food reasoning - only extraction and normalization.
     """
     
-    def __init__(self, model_name: str = "qwen3:4b"):
+    def __init__(self, model_name: Optional[str] = None):
         """
         Initialize the intent extraction agent.
         
         Args:
-            model_name: Ollama model name for extraction
+            model_name: Optional model override
         """
-        self.llm = LLMQwen3(model_name=model_name)
+        self.llm = LLMQwen3(agent_name="intent_agent", model_name=model_name)
         logger.info("IntentAgent initialized")
     
     def extract(self, user_input: str, stream_callback: Optional[callable] = None) -> IntentOutput:
@@ -480,15 +490,34 @@ class FoodSynthesisEngine:
     Uses retrieved knowledge to invent chemically feasible meals.
     """
     
-    def __init__(self, model_name: str = "qwen3:4b"):
+    def __init__(self, model_name: Optional[str] = None, enforcement_mode: NutritionEnforcementMode = NutritionEnforcementMode.STRICT):
         """
         Initialize the synthesis engine.
         
         Args:
-            model_name: Ollama model name for synthesis
+            model_name: Optional model override
+            enforcement_mode: PubChem enforcement mode (STRICT or PARTIAL)
         """
-        self.llm = LLMQwen3(model_name=model_name)
-        logger.info("FoodSynthesisEngine initialized")
+        self.llm = LLMQwen3(agent_name="synthesis_engine", model_name=model_name)
+        self.compound_resolver = CompoundResolver()
+        self.enforcement_mode = enforcement_mode
+        
+        # 📋 PHASE 1-3 Intelligence Hardening Components
+        from backend.claim_parser import ClaimParser
+        from backend.claim_verifier import ClaimVerifier
+        from backend.nutrition_uncertainty import UncertaintyCalculator
+        from backend.usda_client import USDAClient
+        
+        self.claim_parser = ClaimParser(llm_engine=self.llm)
+        self.usda_client = USDAClient()
+        self.claim_verifier = ClaimVerifier(
+            pubchem_client=self.compound_resolver.client,
+            usda_client=self.usda_client,
+            rag_engine=None # Will be connected via orchestrator if needed
+        )
+        self.uncertainty_calculator = UncertaintyCalculator()
+        
+        logger.info(f"FoodSynthesisEngine initialized (enforcement={enforcement_mode.value})")
     
     def synthesize(
         self,
@@ -497,7 +526,7 @@ class FoodSynthesisEngine:
         intent: Optional[IntentOutput] = None,
         stream_callback: Optional[callable] = None,
         boundary_token: Optional[str] = None
-    ) -> str:
+    ) -> tuple[str, Dict[str, Any]]:
         """
         Generate a novel recipe with chemical explanation.
         
@@ -508,8 +537,71 @@ class FoodSynthesisEngine:
             stream_callback: Optional callback for token streaming
             
         Returns:
-            Generated recipe with chemical reasoning
+            Tuple of (generated_recipe, enforcement_metadata)
         """
+        # 🔬 PUBCHEM ENFORCEMENT: Resolve ingredients to compounds
+        enforcement_meta = {}
+        compound_context = ""
+        
+        if intent and hasattr(intent, 'ingredients') and intent.ingredients:
+            logger.info(f"[PUBCHEM_ENFORCE] Resolving {len(intent.ingredients)} ingredients")
+            
+            try:
+                # Resolve compounds via PubChem
+                resolution_result = self.compound_resolver.resolve_ingredients(
+                    ingredients=intent.ingredients
+                )
+                
+                # Calculate confidence
+                confidence = calculate_confidence_score(
+                    resolution_result,
+                    self.enforcement_mode
+                )
+                
+                # Generate proof hash
+                proof_hash = generate_proof_hash(resolution_result.resolved)
+                
+                # Build enforcement metadata
+                enforcement_meta = {
+                    "pubchem_used": len(resolution_result.resolved) > 0,
+                    "confidence_score": confidence,
+                    "pubchem_proof_hash": proof_hash,
+                    "compounds_resolved": len(resolution_result.resolved),
+                    "compounds_failed": len(resolution_result.unresolved),
+                    "resolution_time_ms": resolution_result.total_time_ms,
+                    "enforcement_failures": [
+                        f"{u.name}: {u.reason}" for u in resolution_result.unresolved
+                    ],
+                    "resolved_compounds": [
+                        {
+                            "name": c.name,
+                            "cid": c.cid,
+                            "cached": c.cached,
+                            "resolution_time_ms": c.resolution_time_ms,
+                            "properties": c.properties.dict() if hasattr(c.properties, "dict") else c.properties
+                        } for c in resolution_result.resolved
+                    ]
+                }
+                
+                # Build compound context for LLM
+                compound_context = self._build_compound_context(resolution_result.resolved)
+                
+                # STRICT mode enforcement
+                if self.enforcement_mode == NutritionEnforcementMode.STRICT and confidence < 0.7:
+                    error = f"[STRICT MODE] Confidence {confidence:.2f} below threshold. Resolved {len(resolution_result.resolved)}/{len(resolution_result.resolved) + len(resolution_result.unresolved)} compounds."
+                    logger.error(error)
+                    return (f"⚠️ Unable to generate recipe: {error}", enforcement_meta)
+                
+                logger.info(
+                    f"[PUBCHEM_ENFORCE] Resolved {len(resolution_result.resolved)} compounds, "
+                    f"confidence={confidence:.2f}, hash={proof_hash}"
+                )
+                
+            except PubChemError as e:
+                logger.error(f"[PUBCHEM_ENFORCE] Resolution failed: {e}")
+                if self.enforcement_mode == NutritionEnforcementMode.STRICT:
+                    return (f"⚠️ Unable to generate recipe: PubChem resolution failed", enforcement_meta)
+        
         # Build context from retrieved documents
         context = self._build_context(retrieved_docs)
         
@@ -517,7 +609,9 @@ class FoodSynthesisEngine:
         if intent:
             # Phase 2: Include constraint addendum
             system_prompt = f"{PHASE1_SYSTEM_PROMPT}\n\n{PHASE2_REASONING_ADDENDUM}"
-            user_content = self._build_constrained_query(user_query, intent, context)
+            user_content = self._build_constrained_query(
+                user_query, intent, context, compound_context
+            )
         else:
             # Phase 1: Simple synthesis
             system_prompt = PHASE1_SYSTEM_PROMPT
@@ -541,13 +635,50 @@ class FoodSynthesisEngine:
             
             # Log final reasoning output (LOGGING REQUIREMENT)
             logger.info(f"Synthesis output length: {len(response)} chars")
-            logger.debug(f"Synthesis output: {response[:500]}...")
             
-            return response
+            # 📋 TIER 1 INTELLIGENCE HARDENING (PHASE 4)
+            # 1. Atomic Claim Extraction
+            claims = self.claim_parser.parse(response)
+            
+            # 2. Claim Verification
+            verifications = self.claim_verifier.verify_claims(claims)
+            
+            # 3. Uncertainty Modeling
+            # Detect active variance drivers (Heuristic for now)
+            active_drivers = []
+            if "optional" in response.lower() or "substitution" in response.lower():
+                active_drivers.append("ingredient_substitution")
+            if "serving" not in response.lower() and "portion" not in response.lower():
+                active_drivers.append("portion_ambiguity")
+            if str(enforcement_meta.get("confidence_score", 1.0)) < "1.0":
+                active_drivers.append("incomplete_resolution")
+            
+            uncertainty_report = self.uncertainty_calculator.calculate(
+                claims=verifications,
+                global_drivers=active_drivers
+            )
+            
+            # 4. Integrate into enforcement metadata
+            enforcement_meta.update({
+                "claims": [v.__dict__ for v in verifications],
+                "final_confidence": uncertainty_report.response_confidence,
+                "variance_drivers": uncertainty_report.variance_drivers,
+                "uncertainty_explanation": uncertainty_report.explanation,
+                "weakest_link_id": uncertainty_report.weakest_link_id,
+                "verification_summary": {
+                    "verified_claims": sum(1 for v in verifications if v.verified),
+                    "unverified_claims": sum(1 for v in verifications if not v.verified),
+                    "total_claims": len(verifications),
+                    "conflicts_detected": any(v.metadata.get("has_conflict") for v in verifications)
+                }
+            })
+            
+            # Return response with hardened enforcement metadata
+            return (response, enforcement_meta)
             
         except Exception as e:
             logger.error(f"Synthesis failed: {e}")
-            return f"Error: Unable to generate recipe. {str(e)}"
+            return (f"Error: Unable to generate recipe. {str(e)}", enforcement_meta)
     
     def _build_context(self, docs: List[RetrievedDocument]) -> str:
         """Build context string from retrieved documents."""
@@ -587,11 +718,38 @@ User request: {query}
 
 Invent a novel dish following the reasoning steps in your instructions."""
     
+    def _build_compound_context(self, compounds: List[ResolvedCompound]) -> str:
+        """
+        Build structured compound context for LLM.
+        
+        LLM receives ONLY this structured data, not raw ingredient names.
+        This prevents hallucination by gating information flow.
+        """
+        if not compounds:
+            return ""
+        
+        compound_lines = []
+        for c in compounds:
+            compound_lines.append(
+                f"- **{c.name}** (CID: {c.cid}): "
+                f"{c.properties.molecular_formula}, "
+                f"MW {c.properties.molecular_weight:.1f}g/mol"
+            )
+        
+        return "\n".join([
+            "\n## PubChem-Verified Compounds (Use ONLY These)",
+            "The following compounds have been verified via PubChem.",
+            "Base your chemical reasoning EXCLUSIVELY on these verified compounds.",
+            "",
+            *compound_lines
+        ])
+    
     def _build_constrained_query(
         self,
         query: str,
         intent: IntentOutput,
-        context: str
+        context: str,
+        compound_context: str = ""
     ) -> str:
         """Build Phase 2 query with structured constraints."""
         # Defensive: Handle both IntentOutput object and dict
@@ -603,9 +761,10 @@ Invent a novel dish following the reasoning steps in your instructions."""
             logger.warning(f"Unknown intent type: {type(intent)}. Defaulting to empty constraints.")
             constraints = {}
         
-        return f"""Based on the following scientific knowledge:
+        constraint_section = f"""Based on the following scientific knowledge:
 
 {context}
+{compound_context}
 
 ## Design Constraints (MUST OBEY)
 ```json
@@ -632,14 +791,14 @@ class NutriPipeline:
     
     def __init__(
         self,
-        model_name: str = "qwen3:4b",
+        model_name: Optional[str] = None,
         use_phase2: bool = True
     ):
         """
         Initialize the full Nutri pipeline.
         
         Args:
-            model_name: Ollama model name
+            model_name: Optional model override
             use_phase2: Whether to use Agent 1 for intent extraction
         """
         self.retriever = FoodSynthesisRetriever()
@@ -1133,13 +1292,13 @@ Keep the same format as the original."""
 # CONVENIENCE FUNCTIONS
 # =============================================================================
 
-def create_pipeline(phase: int = 2, model_name: str = "qwen3:8b") -> NutriPipeline:
+def create_pipeline(phase: int = 2, model_name: Optional[str] = None) -> NutriPipeline:
     """
-    Create a NutriPipeline with the specified phase.
+    Factory function to create a NutriPipeline instance.
     
     Args:
-        phase: 1 or 2
-        model_name: Ollama model name
+        phase: 1 (synthesis only) or 2 (intent extraction + synthesis)
+        model_name: Optional model override
         
     Returns:
         Configured NutriPipeline

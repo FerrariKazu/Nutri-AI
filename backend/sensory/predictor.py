@@ -82,8 +82,8 @@ Return ONLY JSON:
 class SensoryPredictor:
     """Predicts advanced sensory profiles (Phase 6.5)."""
     
-    def __init__(self, model_name: str = "qwen3:8b"):
-        self.llm = LLMQwen3(model_name=model_name)
+    def __init__(self, model_name: Optional[str] = None):
+        self.llm = LLMQwen3(agent_name="explainer_agent", model_name=model_name)
         logger.info("SensoryPredictor initialized (Phase 6.5)")
 
     def predict(

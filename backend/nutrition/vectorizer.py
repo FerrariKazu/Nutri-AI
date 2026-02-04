@@ -92,8 +92,8 @@ Return valid JSON only:
 class NutritionVectorizer:
     """Converts ingredients to nutrition vectors."""
     
-    def __init__(self, model_name: str = "qwen3:8b"):
-        self.llm = LLMQwen3(model_name=model_name)
+    def __init__(self, model_name: Optional[str] = None):
+        self.llm = LLMQwen3(agent_name="intent_agent", model_name=model_name)
         self.cache: Dict[str, NutritionVector] = {}
         logger.info("NutritionVectorizer initialized")
         
@@ -191,8 +191,8 @@ Rules:
 class IngredientExtractor:
     """Extracts ingredients and amounts from recipe text."""
     
-    def __init__(self, model_name: str = "qwen3:8b"):
-        self.llm = LLMQwen3(model_name=model_name)
+    def __init__(self, model_name: Optional[str] = None):
+        self.llm = LLMQwen3(agent_name="intent_agent", model_name=model_name)
     
     def extract(self, recipe_text: str) -> List[Dict[str, Any]]:
         """Extract ingredients with amounts in grams. Falls back to regex if LLM fails."""

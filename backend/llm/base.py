@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Optional, Generator, AsyncGenerator
 
 class LLMClient(ABC):
-    """Abstract Base Class for LLM Backends (Ollama vs llama.cpp)"""
+    """Abstract Base Class for LLM Backends"""
 
     @abstractmethod
     def health_check(self) -> Dict:

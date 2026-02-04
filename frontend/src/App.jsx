@@ -264,10 +264,10 @@ function App() {
             // onStatus
             (statusData) => {
                 resetFailsafe();
+                if (!statusData) return;
                 const { phase, message } = statusData;
                 if (phase === 'reset') {
                     setMemoryScope('decayed');
-                    // Session Expiry UX: Soft system message
                     setMessages(prev => [
                         ...prev,
                         {
@@ -281,6 +281,24 @@ function App() {
                 setMessages(prev => prev.map(m =>
                     m.id === assistantId
                         ? { ...m, statusMessage: message || phase }
+                        : m
+                ));
+            },
+            // onNutritionReport
+            (report) => {
+                resetFailsafe();
+                setMessages(prev => prev.map(m =>
+                    m.id === assistantId
+                        ? { ...m, nutritionVerification: report }
+                        : m
+                ));
+            },
+            // onTrace
+            (trace) => {
+                resetFailsafe();
+                setMessages(prev => prev.map(m =>
+                    m.id === assistantId
+                        ? { ...m, executionTrace: trace }
                         : m
                 ));
             }

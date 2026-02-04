@@ -112,8 +112,8 @@ Return valid JSON list of strings:
 class ClaimExtractor:
     """Extracts atomic scientific claims from text."""
 
-    def __init__(self, model_name: str = "qwen3:8b"):
-        self.llm = LLMQwen3(model_name=model_name)
+    def __init__(self, model_name: Optional[str] = None):
+        self.llm = LLMQwen3(agent_name="claim_extractor", model_name=model_name)
         logger.info("ClaimExtractor initialized")
 
     def extract(self, text: str) -> List[str]:
@@ -185,8 +185,8 @@ Return JSON:
 class ClaimVerifier:
     """Verifies claims against scientific knowledge."""
 
-    def __init__(self, model_name: str = "qwen3:8b"):
-        self.llm = LLMQwen3(model_name=model_name)
+    def __init__(self, model_name: Optional[str] = None):
+        self.llm = LLMQwen3(agent_name="claim_verifier", model_name=model_name)
         self.extractor = ClaimExtractor(model_name=model_name)
         logger.info("ClaimVerifier initialized")
 

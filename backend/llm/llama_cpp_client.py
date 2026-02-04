@@ -11,10 +11,11 @@ logger = logging.getLogger(__name__)
 class LlamaCppClient(LLMClient):
     """Client for llama.cpp server (OpenAI compatible API)"""
 
-    def __init__(self):
+    def __init__(self, model_name: str = "qwen3-4b"):
         self.base_url = f"http://{LLAMA_HOST}:{LLAMA_PORT}/v1"
+        self.model_name = model_name
         self.is_ready = False
-        logger.info(f"🔄 [LlamaCpp] Initializing client for {self.base_url}")
+        logger.info(f"🔄 [LlamaCpp] Initializing client for {self.base_url} (model={model_name})")
         self.wait_for_readiness()
 
     def wait_for_readiness(self, timeout: int = 120):
@@ -129,7 +130,7 @@ class LlamaCppClient(LLMClient):
         safe_tokens = MemoryGuard.get_safe_token_limit(max_new_tokens)
         
         payload = {
-            "model": "qwen3", 
+            "model": self.model_name, 
             "messages": messages,
             "max_tokens": safe_tokens,
             "temperature": temperature,
@@ -253,7 +254,7 @@ class LlamaCppClient(LLMClient):
             
             else:
                 payload = {
-                    "model": "qwen3",
+                    "model": self.model_name,
                     "messages": messages,
                     "max_tokens": safe_tokens,
                     "temperature": temperature,

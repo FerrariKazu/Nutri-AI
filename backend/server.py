@@ -1,13 +1,8 @@
-import os
-# FORCE OVERRIDE FOR PRODUCTION STABILITY (MUST BE BEFORE IMPORTS)
-os.environ["LLM_BACKEND"] = "llama_cpp"
-os.environ["LLAMA_PORT"] = "8081"
-print(f"🚨 FORCED LLM BACKEND (print): {os.environ['LLM_BACKEND']} port {os.environ['LLAMA_PORT']}")
-
 import uuid
 import logging
 import asyncio
 import json
+import time # Added for trace
 from fastapi import FastAPI, Request, HTTPException, Response, Query
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +11,10 @@ from typing import Optional, Dict, Any, List
 
 from backend.orchestrator import NutriOrchestrator
 from backend.memory import SessionMemoryStore
+from backend.production_audit import run_startup_audit
+
+# 🟢 PHASE 4: Mandatory Startup Audit (Hard Failure)
+run_startup_audit()
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -151,51 +150,60 @@ async def handle_chat_execution(
     execution_mode: Optional[str]
 ):
     """Core logic with concurrent heartbeat and deterministic termination."""
+    queue = asyncio.Queue()
+    done_sent = False
+    first_token_sent = False
     
+    async def run_orchestrator():
+        seq_id = 1
+        try:
+            # 0. Check for decay BEFORE starting
+            decayed = memory_store.check_and_reset_decay(session_id)
+            if decayed:
+                await queue.put({"type": "status", "content": {"phase": "reset", "message": "New environment initialized."}, "seq_id": seq_id, "ts": time.time()})
+                seq_id += 1
+
+            async for event_dict in orchestrator.execute_streamed(
+                session_id, 
+                message, 
+                preferences,
+                execution_mode=execution_mode
+            ):
+                # 🟢 Inject Sequence ID and Timestamp
+                payload = {
+                    "seq_id": seq_id,
+                    "ts": time.time(),
+                    **event_dict
+                }
+                await queue.put(payload)
+                seq_id += 1
+            
+        except Exception as e:
+            logger.exception("Orchestrator task failed")
+            await queue.put({
+                "type": "error_event", 
+                "content": {"message": str(e), "phase": "orchestration", "status": "failed"},
+                "seq_id": seq_id,
+                "ts": time.time()
+            })
+            seq_id += 1
+            await queue.put({"type": "done", "content": {"status": "error", "message": str(e)}, "seq_id": seq_id, "ts": time.time()})
+        finally:
+            await queue.put(None) # Sentinel for the queue loop
+
+    async def heartbeat():
+        try:
+            while True:
+                await asyncio.sleep(1) # Aggressive heartbeat for proxies
+                await queue.put({"type": "ping", "content": {}, "ts": time.time()})
+        except asyncio.CancelledError:
+            pass
+
+    # Start background tasks
+    o_task = asyncio.create_task(run_orchestrator())
+    h_task = asyncio.create_task(heartbeat())
+
     async def event_generator():
-        queue = asyncio.Queue()
-        done_sent = False
-        first_token_sent = False
-        
-        logger.info("[SSE] Stream opened. Waiting for events...")
-
-        async def run_orchestrator():
-            try:
-                # 0. Check for decay BEFORE starting
-                decayed = memory_store.check_and_reset_decay(session_id)
-                if decayed:
-                    await queue.put({"type": "status", "content": {"phase": "reset", "message": "New environment initialized."}})
-
-                async for event_dict in orchestrator.execute_streamed(
-                    session_id, 
-                    message, 
-                    preferences,
-                    execution_mode=execution_mode
-                ):
-                    await queue.put(event_dict)
-                
-            except Exception as e:
-                logger.exception("Orchestrator task failed")
-                await queue.put({
-                    "type": "error_event", 
-                    "content": {"message": str(e), "phase": "orchestration", "status": "failed"}
-                })
-                await queue.put({"type": "done", "content": {"status": "error", "message": str(e)}})
-            finally:
-                await queue.put(None) # Sentinel for the queue loop
-
-        async def heartbeat():
-            try:
-                while True:
-                    await asyncio.sleep(1) # Aggressive heartbeat for proxies
-                    await queue.put({"type": "ping", "content": {}})
-            except asyncio.CancelledError:
-                pass
-
-        # Start background tasks
-        o_task = asyncio.create_task(run_orchestrator())
-        h_task = asyncio.create_task(heartbeat())
-
         try:
             while True:
                 item = await queue.get()
@@ -207,15 +215,17 @@ async def handle_chat_execution(
                 content = item.get("content")
                 
                 # Log first token for TTT measurement
+                nonlocal first_token_sent
                 if event_type == "token" and not first_token_sent:
                     logger.info("[SSE] First token sent to client.")
                     first_token_sent = True
 
+                nonlocal done_sent
                 if event_type == "done":
                     done_sent = True
                     logger.info(f"[SSE] Emitting DONE event: {content}")
 
-                formatted_chunk = format_sse_event(event_type, content)
+                formatted_chunk = format_sse_event(event_type, item) # Pass whole item to preserve seq_id
                 logger.debug(f"[SSE] YIELDING: {repr(formatted_chunk)}")
                 yield formatted_chunk
                 
@@ -241,12 +251,13 @@ async def handle_chat_execution(
                     logger.error(f"[SSE] Failed to emit final DONE: {final_e}")
             
             logger.info("[SSE] Stream closing. Cleaning up tasks...")
-            h_task.cancel()
             o_task.cancel()
+            h_task.cancel()
             try:
-                await asyncio.gather(h_task, o_task, return_exceptions=True)
-            except asyncio.CancelledError:
-                pass
+                await asyncio.gather(o_task, h_task, return_exceptions=True)
+            except Exception as e:
+                logger.debug(f"Cleanup error (expected): {e}")
+            logger.info("[SSE] All background tasks finalized.")
 
     response = StreamingResponse(
         event_generator(),

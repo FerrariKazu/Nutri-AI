@@ -53,8 +53,8 @@ Return ONLY JSON:
 class SensoryPropertyMapper:
     """Extracts physical/chemical properties from retrieval results."""
     
-    def __init__(self, model_name: str = "qwen3:8b"):
-        self.llm = LLMQwen3(model_name=model_name)
+    def __init__(self, model_name: Optional[str] = None):
+        self.llm = LLMQwen3(agent_name="variant_selector", model_name=model_name)
         logger.info("SensoryPropertyMapper initialized")
 
     def map_ingredient(

@@ -10,6 +10,7 @@ from typing import List, Dict, Any
 
 # Tool imports
 from ..retriever.router import RetrievalRouter, IndexType
+from backend.pubchem_client import get_pubchem_client, PubChemError
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,12 @@ class DatabaseTools:
                 "parameters": "query: str, k: int=5"
             },
             {
+                "name": "search_pubchem",
+                "priority": 10,
+                "description": "Search PubChem for mandatory verifiable compound facts (molecular formula, weight, IUPAC name). Use this for any nutrition or chemical claim.",
+                "parameters": "query: str"
+            },
+            {
                 "name": "pantry_manager",
                 "priority": 5,
                 "description": "Manage user pantry items (add, remove, list, clear).",
@@ -110,6 +117,31 @@ class DatabaseTools:
 
     def search_science(self, query: str, k: int = 5) -> str:
         return self._run_isolated_search(query, IndexType.SCIENCE, k)
+
+    def search_pubchem(self, query: str) -> str:
+        """
+        Search PubChem for compound facts.
+        Mandatory for nutrition and chemical verification.
+        """
+        client = get_pubchem_client()
+        try:
+            cid = client.search_compound(query)
+            props = client.get_compound_properties(cid)
+            
+            result = {
+                "verified": True,
+                "source": "PubChem",
+                "compound_name": query,
+                "cid": cid,
+                "molecular_formula": props.molecular_formula,
+                "molecular_weight": props.molecular_weight,
+                "iupac_name": props.iupac_name,
+                "canonical_smiles": props.canonical_smiles
+            }
+            return json.dumps(result, indent=2)
+        except PubChemError as e:
+            logger.warning(f"[PUBCHEM_TOOL] Failed to resolve {query}: {e}")
+            return f"Error: PubChem could not resolve '{query}'. reason: {str(e)}"
 
     def pantry_manager(self, action: str, items: list = None, session_id: str = "default") -> str:
         from .pantry import pantry_tools

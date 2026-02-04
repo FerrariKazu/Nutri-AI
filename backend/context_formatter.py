@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Context Formatter - Formats retrieved results into LLM-friendly context.
-Manages token budgets and structures data for Qwen3:8B reasoning.
+Manages token budgets and structures data for Qwen3 reasoning.
 """
 import logging
 from typing import Dict, List, Any
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class ContextFormatter:
     """
     Formats retrieved search results into structured context
-    for Qwen3:8B with token budget management.
+    for Qwen3 with token budget management.
     """
     
     def __init__(self, max_tokens: int = 3000):

@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class OllamaClient(LLMClient):
     """Legacy wrapper for Ollama-served models"""
     
-    def __init__(self, model_name: str = "qwen3:4b"):
+    def __init__(self, model_name: str):
         host = os.getenv("LLM_ENDPOINT", "http://localhost:11434")
         self.client = ollama.Client(host=host, timeout=300.0)
         self.model_name = model_name
