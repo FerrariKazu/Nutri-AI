@@ -674,94 +674,88 @@ export function streamNutriChat(
                 }
             };
 
-            eventSource.onopen = () => {
-                debugLog('SSE', '🟢 [CONNECT] Connection established');
-                completed = false;
+            eventSource.onmessage = (e) => {
+                const statusData = safeParseJSON(e.data);
+                if (!statusData) return;
+                debugLog('SSE', '🧠 [REASONING] received', statusData);
+                if (onStatus) onStatus(statusData);
+                if (onReasoning) onReasoning(statusData.message || e.data);
             };
 
-            // Custom "ping" from backend to keep connection alive
-            eventSource.addEventListener('ping', () => {
-                debugLog('SSE', '💓 [PING] Heartbeat received');
+            eventSource.addEventListener('nutrition_report', (e) => {
+                const parsed = safeParseJSON(e.data);
+                debugLog('SSE', '🥗 [NUTRITION_REPORT] received', parsed);
+                if (onNutritionReport) onNutritionReport(parsed);
             });
 
-            if (onStatus) onStatus(statusData);
-            if (onReasoning) onReasoning(statusData.message || e.data);
-        });
-
-        eventSource.addEventListener('nutrition_report', (e) => {
-            const parsed = safeParseJSON(e.data);
-            debugLog('SSE', '🥗 [NUTRITION_REPORT] received', parsed);
-            if (onNutritionReport) onNutritionReport(parsed);
-        });
-
-        eventSource.addEventListener('execution_trace', (e) => {
-            const parsed = safeParseJSON(e.data);
-            debugLog('SSE', '🕵️ [EXECUTION_TRACE] received');
-            if (onTrace) onTrace(parsed);
-        });
-
-        eventSource.addEventListener('token', (e) => {
-            // Tokens are raw or JSON-wrapped tokens
-            let token = e.data;
-            if (token.trim().startsWith('{')) {
-                const parsed = safeParseJSON(token);
-                token = parsed?.content || parsed?.token || token;
-            }
-            onToken(token);
-        });
-
-        eventSource.addEventListener('done', (e) => {
-            debugLog('SSE', '✅ [DONE] Completion signal received');
-            completed = true;
-
-            let statusInfo = { status: 'success' };
-            if (e.data && e.data.trim().startsWith('{')) {
+            eventSource.addEventListener('execution_trace', (e) => {
                 const parsed = safeParseJSON(e.data);
-                if (parsed) statusInfo = parsed;
+                debugLog('SSE', '🕵️ [EXECUTION_TRACE] received');
+                if (onTrace) onTrace(parsed);
+            });
+
+            eventSource.addEventListener('token', (e) => {
+                // Tokens are raw or JSON-wrapped tokens
+                let token = e.data;
+                if (token.trim().startsWith('{')) {
+                    const parsed = safeParseJSON(token);
+                    token = parsed?.content || parsed?.token || token;
+                }
+                onToken(token);
+            });
+
+            eventSource.addEventListener('done', (e) => {
+                debugLog('SSE', '✅ [DONE] Completion signal received');
+                completed = true;
+
+                let statusInfo = { status: 'success' };
+                if (e.data && e.data.trim().startsWith('{')) {
+                    const parsed = safeParseJSON(e.data);
+                    if (parsed) statusInfo = parsed;
+                }
+
+                if (onComplete) onComplete(statusInfo);
+                cleanup();
+            });
+
+            // Explicit backend error event
+            eventSource.addEventListener('error_event', (e) => {
+                const parsed = safeParseJSON(e.data);
+                const errorMsg = parsed?.message || e.data || 'Backend execution failed';
+                debugError('SSE', `❌ [ERROR_EVENT] ${errorMsg}`);
+                onError(new Error(errorMsg));
+                completed = true;
+                cleanup();
+            });
+
+            // Generic EventSource error (usually network/timeout/closure)
+            // Generic EventSource error (usually network/timeout/closure)
+            eventSource.onerror = (e) => {
+                if (completed || aborted) return;
+
+                debugError('SSE', '⚠️ [CONNECTION_ERROR] Stream failed or closed.');
+
+                // CRITICAL: Prevent EventSource from auto-retrying (which would restart generation)
+                // We treat any stream interruption as a fatal error for this turn.
+                cleanup();
+
+                onError(new Error('Stream connection interrupted.'));
+            };
+
+            controller.signal.addEventListener('abort', cleanup);
+
+        } catch (error) {
+            if (!aborted) {
+                console.error('SSE Setup Error:', error);
+                onError(error);
             }
-
-            if (onComplete) onComplete(statusInfo);
-            cleanup();
-        });
-
-        // Explicit backend error event
-        eventSource.addEventListener('error_event', (e) => {
-            const parsed = safeParseJSON(e.data);
-            const errorMsg = parsed?.message || e.data || 'Backend execution failed';
-            debugError('SSE', `❌ [ERROR_EVENT] ${errorMsg}`);
-            onError(new Error(errorMsg));
-            completed = true;
-            cleanup();
-        });
-
-        // Generic EventSource error (usually network/timeout/closure)
-        // Generic EventSource error (usually network/timeout/closure)
-        eventSource.onerror = (e) => {
-            if (completed || aborted) return;
-
-            debugError('SSE', '⚠️ [CONNECTION_ERROR] Stream failed or closed.');
-
-            // CRITICAL: Prevent EventSource from auto-retrying (which would restart generation)
-            // We treat any stream interruption as a fatal error for this turn.
-            cleanup();
-
-            onError(new Error('Stream connection interrupted.'));
-        };
-
-        controller.signal.addEventListener('abort', cleanup);
-
-    } catch (error) {
-        if (!aborted) {
-            console.error('SSE Setup Error:', error);
-            onError(error);
         }
-    }
-}) ();
+    })();
 
-return () => {
-    aborted = true;
-    controller.abort();
-};
+    return () => {
+        aborted = true;
+        controller.abort();
+    };
 }
 
 
