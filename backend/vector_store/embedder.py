@@ -32,20 +32,9 @@ def load_model(model_name: str = "BAAI/bge-m3", force: bool = False) -> None:
     
     logger.info(f"Loading embedding model: {model_name}...")
     
-    # Detect GPU
-    try:
-        import torch
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        
-        if device == "cuda":
-            gpu_name = torch.cuda.get_device_name(0)
-            logger.info(f"🚀 GPU detected: {gpu_name}")
-            logger.info(f"   CUDA version: {torch.version.cuda}")
-        else:
-            logger.info("⚠️  No GPU detected, using CPU")
-    except ImportError:
-        device = "cpu"
-        logger.warning("PyTorch not found, defaulting to CPU")
+    # Force CPU for stability on 8GB VRAM cards
+    device = "cpu"
+    logger.info("⚠️  GPU offloading disabled for embedder (Resource Guard). Using CPU.")
     
     # Load model with device
     _model = SentenceTransformer(model_name, device=device)

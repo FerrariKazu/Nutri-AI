@@ -8,6 +8,8 @@
 // CONFIGURATION
 // ============================================================================ 
 
+let _performanceMode = false;
+
 const LOCAL_BACKEND_URLS = [
     'http://localhost:8000',
     'http://localhost:8001',
@@ -80,10 +82,16 @@ async function detectBackend() {
             });
             clearTimeout(timeoutId);
             if (response.ok) {
+                const healthData = await response.json().catch(() => ({}));
+                if (healthData.status === 'constrained') {
+                    _performanceMode = true;
+                    debugLog('BACKEND', '⚠️ Performance Mode active (Resource Constrained)');
+                }
                 debugLog('BACKEND', `✅ Backend found at: ${url}`);
                 console.log(`✅ Local Backend detected, using: ${url}`);
                 return url;
             }
+
         } catch (error) {
             debugLog('BACKEND', `   ❌ ${url} - ${error.message || 'not reachable'}`);
         }
@@ -107,6 +115,11 @@ function getBackendURL() {
     }
     return backendUrlPromise;
 }
+
+export function getPerformanceMode() {
+    return _performanceMode;
+}
+
 
 
 const API_CONFIG = {
@@ -644,9 +657,22 @@ export function streamNutriChat(
 ) {
     const sessionId = getSessionId();
     const controller = new AbortController();
-    let aborted = false;
-    let completed = false;
-    let eventSource = null;
+    let lastSeq = 0;
+    const processSSE = (e, type, handler) => {
+        const parsed = safeParseJSON(e.data);
+        if (!parsed) return;
+
+        const seq = parsed.seq_id || 0;
+        if (seq > 0 && seq <= lastSeq) {
+            debugLog('SSE', `♻️ [DUP/OLD] Dropping seq ${seq} (last=${lastSeq})`);
+            return;
+        }
+
+        // Update lastSeq
+        if (seq > 0) lastSeq = seq;
+
+        handler(parsed, type);
+    };
 
     (async () => {
         try {
@@ -675,74 +701,67 @@ export function streamNutriChat(
             };
 
             eventSource.onmessage = (e) => {
-                const statusData = safeParseJSON(e.data);
-                if (!statusData) return;
-                debugLog('SSE', '🧠 [REASONING] received', statusData);
-                if (onStatus) onStatus(statusData);
-                if (onReasoning) onReasoning(statusData.message || e.data);
+                processSSE(e, 'status', (data) => {
+                    debugLog('SSE', '🧠 [REASONING] received', data);
+                    if (onStatus) onStatus(data);
+                    if (onReasoning) onReasoning(data.message || e.data);
+                });
             };
 
             eventSource.addEventListener('nutrition_report', (e) => {
-                const parsed = safeParseJSON(e.data);
-                debugLog('SSE', '🥗 [NUTRITION_REPORT] received', parsed);
-                if (onNutritionReport) onNutritionReport(parsed);
+                processSSE(e, 'nutrition_report', (data) => {
+                    debugLog('SSE', '🥗 [NUTRITION_REPORT] received', data);
+                    if (onNutritionReport) onNutritionReport(data);
+                });
             });
 
             eventSource.addEventListener('execution_trace', (e) => {
-                const parsed = safeParseJSON(e.data);
-                debugLog('SSE', '🕵️ [EXECUTION_TRACE] received');
-                if (onTrace) onTrace(parsed);
+                processSSE(e, 'execution_trace', (data) => {
+                    debugLog('SSE', '🕵️ [EXECUTION_TRACE] received');
+                    if (onTrace) onTrace(data);
+                });
             });
 
             eventSource.addEventListener('token', (e) => {
-                // Tokens are raw or JSON-wrapped tokens
-                let token = e.data;
-                if (token.trim().startsWith('{')) {
-                    const parsed = safeParseJSON(token);
-                    token = parsed?.content || parsed?.token || token;
-                }
-                onToken(token);
+                processSSE(e, 'token', (data) => {
+                    let token = data.content || data.token || e.data;
+                    onToken(token);
+                });
             });
 
             eventSource.addEventListener('done', (e) => {
-                debugLog('SSE', '✅ [DONE] Completion signal received');
-                completed = true;
+                if (completed) return; // Ignore double-DONE
 
-                let statusInfo = { status: 'success' };
-                if (e.data && e.data.trim().startsWith('{')) {
-                    const parsed = safeParseJSON(e.data);
-                    if (parsed) statusInfo = parsed;
-                }
-
-                if (onComplete) onComplete(statusInfo);
-                cleanup();
+                processSSE(e, 'done', (data) => {
+                    debugLog('SSE', '✅ [DONE] Completion signal received');
+                    completed = true;
+                    if (onComplete) onComplete(data || { status: 'success' });
+                    cleanup();
+                });
             });
 
             // Explicit backend error event
             eventSource.addEventListener('error_event', (e) => {
-                const parsed = safeParseJSON(e.data);
-                const errorMsg = parsed?.message || e.data || 'Backend execution failed';
-                debugError('SSE', `❌ [ERROR_EVENT] ${errorMsg}`);
-                onError(new Error(errorMsg));
-                completed = true;
-                cleanup();
+                processSSE(e, 'error_event', (data) => {
+                    const errorMsg = data.message || e.data || 'Backend execution failed';
+                    debugError('SSE', `❌ [ERROR_EVENT] ${errorMsg}`);
+                    onError(new Error(errorMsg));
+                    completed = true;
+                    cleanup();
+                });
             });
 
-            // Generic EventSource error (usually network/timeout/closure)
             // Generic EventSource error (usually network/timeout/closure)
             eventSource.onerror = (e) => {
                 if (completed || aborted) return;
 
                 debugError('SSE', '⚠️ [CONNECTION_ERROR] Stream failed or closed.');
-
-                // CRITICAL: Prevent EventSource from auto-retrying (which would restart generation)
-                // We treat any stream interruption as a fatal error for this turn.
                 cleanup();
-
                 onError(new Error('Stream connection interrupted.'));
             };
 
             controller.signal.addEventListener('abort', cleanup);
+
 
         } catch (error) {
             if (!aborted) {
@@ -785,48 +804,33 @@ export async function setMode(mode) {
 }
 
 /**
+ * Get system health and resource status
+ */
+export async function getHealth() {
+    try {
+        const baseURL = await getBackendURL();
+        const response = await fetch(`${baseURL}/health`, {
+            headers: { 'ngrok-skip-browser-warning': 'true' }
+        });
+        if (!response.ok) return { status: 'offline' };
+        return await response.json();
+    } catch (e) {
+        return { status: 'error', error: e.message };
+    }
+}
+
+/**
  * Get system stats
- * 
- * @returns {Promise<Object>} - { recipes, ingredients, papers, etc. }
  */
 export async function getStats() {
     try {
         const baseURL = await getBackendURL();
         const response = await fetch(`${baseURL}/api/stats`);
-
-        if (!response.ok) {
-            throw new APIError('Failed to fetch stats', response.status);
-        }
-
+        if (!response.ok) return { recipes: 0, ingredients: 0, papers: 0 };
         return await response.json();
-
     } catch (error) {
         console.error('Failed to get stats:', error);
-        return {
-            recipes: 0,
-            ingredients: 0,
-            papers: 0,
-        };
-    }
-}
-
-/**
- * Health check
- * 
- * @returns {Promise<boolean>} - Is backend healthy?
- */
-export async function healthCheck() {
-    try {
-        const baseURL = await getBackendURL();
-        const response = await fetch(`${baseURL}/api/health`, {
-            method: 'GET',
-            signal: AbortSignal.timeout(5000), // 5 second timeout
-        });
-
-        return response.ok;
-
-    } catch (error) {
-        return false;
+        return { recipes: 0, ingredients: 0, papers: 0 };
     }
 }
 

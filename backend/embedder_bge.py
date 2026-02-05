@@ -41,10 +41,11 @@ class EmbedderBGE:
                 logger.warning(f"Failed to load cache: {e}")
         
         # Initialize model
-        logger.info(f"Loading BGE-M3 model: {model_name}")
+        logger.info(f"Loading BGE-M3 model: {model_name} on CPU (Resource Guard)")
         self.model = BGEM3FlagModel(
             model_name,
-            use_fp16=use_fp16
+            use_fp16=use_fp16,
+            device='cpu'  # FORCE CPU to prevent CUDA OOM with main LLM
         )
         logger.info("✅ BGE-M3 model loaded")
     

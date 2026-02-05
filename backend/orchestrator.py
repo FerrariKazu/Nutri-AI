@@ -12,6 +12,10 @@ from backend.execution_profiles import ExecutionProfile, ExecutionRouter
 from backend.utils.response_formatter import ResponseFormatter
 from backend.execution_plan import ExecutionPlan
 from backend.memory_guard import MemoryGuard
+from backend.resource_budget import ResourceBudget
+from backend.gpu_monitor import gpu_monitor
+from backend.embedding_throttle import run_throttled_embedding
+
 
 # New Architecture Modules
 from backend.meta_learner import MetaLearner, ExecutionPolicy
@@ -64,14 +68,22 @@ class NutriOrchestrator:
         }
         loop = asyncio.get_running_loop()
         event_queue = asyncio.Queue()
-        
+        seq_counter = 0
+
         def push_event(event_type: str, content: Any):
-            logger.debug(f"[ORCH] push_event: {event_type}")
+            nonlocal seq_counter
+            seq_counter += 1
+            logger.debug(f"[ORCH] push_event: {event_type} (seq={seq_counter})")
             # Safe way to put into queue from ANY thread
             asyncio.run_coroutine_threadsafe(
-                event_queue.put({"type": event_type, "content": content}), 
+                event_queue.put({
+                    "type": event_type, 
+                    "content": content,
+                    "seq": seq_counter
+                }), 
                 loop
             )
+
 
         def stream_callback(token: str):
             # This is called from the executor thread
@@ -87,21 +99,39 @@ class NutriOrchestrator:
             def push_done(status: str, message: str = ""):
                 nonlocal done_emitted
                 if not done_emitted:
+                    # Status contract: OK | FAILED | RESOURCE_EXCEEDED
                     push_event("done", {"status": status, "message": message})
                     done_emitted = True
 
             try:
-                # 0. Meta-Learner Policy Decision
+                # 0. Resource Check
+                ResourceBudget.check_budget("NutriOrchestration", requires_gpu=True)
+                gpu_monitor.sample_before()
+
+                # 0.1 Meta-Learner Policy Decision
+
                 policy = self.meta_learner.decide_policy(user_message, execution_mode)
                 
                 def emit_status(phase: str, msg: str):
                     if phase and msg and msg.strip():
-                        logger.debug(f"[ORCH] Status update: {phase}")
-                        push_event("status", {"phase": phase, "message": msg})
+                        # Calculate latency since last status
+                        nonlocal last_status_ts
+                        now = time.perf_counter()
+                        duration_ms = int((now - last_status_ts) * 1000)
+                        last_status_ts = now
+                        
+                        logger.debug(f"[ORCH] Status update: {phase} ({duration_ms}ms)")
+                        push_event("status", {
+                            "phase": phase, 
+                            "message": msg,
+                            "duration_ms": duration_ms
+                        })
 
+                last_status_ts = time.perf_counter()
                 logger.info(f"Orchestrating with Policy: {policy.profile.value}")
                 emit_status("initializing", "Connecting to Nutri engine...")
                 emit_status("starting", f"Thinking ({policy.profile.value})...")
+
 
                 # 1. Context Preparation
                 context = self.memory.get_context_string(session_id)
@@ -196,17 +226,20 @@ class NutriOrchestrator:
                 
                 # 🟢 MULTI-PHASE PATH with HARD VALIDATION
                 emit_status("retrieval", "Researching...")
-                docs = await run_sync(self.pipeline.retriever.retrieve_for_phase, 2, augmented_query, 2)
+                docs = await run_throttled_embedding(run_sync, self.pipeline.retriever.retrieve_for_phase, 2, augmented_query, 2)
+
                 
                 valid_phase_count = 0
                 phase_results = {}
                 
                 for phase in selected_phases:
+                    phase_start = time.perf_counter()
                     emit_status(f"phase_{phase.value}", f"{phase.value.title()}...")
                     
                     # Execute phase (simplified: use synthesis engine)
                     emit_status("synthesis", f"Analyzing ({phase.value})...")
                     phase_result_raw = await run_sync(self.pipeline.engine.synthesize, augmented_query, docs, intent, stream_callback=None)
+
                     
                     # Unpack (recipe, enforcement_meta)
                     if isinstance(phase_result_raw, tuple):
@@ -233,10 +266,15 @@ class NutriOrchestrator:
                     valid_phase_count += 1
                     phase_results[phase.value] = phase_result
                     
+                    # Duration for the thinking phase specifically
+                    phase_duration = int((time.perf_counter() - phase_start) * 1000)
+                    
                     push_event("thinking_phase", {
                         "type": phase.value,
-                        "content": str(phase_result)[:500]  # Truncated for SSE
+                        "content": str(phase_result)[:500],  # Truncated for SSE
+                        "duration_ms": phase_duration
                     })
+
                 
                 # FALLBACK: If all phases were skipped, emit zero-phase response
                 if valid_phase_count == 0:
@@ -324,14 +362,26 @@ class NutriOrchestrator:
                 logger.info("[ORCH] Generation complete.")
                 push_done("success")
 
+            except RuntimeError as e:
+                # Catch ResourceBudgetExceeded specifically if needed, otherwise general
+                logger.error(f"[ORCH] Resource Rejection: {e}")
+                push_event("error_event", {"message": str(e), "phase": "resource_guard", "status": "RESOURCE_EXCEEDED"})
+                push_done("RESOURCE_EXCEEDED", str(e))
             except Exception as e:
                 logger.error(f"Orchestration failure: {e}", exc_info=True)
-                push_event("error_event", {"message": str(e), "phase": "orchestration", "status": "failed"})
-                push_done("error", str(e))
+                push_event("error_event", {"message": str(e), "phase": "orchestration", "status": "FAILED"})
+                push_done("FAILED", str(e))
             finally:
+                gpu_monitor.sample_after()
                 logger.info("[ORCH] Ending task and pushing sentinels.")
-                push_done("success") # Failsafe
+                
+                # FINAL ASSERTION: Exactly one terminal event
+                if not done_emitted:
+                    logger.warning("[ORCH] Development Warning: No [DONE] emitted! Failsafe triggered.")
+                    push_done("OK")
+                
                 loop.call_soon_threadsafe(event_queue.put_nowait, None) # Sentinel
+
 
         # Start the background task - KEEP REFERENCE
         task = asyncio.create_task(orchestration_task())

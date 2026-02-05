@@ -10,8 +10,10 @@ import psutil
 from typing import Dict, Set, Optional, Any, List
 from dataclasses import dataclass, field
 from backend.execution_profiles import ExecutionProfile, ExecutionRouter
+from backend.gpu_monitor import gpu_monitor
 
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class ExecutionPolicy:
@@ -58,11 +60,15 @@ class MetaLearner:
         Returns:
             ExecutionPolicy object
         """
-        # 1. Check System Health (Safety First)
+        # 1. Check System Health & GPU Degraded Mode
         system_health = self._check_system_health()
         
         # 2. Determine Base Profile
-        if system_health["status"] == "critical":
+        if gpu_monitor.degraded_mode:
+            profile = ExecutionProfile.FAST
+            downgrade_reason = "[GPU_DEGRADED_MODE] VRAM leak protection active."
+            logger.warning(f"Policy forced FAST: {downgrade_reason}")
+        elif system_health["status"] == "critical":
             # Force downgrade under pressure
             profile = ExecutionProfile.FAST
             downgrade_reason = f"System load critical: {system_health['reason']}"
@@ -71,6 +77,7 @@ class MetaLearner:
             # Use standard routing logic
             # If message is very short and generic, default to FAST to avoid over-engineering
             word_count = len(user_message.split())
+
             
             base_profile = ExecutionRouter.determine_profile(user_message, explicit_mode)
             
@@ -93,9 +100,11 @@ class MetaLearner:
         
         # 5. Select Speculative Agents
         # Always try to speculatively render a recipe if we are in a goal-oriented mode
+        # Pruned in DEGRADED mode
         speculative_agents = set()
-        if profile in [ExecutionProfile.FAST, ExecutionProfile.SENSORY]:
+        if not gpu_monitor.degraded_mode and profile in [ExecutionProfile.FAST, ExecutionProfile.SENSORY]:
             speculative_agents.add("recipe_renderer")
+
             
         # 6. Set Latency Budget
         # Targets for specific milestones

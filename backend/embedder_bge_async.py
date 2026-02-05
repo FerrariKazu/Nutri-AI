@@ -12,10 +12,10 @@ logger = logging.getLogger(__name__)
 
 class AsyncBGEEmbedder:
     def __init__(self, model_name: str = "BAAI/bge-m3", soft_limit_gb: float = 7.1):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cpu") # FORCE CPU for stability
         self.soft_limit_bytes = int(soft_limit_gb * 1024**3)
         
-        logger.info(f"Loading model {model_name} on {self.device} (FP16)")
+        logger.info(f"Loading model {model_name} on {self.device} (Resource Guard)")
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModel.from_pretrained(model_name, torch_dtype=torch.float16).to(self.device)
         self.model.eval()

@@ -12,6 +12,8 @@ from typing import Optional, Dict, Any, List
 from backend.orchestrator import NutriOrchestrator
 from backend.memory import SessionMemoryStore
 from backend.production_audit import run_startup_audit
+from backend.resource_budget import ResourceBudget
+
 
 # 🟢 PHASE 4: Mandatory Startup Audit (Hard Failure)
 run_startup_audit()
@@ -169,14 +171,18 @@ async def handle_chat_execution(
                 preferences,
                 execution_mode=execution_mode
             ):
+                # Use orchestrator's sequence if provided, otherwise server seq
+                curr_seq = event_dict.get("seq", seq_id)
                 # 🟢 Inject Sequence ID and Timestamp
                 payload = {
-                    "seq_id": seq_id,
-                    "ts": time.time(),
-                    **event_dict
+                    **event_dict,
+                    "seq_id": curr_seq,
+                    "ts": time.time()
                 }
                 await queue.put(payload)
-                seq_id += 1
+                if curr_seq >= seq_id:
+                    seq_id = curr_seq + 1
+
             
         except Exception as e:
             logger.exception("Orchestrator task failed")
@@ -273,8 +279,16 @@ async def handle_chat_execution(
 
 @app.get("/health")
 async def health_check(request: Request):
-    response = JSONResponse({"status": "healthy", "service": "nutri-backend", "version": "1.3.0"})
+    resources = ResourceBudget.get_status()
+    # Mask GPU details in non-local environments if necessary, but here we provide it.
+    response = JSONResponse({
+        "status": "healthy" if resources["healthy"] else "constrained",
+        "service": "nutri-backend",
+        "version": "1.3.1-hardened",
+        "resources": resources
+    })
     return response
+
 
 if __name__ == "__main__":
     import uvicorn

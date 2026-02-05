@@ -18,11 +18,9 @@ from transformers import AutoTokenizer, AutoModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- HARD PERFORMANCE OVERRIDES ---
-torch.backends.cuda.matmul.allow_tf32 = True
-torch.backends.cudnn.benchmark = True
-torch.backends.cudnn.fastest = True
-os.environ["TOKENIZERS_PARALLELISM"] = "false"  # Handle parallelism manually
+# --- STABILITY OVERRIDES ---
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 
 class EmbedderBGEMaxSpeed:
     """
@@ -33,10 +31,8 @@ class EmbedderBGEMaxSpeed:
     """
     
     def __init__(self, model_name: str = "BAAI/bge-m3", cache_file: str = None):
-        if not torch.cuda.is_available():
-            raise RuntimeError("CRITICAL: GPU REQUIRED FOR MAX SPEED MODE")
-
-        self.device = torch.device("cuda")
+        # Force CPU for stability. GPU-only requirement removed for Resource Guard.
+        self.device = torch.device("cpu")
         self.model_name = model_name
         self.cache_file = Path(cache_file) if cache_file else None
         
@@ -44,13 +40,14 @@ class EmbedderBGEMaxSpeed:
         logger.info(f"🚀 Loading Tokenizer: {model_name}")
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         
-        # 2. Load Model (FP16 directly)
-        logger.info(f"🚀 Loading Model in FP16: {model_name}")
+        # 2. Load Model
+        logger.info(f"🚀 Loading Model: {model_name}")
         self.model = AutoModel.from_pretrained(
             model_name, 
-            torch_dtype=torch.float16
+            torch_dtype=torch.float32 # CPU stability
         ).to(self.device)
         self.model.eval()
+
 
         # 3. Cache (Initialize BEFORE Warmup)
         self.cache = {}
@@ -61,17 +58,16 @@ class EmbedderBGEMaxSpeed:
             except:
                 logger.warning("Cache load failed, starting fresh")
 
-        # 4. VRAM Pre-allocation / Warming
-        self._warmup_gpu()
+        # 4. CPU Warmup (Optional, but kept for logic consistency)
+        self._warmup_cpu()
 
-    def _warmup_gpu(self):
-        """Run fake batches to initialize CUDA context and allocator"""
-        logger.info("🔥 Warming up GPU pipeline...")
-        dummy_input = ["warmup"] * 48
+    def _warmup_cpu(self):
+        """Run fake batches to initialize pipeline"""
+        logger.info("⚡ Warming up CPU pipeline...")
+        dummy_input = ["warmup"] * 4
         with torch.no_grad():
-            self.embed_texts(dummy_input, batch_size=24)
-        torch.cuda.synchronize()
-        logger.info("🔥 GPU Hot & Ready")
+            self.embed_texts(dummy_input, batch_size=4)
+        logger.info("⚡ CPU Ready")
 
     def embed_texts(self, texts: List[str], batch_size: int = 24, is_numeric: bool = False) -> np.ndarray:
         """
@@ -135,10 +131,7 @@ class EmbedderBGEMaxSpeed:
                 model_output = self.model(**encoded)
                 sentence_embeddings = model_output[0][:, 0]
                 
-                # Normalize (in FP16 on GPU)
-                sentence_embeddings = F.normalize(sentence_embeddings, p=2, dim=1)
-                
-                # Move to CPU asynchronously-ish (we don't sync)
+                # Move to CPU
                 results.append(sentence_embeddings.cpu().float().numpy())
 
         # Flatten

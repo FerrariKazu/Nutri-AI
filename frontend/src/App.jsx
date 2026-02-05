@@ -1,6 +1,7 @@
 
 import { useState, useEffect, useRef } from 'react';
-import { streamNutriChat, getSessionId, clearSession, getConversation, getConversationsList, createNewSession } from './api/apiClient';
+import { streamNutriChat, getSessionId, clearSession, getConversation, getConversationsList, createNewSession, getPerformanceMode } from './api/apiClient';
+
 
 import SystemStatus from './components/SystemStatus';
 import ReasoningConsole from './components/ReasoningConsole';
@@ -25,6 +26,8 @@ function App() {
 
     const [turnCount, setTurnCount] = useState(0);
     const [memoryScope, setMemoryScope] = useState('new'); // 'new', 'session', 'decayed'
+    const [performanceMode, setPerformanceMode] = useState(false);
+
 
     const abortRef = useRef(null);
     const timeoutRef = useRef(null);
@@ -52,6 +55,10 @@ function App() {
 
                 setSessionId(targetSid);
                 await hydrateSession(targetSid);
+
+                // 3. Set Performance Mode
+                setPerformanceMode(getPerformanceMode());
+
 
             } catch (e) {
                 console.error('Init failed:', e);
@@ -340,12 +347,20 @@ function App() {
                     />
 
                     {/* System Telemetry - Top (Just below header) */}
-                    <div className="mt-16">
+                    <div className="mt-16 relative">
                         <SystemStatus
                             sessionId={sessionId}
                             turnCount={turnCount}
                         />
+
+                        {performanceMode && (
+                            <div className="absolute top-2 right-4 flex items-center gap-1.5 px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded-md text-[9px] font-mono text-amber-500 animate-pulse uppercase tracking-wider">
+                                <span className="w-1 h-1 bg-amber-500 rounded-full"></span>
+                                Performance Mode Active
+                            </div>
+                        )}
                     </div>
+
 
                     {/* Reasoning Stream - Scrollable */}
                     <PhaseStream
