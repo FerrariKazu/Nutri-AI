@@ -95,12 +95,20 @@ class NutriOrchestrator:
         async def orchestration_task():
             logger.info("[ORCH] Background task started.")
             done_emitted = False
+            seq_counter = 0  # Move to task scope for proper nonlocal binding
 
-            def push_done(status: str, message: str = ""):
+            async def push_done(status: str, message: str = ""):
                 nonlocal done_emitted
+                nonlocal seq_counter
                 if not done_emitted:
+                    seq_counter += 1
                     # Status contract: OK | FAILED | RESOURCE_EXCEEDED
-                    push_event("done", {"status": status, "message": message})
+                    await event_queue.put({
+                        "type": "done",
+                        "content": {"status": status, "message": message},
+                        "seq": seq_counter
+                    })
+                    logger.debug(f"[ORCH] push_done: {status} (seq={seq_counter})")
                     done_emitted = True
 
             try:
@@ -221,7 +229,7 @@ class NutriOrchestrator:
                     
                     await run_sync(self.engine.generate, session_id, user_message, mode, final_data, stream_callback=stream_callback)
                     logger.info("[ORCH] Generation finished.")
-                    push_done("success")
+                    await push_done("success")
                     return
                 
                 # 🟢 MULTI-PHASE PATH with HARD VALIDATION
@@ -285,7 +293,7 @@ class NutriOrchestrator:
                         "session_context": session_ctx
                     }
                     await run_sync(self.engine.generate, session_id, user_message, mode, final_data, stream_callback=stream_callback)
-                    push_done("success")
+                    await push_done("success")
                     return
                 
                 # 5. Parallel DAG
@@ -356,24 +364,24 @@ class NutriOrchestrator:
                 push_event("nutrition_report", nutrition_report)
                 
                 logger.info("[ORCH] Generation finished.")
-                push_done("success", {"nutrition_report": nutrition_report})
+                await push_done("success", {"nutrition_report": nutrition_report})
                 # Update session context after response
                 new_context = await run_sync(memory_extractor.extract_context, user_message, "")
                 if new_context:
                     self.memory.update_context(session_id, new_context)
                 
                 logger.info("[ORCH] Generation complete.")
-                push_done("success")
+                await push_done("success")
 
             except RuntimeError as e:
                 # Catch ResourceBudgetExceeded specifically if needed, otherwise general
                 logger.error(f"[ORCH] Resource Rejection: {e}")
                 push_event("error_event", {"message": str(e), "phase": "resource_guard", "status": "RESOURCE_EXCEEDED"})
-                push_done("RESOURCE_EXCEEDED", str(e))
+                await push_done("RESOURCE_EXCEEDED", str(e))
             except Exception as e:
                 logger.error(f"Orchestration failure: {e}", exc_info=True)
                 push_event("error_event", {"message": str(e), "phase": "orchestration", "status": "FAILED"})
-                push_done("FAILED", str(e))
+                await push_done("FAILED", str(e))
             finally:
                 gpu_monitor.sample_after()
                 logger.info("[ORCH] Ending task and pushing sentinels.")
@@ -381,9 +389,11 @@ class NutriOrchestrator:
                 # FINAL ASSERTION: Exactly one terminal event
                 if not done_emitted:
                     logger.warning("[ORCH] Development Warning: No [DONE] emitted! Failsafe triggered.")
-                    push_done("OK")
+                    await push_done("OK")
                 
-                loop.call_soon_threadsafe(event_queue.put_nowait, None) # Sentinel
+                # Push Sentinel directly (no race with async await above)
+                await event_queue.put(None)
+
 
 
         # Start the background task - KEEP REFERENCE

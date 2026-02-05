@@ -210,23 +210,26 @@ async def handle_chat_execution(
     h_task = asyncio.create_task(heartbeat())
 
     async def event_generator():
+        nonlocal first_token_sent, done_sent
         try:
             while True:
                 item = await queue.get()
                 if item is None:
                     logger.info("[SSE] Sentinel received from orchestrator.")
+                    if not done_sent:
+                        logger.warning("[SSE] Forcing DONE emission before exit.")
+                        yield format_sse_event("done", {})
+                        done_sent = True
                     break
                 
                 event_type = item.get("type", "token")
                 content = item.get("content")
                 
                 # Log first token for TTT measurement
-                nonlocal first_token_sent
                 if event_type == "token" and not first_token_sent:
                     logger.info("[SSE] First token sent to client.")
                     first_token_sent = True
 
-                nonlocal done_sent
                 if event_type == "done":
                     done_sent = True
                     logger.info(f"[SSE] Emitting DONE event: {content}")
@@ -234,6 +237,8 @@ async def handle_chat_execution(
                 formatted_chunk = format_sse_event(event_type, item) # Pass whole item to preserve seq_id
                 logger.debug(f"[SSE] YIELDING: {repr(formatted_chunk)}")
                 yield formatted_chunk
+
+
                 
         except GeneratorExit:
             logger.warning("[SSE] Client disconnected (GeneratorExit).")
