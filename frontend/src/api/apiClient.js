@@ -657,7 +657,13 @@ export function streamNutriChat(
 ) {
     const sessionId = getSessionId();
     const controller = new AbortController();
+
+    // Restore missing state variables
+    let aborted = false;
+    let completed = false;
+    let eventSource = null;
     let lastSeq = 0;
+
     const processSSE = (e, type, handler) => {
         const parsed = safeParseJSON(e.data);
         if (!parsed) return;
