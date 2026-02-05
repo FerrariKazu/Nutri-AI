@@ -275,6 +275,7 @@ class NutriOrchestrator:
                         "duration_ms": phase_duration
                     })
 
+
                 
                 # FALLBACK: If all phases were skipped, emit zero-phase response
                 if valid_phase_count == 0:
@@ -292,8 +293,10 @@ class NutriOrchestrator:
                 if policy.profile != ExecutionProfile.FAST:
                     emit_status("enhancement", "Analyzing & Refining...")
                     dag = DAGScheduler()
+                    start_time = time.perf_counter() # Fix: Initialize start_time
                     
                     if "sensory_model" in policy.enabled_agents:
+
                         dag.add_node(AgentNode(name="sensory", func=run_sync, args=[self.pipeline.predict_sensory, recipe_result]))
                     
                     dag.add_node(AgentNode(name="verification", func=run_sync, args=[self.pipeline.verify, recipe_result]))
