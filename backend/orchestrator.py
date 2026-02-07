@@ -255,13 +255,11 @@ class NutriOrchestrator:
 
                     session_ctx["belief_state"] = belief_state.to_dict()
                     final_data = {
-                        "user_preferences": prefs_to_inject,  # 🟢 Only if confidence >= 0.6
-                        "session_context": session_ctx
-                    "context_prompt": context_prompt,
+                        "user_preferences": prefs_to_inject,
+                        "session_context": session_ctx,
                         "moa_analysis": [],
                         "context_prompt": None,
                         "tier4_metrics": trace.to_dict().get("tier4", {}),
-                    "tier4_metrics": trace.to_dict().get("tier4", {}),
                     }
                     
                     await run_sync(self.engine.generate, session_id, user_message, mode, final_data, stream_callback=stream_callback)
@@ -328,7 +326,7 @@ class NutriOrchestrator:
                     session_ctx["belief_state"] = belief_state.to_dict()
                     final_data = {
                         "user_preferences": user_prefs,
-                        "session_context": session_ctx
+                        "session_context": session_ctx,
                         "moa_analysis": [],
                         "context_prompt": None,
                         "tier4_metrics": trace.to_dict().get("tier4", {}),
@@ -592,7 +590,7 @@ class NutriOrchestrator:
                     "moa_gate_reason": moa_gate_reason,
                     "tier3_results": tier3_results,
                     "context_prompt": context_prompt,
-                    "claim_type": claim_type
+                    "claim_type": claim_type,
                     "moa_analysis": moa_explanations,
                     "tier4_metrics": trace.to_dict().get("tier4", {}),
                 }
