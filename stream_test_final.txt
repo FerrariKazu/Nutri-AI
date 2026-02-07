@@ -1,0 +1,448 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0event: status
+data: {"type": "status", "content": {"phase": "initializing", "message": "Connecting to Nutri engine...", "duration_ms": 0}, "seq": 1, "seq_id": 1, "ts": 1770328692.6639638}
+
+event: status
+data: {"type": "status", "content": {"phase": "starting", "message": "Thinking (fast)...", "duration_ms": 0}, "seq": 2, "seq_id": 2, "ts": 1770328692.66407}
+
+event: status
+data: {"type": "status", "content": {"phase": "intent", "message": "Understanding...", "duration_ms": 0}, "seq": 3, "seq_id": 3, "ts": 1770328692.6642404}
+
+event: ping
+data: 
+
+100   651    0   551  100   100    545     99  0:00:01  0:00:01 --:--:--   645event: status
+data: {"type": "status", "content": {"phase": "conversation", "message": "Chatting...", "duration_ms": 1086}, "seq": 4, "seq_id": 4, "ts": 1770328693.7516055}
+
+event: token
+data: Ah
+
+100   848    0   748  100   100    496     66  0:00:01  0:00:01 --:--:--   562event: token
+data: ,
+
+event: token
+data:  gluten
+
+event: token
+data: -free
+
+event: token
+data:  pasta
+
+event: token
+data:  is
+
+event: token
+data:  such
+
+event: token
+data:  a
+
+event: token
+data:  fascinating
+
+event: token
+data:  topic
+
+event: token
+data: !
+
+event: token
+data:  🥖
+
+event: token
+data:  Without
+
+event: token
+data:  gluten
+
+event: token
+data: —
+
+event: token
+data: those
+
+event: token
+data:  long
+
+event: token
+data: ,
+
+event: token
+data:  elastic
+
+event: token
+data:  protein
+
+event: token
+data:  chains
+
+event: token
+data:  from
+
+event: token
+data:  wheat
+
+event: token
+data: —it
+
+event: token
+data: ’s
+
+event: token
+data:  like
+
+event: token
+data:  rebuilding
+
+event: token
+data:  the
+
+event: token
+data:  structure
+
+event: token
+data:  from
+
+event: ping
+data: 
+
+event: token
+data:  scratch
+
+event: token
+data: .
+
+event: token
+data:  Gluten
+
+event: token
+data: -free
+
+event: token
+data:  past
+
+event: token
+data: as
+
+event: token
+data:  use
+
+event: token
+data:  alternative
+
+event: token
+data:  starch
+
+event: token
+data: es
+
+event: token
+data:  (
+
+event: token
+data: like
+
+event: token
+data:  rice
+
+event: token
+data: ,
+
+event: token
+data:  corn
+
+event: token
+data: ,
+
+event: token
+data:  or
+
+event: token
+data:  leg
+
+event: token
+data: umes
+
+event: token
+data: )
+
+event: token
+data:  that
+
+event: token
+data:  don
+
+event: token
+data: ’t
+
+event: token
+data:  form
+
+event: token
+data:  that
+
+event: token
+data:  same
+
+event: token
+data:  network
+
+event: token
+data: ,
+
+event: token
+data:  so
+
+event: token
+data:  they
+
+event: token
+data:  tend
+
+100  2421    0  2321  100   100    927     39  0:00:02  0:00:02 --:--:--   967event: token
+data:  to
+
+event: token
+data:  be
+
+event: token
+data:  more
+
+event: token
+data:  fragile
+
+event: token
+data:  and
+
+event: token
+data:  less
+
+event: token
+data:  chew
+
+event: token
+data: y
+
+event: token
+data: .
+
+event: token
+data:   
+data: 
+data: 
+
+event: token
+data: But
+
+event: token
+data:  here
+
+event: token
+data: ’s
+
+event: token
+data:  the
+
+event: token
+data:  cool
+
+event: token
+data:  part
+
+event: token
+data: :
+
+event: token
+data:  by
+
+event: token
+data:  using
+
+event: token
+data:  cross
+
+event: token
+data: -linked
+
+event: token
+data:  starch
+
+event: token
+data: es
+
+event: token
+data:  or
+
+event: token
+data:  binding
+
+event: token
+data:  agents
+
+event: token
+data:  (
+
+event: token
+data: like
+
+event: token
+data:  x
+
+event: token
+data: anth
+
+event: token
+data: an
+
+event: ping
+data: 
+
+event: token
+data:  gum
+
+event: token
+data: ),
+
+event: token
+data:  we
+
+event: token
+data:  can
+
+event: token
+data:  mimic
+
+event: token
+data:  that
+
+event: token
+data:  "
+
+event: token
+data: spring
+
+event: token
+data: y
+
+event: token
+data: "
+
+event: token
+data:  feel
+
+event: token
+data:  without
+
+event: token
+data:  gluten
+
+event: token
+data: .
+
+event: token
+data:  It
+
+event: token
+data: ’s
+
+event: token
+data:  all
+
+event: token
+data:  about
+
+event: token
+data:  balancing
+
+event: token
+data:  texture
+
+event: token
+data:  and
+
+event: token
+data:  structure
+
+event: token
+data:  in
+
+event: token
+data:  a
+
+event: token
+data:  way
+
+event: token
+data:  that
+
+event: token
+data:  still
+
+event: token
+data:  tastes
+
+event: token
+data:  satisfying
+
+event: token
+data: !
+
+event: token
+data:   
+data: 
+data: 
+
+100  4043    0  3943  100   100   1126     28  0:00:03  0:00:03 --:--:--  1155event: token
+data: So
+
+event: token
+data: …
+
+event: token
+data:  what
+
+event: token
+data: ’s
+
+event: token
+data:  your
+
+event: token
+data:  favorite
+
+event: token
+data:  way
+
+event: token
+data:  to
+
+event: token
+data:  make
+
+event: token
+data:  it
+
+event: token
+data:  work
+
+event: token
+data:  in
+
+event: token
+data:  a
+
+event: token
+data:  dish
+
+event: token
+data: ?
+
+event: token
+data:  😊
+
+event: done
+data: {"type": "done", "content": {"status": "success", "message": ""}, "seq": 1, "seq_id": 1, "ts": 1770328696.194578}
+
+100  4576    0  4476  100   100   1171     26  0:00:03  0:00:03 --:--:--  1197

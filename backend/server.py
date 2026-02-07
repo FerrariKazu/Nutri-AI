@@ -234,8 +234,12 @@ async def handle_chat_execution(
                     done_sent = True
                     logger.info(f"[SSE] Emitting DONE event: {content}")
 
-                formatted_chunk = format_sse_event(event_type, item) # Pass whole item to preserve seq_id
-                logger.debug(f"[SSE] YIELDING: {repr(formatted_chunk)}")
+                formatted_chunk = format_sse_event(event_type, item) # Pass whole item (already JSONized in sse_utils)
+                
+                # MANDATORY DEBUG LOGGING
+                data_len = len(str(item.get("content", "")))
+                logger.debug(f"[SSE] Yielding {event_type} event (len={data_len})")
+                
                 yield formatted_chunk
 
 
@@ -243,23 +247,40 @@ async def handle_chat_execution(
         except GeneratorExit:
             logger.warning("[SSE] Client disconnected (GeneratorExit).")
             if not done_sent:
-                logger.warning("[SSE] Emitting emergency DONE event after disconnect.")
-                yield format_sse_event("done", {})
+                logger.warning("[SSE] Emitting explicit ABORTED terminal event.")
+                yield format_sse_event("done", {
+                    "status": "aborted",
+                    "reason": "client_disconnect"
+                })
+                done_sent = True
             raise
         except Exception as e:
             logger.error(f"[SSE] Critical Stream Error: {e}")
             yield format_sse_event("error_event", {"message": str(e)})
             if not done_sent:
-                yield format_sse_event("done", {"status": "error", "message": str(e)})
+                yield format_sse_event("done", {
+                    "status": "error",
+                    "reason": "exception",
+                    "message": str(e)
+                })
+                done_sent = True
             raise
         finally:
             # The Final Safety Net
             if not done_sent:
-                logger.warning("[SSE] Loop finished without DONE. Forcing emission.")
+                logger.error("[SSE] Loop finished without DONE! This is a regression.")
                 try:
-                    yield format_sse_event("done", {})
+                    yield format_sse_event("done", {
+                        "status": "forced",
+                        "reason": "sentinel_without_done"
+                    })
+                    done_sent = True
                 except Exception as final_e:
                     logger.error(f"[SSE] Failed to emit final DONE: {final_e}")
+            
+            # Dev/Invariants check
+            if not done_sent:
+                logger.error("🚨 CRITICAL: SSE stream closed without sending any terminal event!")
             
             logger.info("[SSE] Stream closing. Cleaning up tasks...")
             o_task.cancel()
@@ -275,10 +296,11 @@ async def handle_chat_execution(
         media_type="text/event-stream"
     )
     
-    # Tuning Headers
-    response.headers["Cache-Control"] = "no-cache"
+    # Tuning Headers for Live Streaming
+    response.headers["Cache-Control"] = "no-cache, no-transform"
     response.headers["Connection"] = "keep-alive"
     response.headers["X-Accel-Buffering"] = "no"
+    response.headers["Content-Type"] = "text/event-stream"
     
     return response
 

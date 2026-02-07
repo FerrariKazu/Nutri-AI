@@ -31,6 +31,7 @@ function App() {
 
     const abortRef = useRef(null);
     const timeoutRef = useRef(null);
+    const stallTimeoutRef = useRef(null);
 
     // Initial Load: Fetch List & Hydrate Most Recent
     useEffect(() => {
@@ -126,6 +127,7 @@ function App() {
 
     const cleanupStream = (finalStatus = 'IDLE') => {
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
         setStreamStatus(finalStatus);
     };
 
@@ -175,7 +177,24 @@ function App() {
             }, FAILSAFE_TIMEOUT);
         };
 
+        // Stall Indicator: 10s of silence after last activity
+        const STALL_TIMEOUT = 10000;
+        const resetStallIndicator = () => {
+            if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
+            stallTimeoutRef.current = setTimeout(() => {
+                if (streamStatus === 'STREAMING') {
+                    console.warn('[SSE] Stream stalled — no activity for 10s');
+                    setMessages(prev => prev.map(m =>
+                        m.id === assistantId
+                            ? { ...m, statusMessage: 'Stream stalled — retrying...' }
+                            : m
+                    ));
+                }
+            }, STALL_TIMEOUT);
+        };
+
         resetFailsafe();
+        resetStallIndicator();
 
         abortRef.current = streamNutriChat(
             query,
@@ -188,6 +207,7 @@ function App() {
             // onReasoning
             (phaseMessage) => {
                 resetFailsafe();
+                resetStallIndicator();
                 setMessages(prev => prev.map(m =>
                     m.id === assistantId
                         ? { ...m, statusMessage: phaseMessage }
@@ -197,6 +217,7 @@ function App() {
             // onToken
             (token) => {
                 resetFailsafe();
+                resetStallIndicator();
                 setMessages(prev => prev.map(m =>
                     m.id === assistantId
                         ? { ...m, content: m.content + token }
@@ -257,6 +278,7 @@ function App() {
                 setMemoryScope('session');
 
                 if (timeoutRef.current) clearTimeout(timeoutRef.current);
+                if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
             },
             // onError
             (err) => {
@@ -271,6 +293,7 @@ function App() {
             // onStatus
             (statusData) => {
                 resetFailsafe();
+                resetStallIndicator();
                 if (!statusData) return;
                 const { phase, message } = statusData;
                 if (phase === 'reset') {
@@ -294,6 +317,7 @@ function App() {
             // onNutritionReport
             (report) => {
                 resetFailsafe();
+                resetStallIndicator();
                 setMessages(prev => prev.map(m =>
                     m.id === assistantId
                         ? { ...m, nutritionVerification: report }
@@ -303,6 +327,7 @@ function App() {
             // onTrace
             (trace) => {
                 resetFailsafe();
+                resetStallIndicator();
                 setMessages(prev => prev.map(m =>
                     m.id === assistantId
                         ? { ...m, executionTrace: trace }

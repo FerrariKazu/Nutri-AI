@@ -1,6 +1,7 @@
 import logging
 from dataclasses import dataclass, field
 from typing import List, Literal, Dict, Any, Optional
+from backend.mechanism_engine import MechanismEngine, MechanismChain, MechanismStep
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ class ClaimVerification:
     explanation: str
     metadata: Dict[str, Any] = field(default_factory=dict)
     status_label: str = "Supporting" # ✅ Verified | 🟡 Supporting | ⚪ Informational
+    mechanism: Optional[MechanismChain] = None
 
 class ClaimVerifier:
     """
@@ -34,6 +36,7 @@ class ClaimVerifier:
         self.pubchem = pubchem_client
         self.usda = usda_client
         self.rag = rag_engine
+        self.mechanism_engine = MechanismEngine()
         
     def verify_claims(self, claims: List[Any]) -> List[ClaimVerification]:
         verifications = []
@@ -80,6 +83,21 @@ class ClaimVerifier:
         # 4. Status Label Enrichment
         if primary_res.verified:
             primary_res.status_label = "Verified"
+            
+            # 5. Mechanism Assembly (Phase 2 MoA Integration)
+            # Try to build a causal chain explaining verified claim
+            mechanism = self.mechanism_engine.assemble_chain(
+                compound_data=primary_res.evidence, 
+                rag_mechanisms=[], # Placeholder: retrieve from RAG if possible
+                outcome_claim=primary_res.text
+            )
+            primary_res.mechanism = mechanism
+            
+            if not mechanism.is_valid:
+                # Downgrade mechanism status if invalid (Tier 2 strictness)
+                # But keep claim verified if data source is strong (PubChem/USDA)
+                primary_res.explanation += f" (MoA incomplete: {mechanism.break_reason or 'No mechanism'})"
+                
         else:
             primary_res.status_label = "Supporting evidence (not definitive)" if primary_res.source != "heuristic" else "Informational"
             

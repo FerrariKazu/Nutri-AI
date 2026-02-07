@@ -51,6 +51,21 @@ def asks_for_health(message: str) -> bool:
     return any(phrase in msg_lower for phrase in qualitative_triggers)
 
 
+def is_causal_intent(message: str) -> bool:
+    """
+    Detect causal/mechanistic questions requiring MoA reasoning.
+    These questions demand causal explanation, not mere correlation.
+    """
+    msg_lower = message.lower()
+    causal_triggers = [
+        "why does", "why do", "why is", "how does", "how do",
+        "what makes", "what causes", "effect of", "impact of",
+        "leads to", "results in", "helps with", "reduces",
+        "improves", "benefits", "mechanism", "science behind"
+    ]
+    return any(phrase in msg_lower for phrase in causal_triggers)
+
+
 def asks_for_steps(message: str) -> bool:
     """Detect explicit request for procedural output."""
     return any(

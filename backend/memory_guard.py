@@ -27,17 +27,27 @@ class MemoryGuard:
         """
         try:
             swap = psutil.swap_memory()
-            swap_used_mb = swap.used / (1024**2)
+            mem = psutil.virtual_memory()
             
+            swap_used_mb = swap.used / (1024**2)
+            available_gb = mem.available / (1024**3)
+            
+            # Intelligent Check:
+            # If we have > 2GB of available RAM, we are NOT under pressure,
+            # even if swap is high (kernel being lazily swappy).
+            if available_gb > 2.0:
+                return False, swap_used_mb
+                
             is_pressure = swap_used_mb > MemoryGuard.SWAP_THRESHOLD_MB
             
             if is_pressure:
-                logger.warning(f"Memory pressure detected: {swap_used_mb:.1f}MB swap in use")
+                logger.warning(f"Memory pressure detected: {swap_used_mb:.1f}MB swap in use (Available RAM: {available_gb:.2f}GB)")
             
             return is_pressure, swap_used_mb
         except Exception as e:
             logger.error(f"Failed to check memory pressure: {e}")
             return False, 0.0
+
     
     @staticmethod
     def safe_profile(requested: ExecutionProfile) -> ExecutionProfile:

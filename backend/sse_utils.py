@@ -62,65 +62,47 @@ def safe_json(obj: Any, seen: set = None, depth: int = 0) -> Any:
 
 def format_sse_event(event: str, data: Any) -> str:
     """
-    ZERO-JSON SSE CONTRACT:
-    - ALL events are transmitted as raw text.
-    - Textual events (token, reasoning, message) transmit raw markdown.
-    - Structured events are flattened into descriptive text.
-    - CRITICAL: Raises RuntimeError if '{' is detected in UI-facing textual events.
+    Formats a message into an SSE-compatible string.
+    ENVELOPE: {"type": event, "content": data, "seq": ...}
+    Strict Policy: For textual events (token, reasoning, message), content MUST be a raw string.
     """
     try:
         if event == "ping":
-            return f"event: ping\ndata: \n\n"
+            return "event: ping\ndata: \n\n"
             
-        if event == "done":
-            logger.debug(f"[SSE] Formatting done event with data: {data} (type: {type(data)})")
-            # If data is a dict (new contract), JSON-encode it. 
-            if isinstance(data, dict):
-                res = f"event: done\ndata: {json.dumps(data)}\n\n"
-                logger.debug(f"[SSE] Formatted JSON done: {res.strip()}")
-                return res
-            res = f"event: done\ndata: {data if data else '[DONE]'}\n\n"
-            logger.debug(f"[SSE] Formatted legacy done: {res.strip()}")
-            return res
-
-        # 1. Flatten Data to String
-        final_text = ""
+        # 1. Standardize Envelope
+        # If data is already a dict, we assume it's the full item with seq and ts.
+        payload = data if isinstance(data, dict) else {"type": event, "content": data}
         
-        # JSON-Allowed Events: These events can transmit structured data
-        json_allowed_events = ("status", "error_event", "intermediate")
+        # 2. Identity Enforcement (User Request: stream_id is MANDATORY)
+        stream_id = payload.get("stream_id")
+        if event != "error_event": # Allow simple error_event without ID for fallback
+            assert stream_id is not None, f"SSE {event} must include stream_id"
         
-        if event in json_allowed_events and isinstance(data, (dict, list)):
-            final_text = json.dumps(data)
-        elif isinstance(data, str):
-            final_text = data
-        elif isinstance(data, dict):
-            # Fallback flattening for legacy or non-JSON events
-            final_text = data.get("final_answer") or data.get("message") or \
-                        data.get("recipe") or data.get("content") or \
-                        data.get("status") or ""
-        else:
-            final_text = str(data)
-
-        # Note: 'final' is now just a signal if used, or removed.
+        # 3. Token Content Enforcement (User Request: Strict string checking)
         textual_events = ("token", "reasoning", "message")
         if event in textual_events:
-            stripped = final_text.strip()
-            # 2. NUCLEAR SAFETY CHECK (Zero JSON Policy)
-            # We crash the server if we detect JSON structures about to be sent to the user.
-            # EXCEPTION: Allow the explicit [DONE] sentinel and System Errors.
-            if stripped.startswith(("{", "[")) and stripped != "[DONE]" and not stripped.startswith("[System Error") and not stripped.startswith("[Connection Error"):
-                logger.error(f"🚨 NUCLEAR SAFETY VIOLATION: JSON leakage detected in {event} event!")
-                logger.error(f"   Payload Sample: {stripped[:100]}")
+            content = payload.get("content", "")
+            
+            # Backend Assertion to prevent regressions
+            if not isinstance(content, str):
+                logger.error(f"[SSE] Contract Violation: {event} content is not a string (got {type(content)})")
+                assert isinstance(content, str), f"SSE {event} content must be string"
+            
+            # 4. NUCLEAR SAFETY CHECK (Zero JSON leakage in textual content)
+            # We only check the textual content, not the whole envelope.
+            content_str = str(content).strip()
+            if content_str.startswith(("{", "[")) and content_str != "[DONE]" and not content_str.startswith("[System Error"):
+                logger.error(f"🚨 NUCLEAR SAFETY VIOLATION: JSON leakage detected in {event} content!")
                 raise RuntimeError(f"UI SAFETY VIOLATION: JSON detected in {event} stream.")
 
-        # 3. Multi-line SSE formatting: Each line MUST start with "data: "
-        lines = final_text.split('\n')
-        data_block = "\n".join([f"data: {line}" for line in lines])
+        # 5. Serialize THE ENTIRE ENVELOPE to JSON
+        json_envelope = json.dumps(safe_json(payload))
         
-        return f"event: {event}\n{data_block}\n\n"
+        return f"event: {event}\ndata: {json_envelope}\n\n"
         
     except Exception as e:
-        if isinstance(e, RuntimeError): raise # Reraise the safety crash
+        if isinstance(e, (RuntimeError, AssertionError)): raise 
         logger.error(f"SSE Formatting failure for event {event}: {e}")
-        # Final fail-safe: even errors must be plain text
-        return f"event: error_event\ndata: FAILED: {str(e)}\n\n"
+        error_json = json.dumps({"type": "error", "content": str(e)})
+        return f"event: error_event\ndata: {error_json}\n\n"

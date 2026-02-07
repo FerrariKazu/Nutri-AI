@@ -1,0 +1,108 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0HTTP/1.1 200 OK
+date: Fri, 06 Feb 2026 01:53:27 GMT
+server: uvicorn
+content-type: text/event-stream
+cache-control: no-cache, no-transform
+connection: keep-alive
+x-accel-buffering: no
+transfer-encoding: chunked
+
+event: status
+data: {"type": "status", "content": {"phase": "initializing", "message": "Connecting to Nutri engine...", "duration_ms": 0}, "seq": 1, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 1, "ts": 1770342807.5309258}
+
+event: status
+data: {"type": "status", "content": {"phase": "starting", "message": "Thinking (fast)...", "duration_ms": 0}, "seq": 2, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 2, "ts": 1770342807.5310714}
+
+event: status
+data: {"type": "status", "content": {"phase": "intent", "message": "Understanding...", "duration_ms": 0}, "seq": 3, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 3, "ts": 1770342807.5311787}
+
+event: ping
+data: 
+
+100   762    0   712  100    50    705     49  0:00:01  0:00:01 --:--:--   755event: status
+data: {"type": "status", "content": {"phase": "conversation", "message": "Chatting...", "duration_ms": 944}, "seq": 4, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 4, "ts": 1770342808.4768095}
+
+event: token
+data: {"type": "token", "content": "Hi", "seq": 5, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 5, "ts": 1770342808.6174574}
+
+event: token
+data: {"type": "token", "content": " there", "seq": 6, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 6, "ts": 1770342808.634927}
+
+event: token
+data: {"type": "token", "content": "!", "seq": 7, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 7, "ts": 1770342808.649592}
+
+event: token
+data: {"type": "token", "content": " \ud83c\udf1f", "seq": 8, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 8, "ts": 1770342808.6942358}
+
+100  1628    0  1578  100    50   1122     35  0:00:01  0:00:01 --:--:--  1157event: token
+data: {"type": "token", "content": " How", "seq": 9, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 9, "ts": 1770342808.7091055}
+
+event: token
+data: {"type": "token", "content": "\u2019s", "seq": 10, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 10, "ts": 1770342808.7247186}
+
+event: token
+data: {"type": "token", "content": " your", "seq": 11, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 11, "ts": 1770342808.7396593}
+
+event: token
+data: {"type": "token", "content": " kitchen", "seq": 12, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 12, "ts": 1770342808.7541835}
+
+event: token
+data: {"type": "token", "content": " been", "seq": 13, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 13, "ts": 1770342808.7702906}
+
+event: token
+data: {"type": "token", "content": " treating", "seq": 14, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 14, "ts": 1770342808.785995}
+
+event: token
+data: {"type": "token", "content": " you", "seq": 15, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 15, "ts": 1770342808.8015847}
+
+event: token
+data: {"type": "token", "content": " lately", "seq": 16, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 16, "ts": 1770342808.8171318}
+
+event: token
+data: {"type": "token", "content": "?", "seq": 17, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 17, "ts": 1770342808.8322182}
+
+event: token
+data: {"type": "token", "content": " Any", "seq": 18, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 18, "ts": 1770342808.8472834}
+
+event: token
+data: {"type": "token", "content": " delicious", "seq": 19, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 19, "ts": 1770342808.8625154}
+
+event: token
+data: {"type": "token", "content": " experiments", "seq": 20, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 20, "ts": 1770342808.8774374}
+
+event: token
+data: {"type": "token", "content": " or", "seq": 21, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 21, "ts": 1770342808.892915}
+
+event: token
+data: {"type": "token", "content": " food", "seq": 22, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 22, "ts": 1770342808.9074168}
+
+event: token
+data: {"type": "token", "content": " puzzles", "seq": 23, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 23, "ts": 1770342808.9227715}
+
+event: token
+data: {"type": "token", "content": " you", "seq": 24, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 24, "ts": 1770342808.9382234}
+
+event: token
+data: {"type": "token", "content": "\u2019ve", "seq": 25, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 25, "ts": 1770342808.953846}
+
+event: token
+data: {"type": "token", "content": " been", "seq": 26, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 26, "ts": 1770342808.9689984}
+
+event: token
+data: {"type": "token", "content": " stuck", "seq": 27, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 27, "ts": 1770342808.9839156}
+
+event: token
+data: {"type": "token", "content": " on", "seq": 28, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 28, "ts": 1770342808.9999964}
+
+event: token
+data: {"type": "token", "content": "?", "seq": 29, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 29, "ts": 1770342809.015498}
+
+event: token
+data: {"type": "token", "content": " \ud83d\ude04", "seq": 30, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 30, "ts": 1770342809.0454812}
+
+event: done
+data: {"type": "done", "content": {"status": "success", "reason": "completed"}, "seq": 31, "stream_id": "00a84127-2f0e-47bd-8368-4670f1828bf7", "seq_id": 31, "ts": 1770342809.0937912}
+
+100  5405    0  5355  100    50   2964     27  0:00:01  0:00:01 --:--:--  2992

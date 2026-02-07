@@ -1,0 +1,287 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0event: status
+data: {"type": "status", "content": {"phase": "initializing", "message": "Connecting to Nutri engine...", "duration_ms": 0}, "seq": 1, "seq_id": 1, "ts": 1770330159.8916423}
+
+event: status
+data: {"type": "status", "content": {"phase": "starting", "message": "Thinking (fast)...", "duration_ms": 0}, "seq": 2, "seq_id": 2, "ts": 1770330159.8918579}
+
+event: status
+data: {"type": "status", "content": {"phase": "intent", "message": "Understanding...", "duration_ms": 3}, "seq": 3, "seq_id": 3, "ts": 1770330159.8922966}
+
+event: ping
+data: 
+
+100   642    0   553  100    89    548     88  0:00:01  0:00:01 --:--:--   637event: status
+data: {"type": "status", "content": {"phase": "conversation", "message": "Chatting...", "duration_ms": 1491}, "seq": 4, "seq_id": 4, "ts": 1770330161.3822236}
+
+100   816    0   727  100    89    400     49  0:00:01  0:00:01 --:--:--   449event: ping
+data: 
+
+event: token
+data: Ah
+
+event: token
+data: ,
+
+event: token
+data:  gluten
+
+event: token
+data: -free
+
+event: token
+data:  dough
+
+event: token
+data: —
+
+event: token
+data: such
+
+event: token
+data:  a
+
+event: token
+data:  fascinating
+
+event: token
+data:  blend
+
+event: token
+data:  of
+
+event: token
+data:  chemistry
+
+event: token
+data:  and
+
+event: token
+data:  creativity
+
+event: token
+data: !
+
+event: token
+data:  🥣
+
+event: token
+data:  Without
+
+event: token
+data:  gluten
+
+event: token
+data: ’s
+
+event: token
+data:  natural
+
+event: token
+data:  elastic
+
+event: token
+data:  network
+
+event: token
+data: ,
+
+event: token
+data:  gluten
+
+event: token
+data: -free
+
+event: token
+data:  dough
+
+event: token
+data:  relies
+
+event: token
+data:  on
+
+event: token
+data:  starch
+
+event: token
+data: es
+
+100  1629    0  1540  100    89    615     35  0:00:02  0:00:02 --:--:--   650event: token
+data:  and
+
+event: token
+data:  bind
+
+event: token
+data: ers
+
+event: token
+data:  (
+
+event: token
+data: like
+
+event: token
+data:  x
+
+event: token
+data: anth
+
+event: token
+data: an
+
+event: token
+data:  or
+
+event: token
+data:  guar
+
+event: token
+data:  gum
+
+event: token
+data: )
+
+event: token
+data:  to
+
+event: token
+data:  create
+
+event: token
+data:  structure
+
+event: token
+data:  and
+
+event: token
+data:  texture
+
+event: token
+data: .
+
+event: token
+data:  These
+
+event: token
+data:  ingredients
+
+event: token
+data:  mimic
+
+event: token
+data:  gluten
+
+event: token
+data: ’s
+
+event: token
+data:  stretch
+
+event: token
+data: ,
+
+event: token
+data:  helping
+
+event: token
+data:  the
+
+event: token
+data:  dough
+
+event: token
+data:  hold
+
+event: token
+data:  together
+
+event: token
+data:  during
+
+event: token
+data:  baking
+
+event: token
+data: .
+
+event: token
+data:   
+data: 
+data: 
+
+event: token
+data: So
+
+event: ping
+data: 
+
+event: token
+data: ,
+
+event: token
+data:  what
+
+event: token
+data: ’s
+
+event: token
+data:  your
+
+event: token
+data:  favorite
+
+event: token
+data:  gluten
+
+event: token
+data: -free
+
+event: token
+data:  baked
+
+event: token
+data:  good
+
+event: token
+data: ?
+
+event: token
+data:  I
+
+event: token
+data: ’d
+
+event: token
+data:  love
+
+event: token
+data:  to
+
+event: token
+data:  hear
+
+event: token
+data:  how
+
+event: token
+data:  it
+
+event: token
+data:  turns
+
+event: token
+data:  out
+
+event: token
+data: !
+
+event: token
+data:  🥞
+
+event: done
+data: {"type": "done", "content": {"status": "success", "reason": "completed"}, "seq": 1, "seq_id": 1, "ts": 1770330162.9920976}
+
+100  3238    0  3149  100    89    919     25  0:00:03  0:00:03 --:--:--   945

@@ -1,0 +1,203 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0HTTP/1.1 200 OK
+date: Fri, 06 Feb 2026 01:47:46 GMT
+server: uvicorn
+content-type: text/event-stream
+cache-control: no-cache, no-transform
+connection: keep-alive
+x-accel-buffering: no
+transfer-encoding: chunked
+
+event: status
+data: {"type": "status", "content": {"phase": "initializing", "message": "Connecting to Nutri engine...", "duration_ms": 0}, "seq": 1, "seq_id": 1, "ts": 1770342466.650465}
+
+event: status
+data: {"type": "status", "content": {"phase": "starting", "message": "Thinking (fast)...", "duration_ms": 0}, "seq": 2, "seq_id": 2, "ts": 1770342466.6506135}
+
+event: status
+data: {"type": "status", "content": {"phase": "intent", "message": "Understanding...", "duration_ms": 2}, "seq": 3, "seq_id": 3, "ts": 1770342466.6508982}
+
+100   625    0   532  100    93   1404    245 --:--:-- --:--:-- --:--:--  1649event: ping
+data: 
+
+event: status
+data: {"type": "status", "content": {"phase": "conversation", "message": "Chatting...", "duration_ms": 1475}, "seq": 4, "seq_id": 4, "ts": 1770342468.1255298}
+
+100   819    0   726  100    93    391     50  0:00:01  0:00:01 --:--:--   441event: ping
+data: 
+
+event: token
+data: {"type": "token", "content": "Ah", "seq": 5, "seq_id": 5, "ts": 1770342468.362232}
+
+event: token
+data: {"type": "token", "content": ",", "seq": 6, "seq_id": 6, "ts": 1770342468.3767898}
+
+event: token
+data: {"type": "token", "content": " lent", "seq": 7, "seq_id": 7, "ts": 1770342468.39043}
+
+event: token
+data: {"type": "token", "content": "ils", "seq": 8, "seq_id": 8, "ts": 1770342468.4038043}
+
+event: token
+data: {"type": "token", "content": "\u2014", "seq": 9, "seq_id": 9, "ts": 1770342468.417589}
+
+event: token
+data: {"type": "token", "content": "nature", "seq": 10, "seq_id": 10, "ts": 1770342468.432877}
+
+event: token
+data: {"type": "token", "content": "\u2019s", "seq": 11, "seq_id": 11, "ts": 1770342468.4477642}
+
+event: token
+data: {"type": "token", "content": " little", "seq": 12, "seq_id": 12, "ts": 1770342468.461254}
+
+event: token
+data: {"type": "token", "content": " power", "seq": 13, "seq_id": 13, "ts": 1770342468.475268}
+
+event: token
+data: {"type": "token", "content": "houses", "seq": 14, "seq_id": 14, "ts": 1770342468.4889941}
+
+event: token
+data: {"type": "token", "content": "!", "seq": 15, "seq_id": 15, "ts": 1770342468.5030563}
+
+event: token
+data: {"type": "token", "content": " \ud83c\udf31", "seq": 16, "seq_id": 16, "ts": 1770342468.5451858}
+
+event: token
+data: {"type": "token", "content": " They", "seq": 17, "seq_id": 17, "ts": 1770342468.5599504}
+
+event: token
+data: {"type": "token", "content": "\u2019re", "seq": 18, "seq_id": 18, "ts": 1770342468.5734355}
+
+event: token
+data: {"type": "token", "content": " rich", "seq": 19, "seq_id": 19, "ts": 1770342468.5878587}
+
+event: token
+data: {"type": "token", "content": " in", "seq": 20, "seq_id": 20, "ts": 1770342468.602042}
+
+100  2569    0  2476  100    93   1063     39  0:00:02  0:00:02 --:--:--  1103event: token
+data: {"type": "token", "content": " plant", "seq": 21, "seq_id": 21, "ts": 1770342468.6161506}
+
+event: token
+data: {"type": "token", "content": "-based", "seq": 22, "seq_id": 22, "ts": 1770342468.6299088}
+
+event: token
+data: {"type": "token", "content": " protein", "seq": 23, "seq_id": 23, "ts": 1770342468.6438673}
+
+event: token
+data: {"type": "token", "content": " and", "seq": 24, "seq_id": 24, "ts": 1770342468.658205}
+
+event: token
+data: {"type": "token", "content": " fiber", "seq": 25, "seq_id": 25, "ts": 1770342468.6720936}
+
+event: token
+data: {"type": "token", "content": ",", "seq": 26, "seq_id": 26, "ts": 1770342468.685731}
+
+event: token
+data: {"type": "token", "content": " which", "seq": 27, "seq_id": 27, "ts": 1770342468.6991878}
+
+event: token
+data: {"type": "token", "content": " helps", "seq": 28, "seq_id": 28, "ts": 1770342468.7134595}
+
+event: token
+data: {"type": "token", "content": " keep", "seq": 29, "seq_id": 29, "ts": 1770342468.7277863}
+
+event: token
+data: {"type": "token", "content": " you", "seq": 30, "seq_id": 30, "ts": 1770342468.741862}
+
+event: token
+data: {"type": "token", "content": " full", "seq": 31, "seq_id": 31, "ts": 1770342468.7565448}
+
+event: token
+data: {"type": "token", "content": ",", "seq": 32, "seq_id": 32, "ts": 1770342468.7708488}
+
+event: token
+data: {"type": "token", "content": " supports", "seq": 33, "seq_id": 33, "ts": 1770342468.7841196}
+
+event: token
+data: {"type": "token", "content": " healthy", "seq": 34, "seq_id": 34, "ts": 1770342468.7991798}
+
+event: token
+data: {"type": "token", "content": " digestion", "seq": 35, "seq_id": 35, "ts": 1770342468.813534}
+
+event: token
+data: {"type": "token", "content": ",", "seq": 36, "seq_id": 36, "ts": 1770342468.8281808}
+
+event: token
+data: {"type": "token", "content": " and", "seq": 37, "seq_id": 37, "ts": 1770342468.8420687}
+
+event: token
+data: {"type": "token", "content": " keeps", "seq": 38, "seq_id": 38, "ts": 1770342468.8561082}
+
+event: token
+data: {"type": "token", "content": " blood", "seq": 39, "seq_id": 39, "ts": 1770342468.8705559}
+
+event: token
+data: {"type": "token", "content": " sugar", "seq": 40, "seq_id": 40, "ts": 1770342468.8851788}
+
+event: token
+data: {"type": "token", "content": " steady", "seq": 41, "seq_id": 41, "ts": 1770342468.8995576}
+
+event: token
+data: {"type": "token", "content": ".", "seq": 42, "seq_id": 42, "ts": 1770342468.9144027}
+
+event: token
+data: {"type": "token", "content": " Over", "seq": 43, "seq_id": 43, "ts": 1770342468.9274716}
+
+event: token
+data: {"type": "token", "content": " time", "seq": 44, "seq_id": 44, "ts": 1770342468.9422033}
+
+event: token
+data: {"type": "token", "content": ",", "seq": 45, "seq_id": 45, "ts": 1770342468.9560616}
+
+event: token
+data: {"type": "token", "content": " their", "seq": 46, "seq_id": 46, "ts": 1770342468.9702334}
+
+event: token
+data: {"type": "token", "content": " steady", "seq": 47, "seq_id": 47, "ts": 1770342468.9833493}
+
+event: token
+data: {"type": "token", "content": " nutrient", "seq": 48, "seq_id": 48, "ts": 1770342468.9974742}
+
+event: token
+data: {"type": "token", "content": " release", "seq": 49, "seq_id": 49, "ts": 1770342469.0117338}
+
+event: token
+data: {"type": "token", "content": " can", "seq": 50, "seq_id": 50, "ts": 1770342469.0258286}
+
+event: token
+data: {"type": "token", "content": " even", "seq": 51, "seq_id": 51, "ts": 1770342469.0397284}
+
+event: token
+data: {"type": "token", "content": " help", "seq": 52, "seq_id": 52, "ts": 1770342469.053227}
+
+event: token
+data: {"type": "token", "content": " lower", "seq": 53, "seq_id": 53, "ts": 1770342469.068632}
+
+event: token
+data: {"type": "token", "content": " cholesterol", "seq": 54, "seq_id": 54, "ts": 1770342469.08332}
+
+event: token
+data: {"type": "token", "content": " and", "seq": 55, "seq_id": 55, "ts": 1770342469.0978007}
+
+event: token
+data: {"type": "token", "content": " support", "seq": 56, "seq_id": 56, "ts": 1770342469.111398}
+
+event: token
+data: {"type": "token", "content": " heart", "seq": 57, "seq_id": 57, "ts": 1770342469.1249447}
+
+event: token
+data: {"type": "token", "content": " health", "seq": 58, "seq_id": 58, "ts": 1770342469.1390126}
+
+event: token
+data: {"type": "token", "content": ".", "seq": 59, "seq_id": 59, "ts": 1770342469.1532547}
+
+event: token
+data: {"type": "token", "content": "  \n\n", "seq": 60, "seq_id": 60, "ts": 1770342469.1672647}
+
+event: token
+data: {"type": "token", "content": "Have", "seq": 61, "seq_id": 61, "ts": 1770342469.1810224}
+
+event: token
+data: {"type": "token", "content": " you", "seq": 62, "seq_id": 62, "ts": 1770342469.1953108}
+

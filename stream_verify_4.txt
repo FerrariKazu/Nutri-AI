@@ -1,0 +1,108 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0HTTP/1.1 200 OK
+date: Fri, 06 Feb 2026 01:53:52 GMT
+server: uvicorn
+content-type: text/event-stream
+cache-control: no-cache, no-transform
+connection: keep-alive
+x-accel-buffering: no
+transfer-encoding: chunked
+
+event: status
+data: {"type": "status", "content": {"phase": "initializing", "message": "Connecting to Nutri engine...", "duration_ms": 0}, "seq": 1, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 1, "ts": 1770342833.029497}
+
+event: status
+data: {"type": "status", "content": {"phase": "starting", "message": "Thinking (fast)...", "duration_ms": 0}, "seq": 2, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 2, "ts": 1770342833.029838}
+
+event: status
+data: {"type": "status", "content": {"phase": "intent", "message": "Understanding...", "duration_ms": 0}, "seq": 3, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 3, "ts": 1770342833.030176}
+
+event: status
+data: {"type": "status", "content": {"phase": "conversation", "message": "Chatting...", "duration_ms": 778}, "seq": 4, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 4, "ts": 1770342833.8078337}
+
+event: token
+data: {"type": "token", "content": "Hi", "seq": 5, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 5, "ts": 1770342833.9155762}
+
+event: token
+data: {"type": "token", "content": " there", "seq": 6, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 6, "ts": 1770342833.9282353}
+
+100  1283    0  1233  100    50   1362     55 --:--:-- --:--:-- --:--:--  1417event: token
+data: {"type": "token", "content": "!", "seq": 7, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 7, "ts": 1770342833.9421704}
+
+event: token
+data: {"type": "token", "content": " \ud83c\udf1f", "seq": 8, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 8, "ts": 1770342833.9838755}
+
+event: token
+data: {"type": "token", "content": " How", "seq": 9, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 9, "ts": 1770342833.9978473}
+
+event: token
+data: {"type": "token", "content": "\u2019s", "seq": 10, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 10, "ts": 1770342834.0120153}
+
+event: ping
+data: 
+
+event: token
+data: {"type": "token", "content": " your", "seq": 11, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 11, "ts": 1770342834.0262296}
+
+event: token
+data: {"type": "token", "content": " kitchen", "seq": 12, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 12, "ts": 1770342834.0403652}
+
+event: token
+data: {"type": "token", "content": " been", "seq": 13, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 13, "ts": 1770342834.0548604}
+
+event: token
+data: {"type": "token", "content": " treating", "seq": 14, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 14, "ts": 1770342834.0683775}
+
+event: token
+data: {"type": "token", "content": " you", "seq": 15, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 15, "ts": 1770342834.0823984}
+
+event: token
+data: {"type": "token", "content": " lately", "seq": 16, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 16, "ts": 1770342834.0961103}
+
+event: token
+data: {"type": "token", "content": "?", "seq": 17, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 17, "ts": 1770342834.1097553}
+
+event: token
+data: {"type": "token", "content": " Any", "seq": 18, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 18, "ts": 1770342834.1233783}
+
+event: token
+data: {"type": "token", "content": " tasty", "seq": 19, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 19, "ts": 1770342834.1371338}
+
+event: token
+data: {"type": "token", "content": " experiments", "seq": 20, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 20, "ts": 1770342834.152286}
+
+event: token
+data: {"type": "token", "content": " or", "seq": 21, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 21, "ts": 1770342834.16545}
+
+event: token
+data: {"type": "token", "content": " food", "seq": 22, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 22, "ts": 1770342834.179231}
+
+event: token
+data: {"type": "token", "content": " puzzles", "seq": 23, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 23, "ts": 1770342834.1928532}
+
+event: token
+data: {"type": "token", "content": " you", "seq": 24, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 24, "ts": 1770342834.2064166}
+
+event: token
+data: {"type": "token", "content": "\u2019ve", "seq": 25, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 25, "ts": 1770342834.2194402}
+
+event: token
+data: {"type": "token", "content": " been", "seq": 26, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 26, "ts": 1770342834.23264}
+
+event: token
+data: {"type": "token", "content": " wrestling", "seq": 27, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 27, "ts": 1770342834.24626}
+
+event: token
+data: {"type": "token", "content": " with", "seq": 28, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 28, "ts": 1770342834.2605555}
+
+event: token
+data: {"type": "token", "content": "?", "seq": 29, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 29, "ts": 1770342834.2739916}
+
+event: token
+data: {"type": "token", "content": " \ud83d\ude0a", "seq": 30, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 30, "ts": 1770342834.301172}
+
+event: done
+data: {"type": "done", "content": {"status": "success", "reason": "completed"}, "seq": 31, "stream_id": "720fcbb1-a223-465f-965f-f19bd670cb97", "seq_id": 31, "ts": 1770342834.3431985}
+
+100  5401    0  5351  100    50   4051     37  0:00:01  0:00:01 --:--:--  4091

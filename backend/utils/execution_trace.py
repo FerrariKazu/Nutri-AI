@@ -62,13 +62,33 @@ class AgentExecutionTrace:
     claims: List[Dict[str, Any]] = field(default_factory=list)
     variance_drivers: Dict[str, float] = field(default_factory=dict)
     
-    # 🔬 PubChem Enforcement Fields
+    # 🔬 PubChem Enforcement Fields (P0 Requirements)
     pubchem_used: bool = False
-    pubchem_compounds: List[CompoundTrace] = field(default_factory=list)
+    compounds: List[CompoundTrace] = field(default_factory=list)
     confidence_score: float = 0.0 # Base confidence
     final_confidence: float = 0.0 # Uncertainty-adjusted confidence
     pubchem_proof_hash: str = ""
     enforcement_failures: List[str] = field(default_factory=list)
+    
+    # 🧬 MoA Metrics (Phase 3)
+    moa_coverage: float = 0.0  # % of claims with valid mechanisms
+    broken_step_histogram: Dict[str, int] = field(default_factory=dict)  # Broken by step type
+    source_contribution: Dict[str, int] = field(default_factory=dict)  # Steps by source
+    
+    # 🎯 Tier 3 Metrics (Contextual Causality)
+    tier3_applicability_match: float = 0.0  # Average applicability match score
+    tier3_risk_flags_count: int = 0  # Total risk flags detected
+    tier3_recommendation_distribution: Dict[str, int] = field(default_factory=dict)  # ALLOW/WITHHOLD/REQUIRE_MORE_CONTEXT counts
+    tier3_missing_context_fields: List[str] = field(default_factory=list)  # Aggregated missing fields
+
+    # 🕐 Tier 4 Metrics (Temporal Consistency)
+    tier4_decision_changes: Dict[str, str] = field(default_factory=dict)  # claim_id → change_type
+    tier4_uncertainty_resolved_count: int = 0
+    tier4_clarification_attempts: int = 0
+    tier4_confidence_delta: Dict[str, float] = field(default_factory=dict)  # claim_id → delta
+    tier4_saturation_triggered: bool = False
+    tier4_belief_revisions: List[str] = field(default_factory=list)  # Audit trail
+    tier4_session_age: int = 0  # Turns since start
 
     def add_invocation(self, invocation: AgentInvocation):
         self.invocations.append(invocation)
@@ -84,22 +104,48 @@ class AgentExecutionTrace:
                 "verified": c.verified,
                 "source": c.source,
                 "confidence": c.confidence,
-                "text": c.metadata.get("text") if c.metadata else None
+                "text": c.metadata.get("text") if c.metadata else None,
+                "mechanism": c.mechanism.to_dict() if hasattr(c, "mechanism") and c.mechanism else None
             } for c in claims
         ]
         if variance_drivers:
             self.variance_drivers = variance_drivers
         
+        # Phase 3: Calculate MoA Metrics
+        claims_with_valid_moa = sum(
+            1 for c in claims 
+            if hasattr(c, "mechanism") and c.mechanism and c.mechanism.is_valid
+        )
+        self.moa_coverage = (claims_with_valid_moa / len(claims) * 100) if claims else 0.0
+        
+        # Track broken steps
+        self.broken_step_histogram = {}
+        for c in claims:
+            if hasattr(c, "mechanism") and c.mechanism and not c.mechanism.is_valid:
+                # Try to identify which step type caused the break
+                if c.mechanism.break_reason:
+                    # Simple heuristic: extract step type from break reason
+                    for step_type in ["compound", "interaction", "physiology", "outcome"]:
+                        if step_type in c.mechanism.break_reason.lower():
+                            self.broken_step_histogram[step_type] = self.broken_step_histogram.get(step_type, 0) + 1
+                            break
+        
+        # Track source contribution per step
+        self.source_contribution = {}
+        for c in claims:
+            if hasattr(c, "mechanism") and c.mechanism and c.mechanism.steps:
+                for step in c.mechanism.steps:
+                    source = step.evidence_source
+                    self.source_contribution[source] = self.source_contribution.get(source, 0) + 1
+        
         logger.info(f"[CLAIM_TRACE] Recorded {len(self.claims)} claims with {len(self.variance_drivers)} drivers")
-
+        logger.info(f"[MOA_METRICS] Coverage: {self.moa_coverage:.1f}%, Broken: {self.broken_step_histogram}, Sources: {self.source_contribution}")
+    
     def set_pubchem_enforcement(self, enforcement_meta: Dict[str, Any]):
         """
         Attach PubChem enforcement metadata to the trace.
-        
-        Args:
-            enforcement_meta: Dictionary from FoodSynthesisEngine.synthesize()
         """
-        self.pubchem_used = enforcement_meta.get("pubchem_used", False)
+        self.pubchem_used = enforcement_meta.get("pubchem_used", True) # Default to true if called
         self.confidence_score = enforcement_meta.get("confidence_score", 0.0)
         self.final_confidence = enforcement_meta.get("final_confidence", self.confidence_score)
         self.pubchem_proof_hash = enforcement_meta.get("pubchem_proof_hash", "")
@@ -108,49 +154,35 @@ class AgentExecutionTrace:
         # Build compound trace list
         resolved_data = enforcement_meta.get("resolved_compounds", [])
         for rd in resolved_data:
-            self.pubchem_compounds.append(CompoundTrace(
+            self.compounds.append(CompoundTrace(
                 name=rd.get("name", ""),
                 cid=rd.get("cid", 0),
-                endpoint="compound/cid/JSON",  # Canonical endpoint
+                endpoint=rd.get("endpoint", "/rest/pug/compound/cid/{cid}/property"),
                 source="pubchem",
                 cached=rd.get("cached", False),
                 resolution_time_ms=rd.get("resolution_time_ms", 0),
-                molecular_formula=rd.get("properties", {}).get("molecular_formula"),
-                molecular_weight=rd.get("properties", {}).get("molecular_weight")
+                molecular_formula=rd.get("molecular_formula"),
+                molecular_weight=rd.get("molecular_weight")
             ))
             
         logger.info(
             f"[PUBCHEM_TRACE] used={self.pubchem_used}, "
-            f"confidence={self.confidence_score:.2f} (Final: {self.final_confidence:.2f}), "
-            f"compounds={len(self.pubchem_compounds)}, "
-            f"hash={self.pubchem_proof_hash}"
+            f"confidence={self.confidence_score:.2f}, "
+            f"compounds={len(self.compounds)}"
         )
 
     def to_dict(self) -> Dict[str, Any]:
         """
         Convert trace to dictionary, including PubChem proof data.
-        
-        This dictionary is emitted in SSE events to the frontend.
         """
         data = asdict(self)
         
-        # Add explicit PubChem verification block
+        # Explicit PubChem verification block in root if used
         if self.pubchem_used:
-            data["pubchem_verification"] = {
+            data["pubchem_proof"] = {
                 "verified": True,
-                "confidence": self.confidence_score,
-                "proof_hash": self.pubchem_proof_hash,
-                "compounds_count": len(self.pubchem_compounds),
-                "failures_count": len(self.enforcement_failures)
-            }
-        
-        # Add Claim-Level block
-        if self.claims:
-            verified_count = sum(1 for c in self.claims if c.get("verified"))
-            data["verification_summary"] = {
-                "verified_claims": verified_count,
-                "unverified_claims": len(self.claims) - verified_count,
-                "total_claims": len(self.claims)
+                "traceable": len(self.compounds) > 0,
+                "compounds": data.get("compounds", [])
             }
         
         return data

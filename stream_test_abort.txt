@@ -1,0 +1,187 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0event: status
+data: {"type": "status", "content": {"phase": "initializing", "message": "Connecting to Nutri engine...", "duration_ms": 0}, "seq": 1, "seq_id": 1, "ts": 1770330175.493556}
+
+event: status
+data: {"type": "status", "content": {"phase": "starting", "message": "Thinking (fast)...", "duration_ms": 0}, "seq": 2, "seq_id": 2, "ts": 1770330175.493903}
+
+event: status
+data: {"type": "status", "content": {"phase": "intent", "message": "Understanding...", "duration_ms": 0}, "seq": 3, "seq_id": 3, "ts": 1770330175.4940138}
+
+100   623    0   531  100    92   2640    457 --:--:-- --:--:-- --:--:--  3099event: ping
+data: 
+
+event: ping
+data: 
+
+100   663    0   571  100    92    284     45  0:00:02  0:00:02 --:--:--   330event: status
+data: {"type": "status", "content": {"phase": "conversation", "message": "Chatting...", "duration_ms": 2079}, "seq": 4, "seq_id": 4, "ts": 1770330177.573004}
+
+event: token
+data: Ah
+
+100   859    0   767  100    92    346     41  0:00:02  0:00:02 --:--:--   387event: token
+data: ,
+
+event: token
+data:  molecular
+
+event: token
+data:  gastr
+
+event: token
+data: onomy
+
+event: token
+data:  —
+
+event: token
+data:  that
+
+event: token
+data:  fascinating
+
+event: token
+data:  blend
+
+event: token
+data:  of
+
+event: token
+data:  science
+
+event: token
+data:  and
+
+event: token
+data:  cuisine
+
+event: token
+data:  where
+
+event: token
+data:  a
+
+event: token
+data:  spoon
+
+event: token
+data: ful
+
+event: token
+data:  of
+
+event: token
+data:  soup
+
+event: token
+data:  can
+
+event: token
+data:  suddenly
+
+event: token
+data:  feel
+
+event: token
+data:  like
+
+event: token
+data:  a
+
+event: token
+data:  lab
+
+event: token
+data:  experiment
+
+event: token
+data: !
+
+event: token
+data:  🥣
+
+event: token
+data: 🔬
+
+event: token
+data:   
+data: 
+data: 
+
+event: token
+data: At
+
+event: token
+data:  its
+
+event: token
+data:  core
+
+event: token
+data: ,
+
+event: token
+data:  molecular
+
+event: token
+data:  gastr
+
+event: token
+data: onomy
+
+event: token
+data:  isn
+
+event: token
+data: ’t
+
+event: token
+data:  just
+
+event: token
+data:  about
+
+event: token
+data:  making
+
+event: token
+data:  food
+
+event: token
+data:  look
+
+event: token
+data:  like
+
+event: token
+data:  art
+
+event: token
+data: .
+
+event: token
+data:  It
+
+event: token
+data: ’s
+
+event: token
+data:  about
+
+event: token
+data:  understanding
+
+event: token
+data:  *
+
+event: token
+data: why
+
+event: token
+data: *
+
+event: token
+data:  things
+

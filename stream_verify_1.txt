@@ -1,0 +1,27 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0HTTP/1.1 200 OK
+date: Thu, 05 Feb 2026 23:01:32 GMT
+server: uvicorn
+content-type: text/event-stream
+cache-control: no-cache, no-transform
+connection: keep-alive
+x-accel-buffering: no
+transfer-encoding: chunked
+
+event: status
+data: {"type": "status", "content": {"phase": "initializing", "message": "Connecting to Nutri engine...", "duration_ms": 0}, "seq": 1, "seq_id": 1, "ts": 1770332493.6613646}
+
+event: status
+data: {"type": "status", "content": {"phase": "starting", "message": "Thinking (fast)...", "duration_ms": 0}, "seq": 2, "seq_id": 2, "ts": 1770332493.6614947}
+
+event: status
+data: {"type": "status", "content": {"phase": "intent", "message": "Understanding...", "duration_ms": 2}, "seq": 3, "seq_id": 3, "ts": 1770332493.6615777}
+
+100   623    0   533  100    90   1070    180 --:--:-- --:--:-- --:--:--  1251event: ping
+data: 
+
+event: status
+data: {"type": "status", "content": {"phase": "conversation", "message": "Chatting...", "duration_ms": 1204}, "seq": 4, "seq_id": 4, "ts": 1770332494.8640354}
+
+100   817    0   727  100    90    427     52  0:00:01  0:00:01 --:--:--   480

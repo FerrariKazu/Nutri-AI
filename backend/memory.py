@@ -82,6 +82,17 @@ class SessionMemoryStore:
                 cursor.execute("SELECT user_id FROM sessions LIMIT 1")
             except sqlite3.OperationalError:
                 cursor.execute("ALTER TABLE sessions ADD COLUMN user_id TEXT")
+
+            # PubChem audit table (SESSION-SCOPED)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS pubchem_audit (
+                    session_id TEXT PRIMARY KEY,
+                    compounds_json TEXT, 
+                    total_count INTEGER DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(session_id) REFERENCES sessions(session_id)
+                )
+            """)
             
             conn.commit()
 
@@ -414,3 +425,47 @@ class SessionMemoryStore:
             
             conn.commit()
         logger.debug(f"[MEMORY] Updated context for session {session_id}")
+
+    # --- PubChem Audit (SESSION-SCOPED) ---
+    
+    def update_pubchem_audit(self, session_id: str, new_compounds: List[Dict[str, Any]]):
+        """Adds new verified compounds to the session's cumulative audit."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT compounds_json FROM pubchem_audit WHERE session_id = ?", (session_id,))
+            row = cursor.fetchone()
+            
+            existing = json.loads(row[0]) if row and row[0] else []
+            # Merge and deduplicate by CID
+            seen_cids = {c['cid'] for c in existing}
+            for nc in new_compounds:
+                if nc['cid'] not in seen_cids:
+                    existing.append({
+                        "name": nc["name"],
+                        "cid": nc["cid"],
+                        "formula": nc.get("properties", {}).get("MolecularFormula", "N/A")
+                    })
+                    seen_cids.add(nc['cid'])
+            
+            cursor.execute("""
+                INSERT OR REPLACE INTO pubchem_audit (session_id, compounds_json, total_count, updated_at)
+                VALUES (?, ?, ?, ?)
+            """, (session_id, json.dumps(existing), len(existing), datetime.now().isoformat()))
+            conn.commit()
+
+    def get_pubchem_report(self, session_id: str) -> Dict[str, Any]:
+        """Generates a holistic report of all PubChem-verified intelligence for the session."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT compounds_json, total_count FROM pubchem_audit WHERE session_id = ?", (session_id,))
+            row = cursor.fetchone()
+            
+            if not row:
+                return {"verified_compounds": [], "total_count": 0, "status": "no_data"}
+            
+            return {
+                "verified_compounds": json.loads(row["compounds_json"]),
+                "total_count": row["total_count"],
+                "status": "verified"
+            }

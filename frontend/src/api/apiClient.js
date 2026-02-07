@@ -662,13 +662,24 @@ export function streamNutriChat(
     let aborted = false;
     let completed = false;
     let eventSource = null;
-    let lastSeq = 0;
+
+    // Identity & Sequence Tracking
+    let lastSeq = -1;
+    let activeStreamId = null;
 
     const processSSE = (e, type, handler) => {
         const parsed = safeParseJSON(e.data);
         if (!parsed) return;
 
-        const seq = parsed.seq_id || 0;
+        // Reset tracking on new stream_id detection
+        const streamId = parsed.stream_id;
+        if (streamId && streamId !== activeStreamId) {
+            debugLog('SSE', `📡 [NEW] Stream identity detected: ${streamId}`);
+            activeStreamId = streamId;
+            lastSeq = -1;
+        }
+
+        const seq = parsed.seq || parsed.seq_id || 0;
         if (seq > 0 && seq <= lastSeq) {
             debugLog('SSE', `♻️ [DUP/OLD] Dropping seq ${seq} (last=${lastSeq})`);
             return;

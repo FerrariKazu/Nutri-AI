@@ -46,13 +46,13 @@ from backend.sensory.counterfactual_multi_engine import MultiCounterfactualEngin
 from backend.sensory.explanation_interactive import InteractiveExplainer
 from backend.sensory.interactive_design_loop import InteractiveDesignLoop
 
-# PubChem Enforcement
 from backend.nutrition_enforcer import (
     CompoundResolver,
     calculate_confidence_score,
     generate_proof_hash,
     NutritionEnforcementMode,
-    ResolvedCompound
+    ResolvedCompound,
+    NutritionEnforcer
 )
 from backend.pubchem_client import PubChemError
 
@@ -519,13 +519,15 @@ class FoodSynthesisEngine:
         
         logger.info(f"FoodSynthesisEngine initialized (enforcement={enforcement_mode.value})")
     
+    @NutritionEnforcer.requires_pubchem
     def synthesize(
         self,
         user_query: str,
         retrieved_docs: List[RetrievedDocument],
         intent: Optional[IntentOutput] = None,
         stream_callback: Optional[callable] = None,
-        boundary_token: Optional[str] = None
+        boundary_token: Optional[str] = None,
+        **kwargs
     ) -> tuple[str, Dict[str, Any]]:
         """
         Generate a novel recipe with chemical explanation.
@@ -539,19 +541,15 @@ class FoodSynthesisEngine:
         Returns:
             Tuple of (generated_recipe, enforcement_metadata)
         """
-        # 🔬 PUBCHEM ENFORCEMENT: Resolve ingredients to compounds
+        # 🔬 PUBCHEM ENFORCEMENT (Injected via Decorator)
         enforcement_meta = {}
         compound_context = ""
-        
-        if intent and hasattr(intent, 'ingredients') and intent.ingredients:
-            logger.info(f"[PUBCHEM_ENFORCE] Resolving {len(intent.ingredients)} ingredients")
+        resolution_result = kwargs.get("pubchem_data")
+
+        if resolution_result:
+            logger.info(f"[PUBCHEM_ENFORCE] Received {len(resolution_result.resolved)} resolved compounds")
             
             try:
-                # Resolve compounds via PubChem
-                resolution_result = self.compound_resolver.resolve_ingredients(
-                    ingredients=intent.ingredients
-                )
-                
                 # Calculate confidence
                 confidence = calculate_confidence_score(
                     resolution_result,
@@ -578,7 +576,7 @@ class FoodSynthesisEngine:
                             "cid": c.cid,
                             "cached": c.cached,
                             "resolution_time_ms": c.resolution_time_ms,
-                            "properties": c.properties.dict() if hasattr(c.properties, "dict") else c.properties
+                            "properties": c.properties
                         } for c in resolution_result.resolved
                     ]
                 }
@@ -593,12 +591,11 @@ class FoodSynthesisEngine:
                     return (f"⚠️ Unable to generate recipe: {error}", enforcement_meta)
                 
                 logger.info(
-                    f"[PUBCHEM_ENFORCE] Resolved {len(resolution_result.resolved)} compounds, "
-                    f"confidence={confidence:.2f}, hash={proof_hash}"
+                    f"[PUBCHEM_ENFORCE] Resolution complete. confidence={confidence:.2f}, hash={proof_hash}"
                 )
                 
-            except PubChemError as e:
-                logger.error(f"[PUBCHEM_ENFORCE] Resolution failed: {e}")
+            except Exception as e:
+                logger.error(f"[PUBCHEM_ENFORCE] Processing resolution failed: {e}")
                 if self.enforcement_mode == NutritionEnforcementMode.STRICT:
                     return (f"⚠️ Unable to generate recipe: PubChem resolution failed", enforcement_meta)
         

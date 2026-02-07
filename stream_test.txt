@@ -1,0 +1,347 @@
+event: status
+data: {"type": "status", "content": {"phase": "initializing", "message": "Connecting to Nutri engine...", "duration_ms": 0}, "seq": 1, "seq_id": 1, "ts": 1770308606.4003217}
+
+event: status
+data: {"type": "status", "content": {"phase": "starting", "message": "Thinking (fast)...", "duration_ms": 0}, "seq": 2, "seq_id": 2, "ts": 1770308606.400478}
+
+event: status
+data: {"type": "status", "content": {"phase": "intent", "message": "Understanding...", "duration_ms": 1}, "seq": 3, "seq_id": 3, "ts": 1770308606.400591}
+
+event: ping
+data: 
+
+event: status
+data: {"type": "status", "content": {"phase": "conversation", "message": "Chatting...", "duration_ms": 981}, "seq": 4, "seq_id": 4, "ts": 1770308607.3818443}
+
+event: token
+data: Ah
+
+event: token
+data: ,
+
+event: token
+data:  gluten
+
+event: token
+data: -free
+
+event: token
+data:  pasta
+
+event: token
+data:  is
+
+event: token
+data:  a
+
+event: token
+data:  fascinating
+
+event: token
+data:  twist
+
+event: token
+data:  on
+
+event: token
+data:  a
+
+event: token
+data:  classic
+
+event: token
+data: !
+
+event: token
+data:  🥖
+
+event: token
+data:  Without
+
+event: token
+data:  gluten
+
+event: token
+data: —the
+
+event: token
+data:  protein
+
+event: token
+data:  network
+
+event: token
+data:  that
+
+event: token
+data:  gives
+
+event: token
+data:  traditional
+
+event: token
+data:  pasta
+
+event: token
+data:  its
+
+event: token
+data:  elasticity
+
+event: token
+data:  and
+
+event: token
+data:  structure
+
+event: token
+data: —
+
+event: token
+data: gl
+
+event: token
+data: uten
+
+event: token
+data: -free
+
+event: token
+data:  pasta
+
+event: token
+data:  relies
+
+event: token
+data:  on
+
+event: token
+data:  alternative
+
+event: ping
+data: 
+
+event: token
+data:  starch
+
+event: token
+data: es
+
+event: token
+data:  like
+
+event: token
+data:  rice
+
+event: token
+data: ,
+
+event: token
+data:  corn
+
+event: token
+data: ,
+
+event: token
+data:  or
+
+event: token
+data:  leg
+
+event: token
+data: umes
+
+event: token
+data: ,
+
+event: token
+data:  which
+
+event: token
+data:  are
+
+event: token
+data:  blended
+
+event: token
+data:  with
+
+event: token
+data:  bind
+
+event: token
+data: ers
+
+event: token
+data:  like
+
+event: token
+data:  x
+
+event: token
+data: anth
+
+event: token
+data: an
+
+event: token
+data:  gum
+
+event: token
+data:  or
+
+event: token
+data:  guar
+
+event: token
+data:  gum
+
+event: token
+data:  to
+
+event: token
+data:  mimic
+
+event: token
+data:  that
+
+event: token
+data:  stretch
+
+event: token
+data: y
+
+event: token
+data: ,
+
+event: token
+data:  chew
+
+event: token
+data: y
+
+event: token
+data:  texture
+
+event: token
+data: .
+
+event: token
+data:  These
+
+event: token
+data:  bind
+
+event: token
+data: ers
+
+event: token
+data:  help
+
+event: token
+data:  hold
+
+event: token
+data:  the
+
+event: token
+data:  grains
+
+event: token
+data:  together
+
+event: token
+data:  at
+
+event: token
+data:  a
+
+event: token
+data:  molecular
+
+event: token
+data:  level
+
+event: token
+data: ,
+
+event: token
+data:  creating
+
+event: token
+data:  a
+
+event: token
+data:  more
+
+event: token
+data:  cohesive
+
+event: token
+data:  structure
+
+event: token
+data:  even
+
+event: token
+data:  without
+
+event: token
+data:  gluten
+
+event: token
+data: .
+
+event: token
+data:   
+data: 
+data: 
+
+event: token
+data: Want
+
+event: token
+data:  to
+
+event: token
+data:  know
+
+event: token
+data:  how
+
+event: token
+data:  these
+
+event: token
+data:  bind
+
+event: token
+data: ers
+
+event: token
+data:  actually
+
+event: token
+data:  work
+
+event: token
+data:  in
+
+event: token
+data:  the
+
+event: token
+data:  kitchen
+
+event: token
+data: ?
+
+event: token
+data:  😊
+
+event: ping
+data: 
+
+event: done
+data: {}
+

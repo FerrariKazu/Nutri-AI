@@ -23,6 +23,7 @@ from backend.mode_constraints import (
     NUTRITION_CONFIDENCE_POLICY
 )
 from backend.llm_qwen3 import LLMQwen3
+from backend.nutrition_enforcer import NutritionEnforcer
 
 logger = logging.getLogger(__name__)
 
@@ -36,18 +37,21 @@ class NutriEngine:
         self.llm = llm
         self.memory = memory_store
 
+    @NutritionEnforcer.requires_pubchem
     def generate(
         self,
         session_id: str,
         user_message: str,
         mode: ResponseMode,
         synthesis_data: Optional[Dict[str, Any]] = None,
-        stream_callback: Optional[Callable[[str], None]] = None
+        stream_callback: Optional[Callable[[str], None]] = None,
+        **kwargs
     ) -> str:
         logger.info(f"🎯 NutriEngine generating in {mode.value} mode")
         
         # 1. Build system prompt
-        system_prompt = self._build_prompt(mode, synthesis_data)
+        pubchem_data = kwargs.get("pubchem_data")
+        system_prompt = self._build_prompt(mode, synthesis_data, pubchem_data)
 
         # 2. Get conversation history
         history = self.memory.get_messages(session_id)
@@ -185,7 +189,8 @@ class NutriEngine:
     def _build_prompt(
         self,
         mode: ResponseMode,
-        synthesis_data: Optional[Dict[str, Any]]
+        synthesis_data: Optional[Dict[str, Any]],
+        pubchem_data: Optional[Any] = None
     ) -> str:
         constraints = {
             ResponseMode.CONVERSATION: CONVERSATION_CONSTRAINTS,
@@ -198,6 +203,15 @@ class NutriEngine:
         
         if mode == ResponseMode.NUTRITION_ANALYSIS:
             prompt += "\n\n" + NUTRITION_CONFIDENCE_POLICY
+
+        # 🔬 Inject PubChem verified data directly into the system context
+        if pubchem_data and hasattr(pubchem_data, "resolved") and pubchem_data.resolved:
+            pubchem_block = "\n\n🔬 PUBCHEM VERIFIED INTELLIGENCE (MANDATORY PROOF):\n"
+            pubchem_block += "The following compounds have been verified via PubChem API. Use ONLY these facts for health/chemical claims.\n"
+            for c in pubchem_data.resolved:
+                props = c.properties
+                pubchem_block += f"- {c.name} (CID: {c.cid}): {props.get('MolecularFormula', 'N/A')}, MW: {props.get('MolecularWeight', 'N/A')}\n"
+            prompt += pubchem_block
 
         # Inject synthesis data
         if synthesis_data:

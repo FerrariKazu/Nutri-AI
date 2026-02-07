@@ -253,35 +253,53 @@ Final Answer: [your answer]
         Logs [RAG_CONFLICT] if RAG contradicts PubChem.
         """
         # If the result suggests nutrition/chemical facts, cross-verify
-        if any(term in result.lower() for term in ["nutrition", "mg", "ug", "acid", "compound", "vitamin"]):
+        chemical_terms = ["formula", "molecular", "mg", "ug", "acid", "compound", "vitamin"]
+        if any(term in result.lower() for term in chemical_terms):
             logger.info(f"[RAG_ALIGN] Nutrition/Chemical info detected in {tool_name} results. cross-verifying...")
             
             # Simple heuristic: if query looks like a compound, try PubChem
             if len(query.split()) <= 2:
-                from backend.pubchem_client import get_pubchem_client, PubChemNotFound
-                client = get_pubchem_client()
+                from backend.pubchem_client import PubChemClient, PubChemNotFound
+                client = PubChemClient()
+                
+                import asyncio
                 try:
-                    cid = client.search_compound(query)
-                    props = client.get_compound_properties(cid)
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                
+                try:
+                    cid = loop.run_until_complete(client.search_compound(query))
+                    props = loop.run_until_complete(client.get_compound_properties(cid))
                     
                     # Log successful cross-verification
                     logger.info(f"[RAG_ALIGN] CID {cid} found for '{query}'. Verifying RAG consistency.")
                     
-                    # Prepend PubChem truth
-                    truth = f"✅ [PUBCHEM_VERIFIED] {query} (CID:{cid}): {props.molecular_formula}, MW:{props.molecular_weight}"
+                    formula = props.get("MolecularFormula", "")
+                    weight = props.get("MolecularWeight", "")
                     
-                    # Conflict Detection Placeholder
-                    if "conflict" in result.lower(): 
-                        logger.warning(f"[RAG_CONFLICT] Contradiction between {tool_name} and PubChem CID {cid}")
-                        result = f"❌ [RAG_CONFLICT] RAG data contradicts PubChem verification.\n{result}"
+                    # Prepend PubChem truth
+                    truth = f"✅ [PUBCHEM_VERIFIED] {query} (CID:{cid}): Formula={formula}, MW={weight}"
+                    
+                    # 🔬 CONFLICT DETECTION
+                    if formula:
+                        # Regex to find things that look like formulas in the RAG result
+                        rag_formulas = re.findall(r'\b[A-Z][a-z]?\d*[A-Z][a-z]?\d*\b', result)
+                        for rf in rag_formulas:
+                            if rf != formula and len(rf) > 2:
+                                logger.warning(f"[RAG_CONFLICT] Contradiction! RAG says {rf}, PubChem says {formula}")
+                                return f"❌ [RAG_CONFLICT] RAG result for '{query}' contradicts PubChem truth ({formula} vs {rf}).\nTRUSTED DATA: {truth}\n\n[UNTRUSTED RAG CONTEXT]\n{result}"
 
                     return f"{truth}\n\n[RAG_CONTEXT]\n{result}"
 
-                except (PubChemNotFound, Exception):
+                except (PubChemNotFound, Exception) as e:
+                    logger.warning(f"[RAG_ALIGN] PubChem verify failed for '{query}': {e}")
                     # Filter unverified nutrition claims
                     if "usda" in tool_name or "open_nutrition" in tool_name:
-                         logger.warning(f"[RAG_ALIGN] No CID for nutrition query '{query}'. Marking as UNVERIFIED.")
                          return f"⚠️ [UNVERIFIED_DATA] No PubChem CID found for this claim.\n{result}"
+                finally:
+                    loop.run_until_complete(client.close())
         
         return result
 
