@@ -317,7 +317,6 @@ class NutriOrchestrator:
                     
                     await self.engine.generate(session_id, user_message, mode, final_data, stream_callback=stream_callback)
                     logger.info("[ORCH] Generation finished.")
-                    await push_done("success")
                     return
                 
                 # 🟢 MULTI-PHASE PATH with HARD VALIDATION
@@ -387,7 +386,6 @@ class NutriOrchestrator:
                         "tier4_metrics": trace.to_dict().get("tier4", {}),
                     }
                     await self.engine.generate(session_id, user_message, mode, final_data, stream_callback=stream_callback)
-                    await push_done("success")
                     return
                 
                 # 5. Parallel DAG
