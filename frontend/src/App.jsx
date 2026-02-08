@@ -410,7 +410,7 @@ function App() {
                             Nutri remembers this conversation
                         </div>
                         <div className="text-[8px] font-mono text-neutral-700 opacity-50">
-                            Build: d4f9149
+                            Build: f491f73
                         </div>
                     </div>
                 </div>
