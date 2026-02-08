@@ -33,6 +33,10 @@ import { renderPermissions } from '../../contracts/renderPermissions';
  * - Schema Mismatch Handling.
  */
 const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false }) => {
+    useEffect(() => {
+        console.log("%c INTELLIGENCE PANEL MOUNTED ", "background: #3b82f6; color: white; font-weight: bold; padding: 2px 4px; border-radius: 4px;");
+    }, []);
+
     const [isOpen, setIsOpen] = useState(false);
     const [isExpertMode, setIsExpertMode] = useState(expertModeDefault);
     const [isRawView, setIsRawView] = useState(false);
