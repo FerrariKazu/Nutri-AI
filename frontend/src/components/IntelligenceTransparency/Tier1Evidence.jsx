@@ -1,15 +1,31 @@
 import React from 'react';
-import { Database, FlaskConical, AlertCircle, Search, Hash } from 'lucide-react';
+import { Database, FlaskConical, AlertCircle, Hash } from 'lucide-react';
 import { TierBadge, EvidenceBadge, Tooltip } from './UIUtils';
+import { renderPermissions } from '../../contracts/renderPermissions';
 
 /**
  * Tier1Evidence
  * 
- * Friendly Mode: Shows evidence strength badge and normalized sources.
- * Expert Mode: Shows source histograms and PubChem proof verification.
+ * STRICT MODE:
+ * - No defaults for source.
+ * - Explicit "Unavailable" if data missing.
+ * - No synthetic confidence.
  */
-const Tier1Evidence = React.memo(({ claim, metrics, expertMode }) => {
+const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
+    // 1. Permission Gate
+    if (!renderPermissions.canRenderTier1(trace)) {
+        return (
+            <div className="p-4 border border-dashed border-neutral-800 rounded bg-neutral-900/50">
+                <p className="text-[10px] font-mono text-neutral-500 uppercase">Evidence Data Unavailable</p>
+            </div>
+        );
+    }
+
+    // 2. Strict Data Access
     const strength = claim.confidence > 0.8 ? 'strong' : claim.confidence > 0.4 ? 'moderate' : 'weak';
+
+    // Explicit Null Handling for Confidence
+    const hasConfidence = claim.confidence !== null;
 
     return (
         <div className="space-y-4">
@@ -17,27 +33,32 @@ const Tier1Evidence = React.memo(({ claim, metrics, expertMode }) => {
                 <div className="flex items-center gap-2">
                     <TierBadge tier={1} label="Evidence" />
                     <Database className="w-3 h-3 text-green-400 opacity-50" />
-                    <Tooltip text="Raw data verification layer. Measures the statistical power and quality of supporting research for this specific claim." />
+                    <Tooltip text="Raw data verification layer." />
                 </div>
-                <EvidenceBadge strength={strength} />
+                {hasConfidence ? (
+                    <EvidenceBadge strength={strength} />
+                ) : (
+                    <span className="text-[9px] font-mono text-neutral-500 bg-neutral-900 px-2 py-0.5 rounded border border-neutral-800">
+                        CONFIDENCE: NULL
+                    </span>
+                )}
             </div>
 
             <p className="text-sm text-neutral-300 leading-relaxed">
-                Derived from validated nutritional knowledge and <span className="text-white font-medium">{claim.source || 'verified datasets'}</span>.
+                Source: <span className="text-white font-medium">{claim.source || 'Unavailable'}</span>
             </p>
 
             {/* Source List / Histograms */}
             <div className="space-y-2">
                 <div className="flex items-center gap-1.5 px-0.5">
                     <p className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Active Data Indices</p>
-                    <Tooltip text="Nutri weights multiple sources to reach a conclusion. High-weight sources contribute more to the final confidence score." />
                 </div>
                 <div className="flex flex-wrap gap-2">
                     {(expertMode && metrics.sourceContribution && Object.keys(metrics.sourceContribution).length > 0
                         ? Object.keys(metrics.sourceContribution)
-                        : [claim.source || 'NutriDB']).map((src, i) => (
-                            <div key={i} className="px-2.5 py-1 rounded bg-neutral-800/40 border border-neutral-700/30 flex items-center gap-2.5 group hover:border-green-500/30 transition-colors cursor-default">
-                                <span className="text-[10px] text-neutral-400 font-mono tracking-tight group-hover:text-neutral-200 transition-colors">{src}</span>
+                        : [claim.source]).filter(Boolean).map((src, i) => (
+                            <div key={i} className="px-2.5 py-1 rounded bg-neutral-800/40 border border-neutral-700/30 flex items-center gap-2.5 cursor-default">
+                                <span className="text-[10px] text-neutral-400 font-mono tracking-tight">{src}</span>
                                 {expertMode && metrics.sourceContribution && (
                                     <span className="text-[9px] text-green-400 font-bold font-mono">
                                         {(metrics.sourceContribution[src] || 0)}%
@@ -45,6 +66,10 @@ const Tier1Evidence = React.memo(({ claim, metrics, expertMode }) => {
                                 )}
                             </div>
                         ))}
+
+                    {(!claim.source && (!metrics.sourceContribution || Object.keys(metrics.sourceContribution).length === 0)) && (
+                        <span className="text-[10px] text-neutral-600 font-mono italic">No source metadata</span>
+                    )}
                 </div>
             </div>
 
@@ -56,7 +81,6 @@ const Tier1Evidence = React.memo(({ claim, metrics, expertMode }) => {
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <p className="text-[10px] font-bold text-green-400 uppercase tracking-widest">Molecular Identity Verified</p>
-                                <Tooltip text="Nutri enforced a P0 check against PubChem's CID database to ensure chemical compounds mentioned are real and verified." />
                             </div>
                             <span className="text-[8px] font-mono text-green-400/50 px-1.5 py-0.5 border border-green-500/20 rounded-full">P0 ENFORCED</span>
                         </div>
@@ -67,15 +91,6 @@ const Tier1Evidence = React.memo(({ claim, metrics, expertMode }) => {
                             </p>
                         </div>
                     </div>
-                </div>
-            )}
-
-            {expertMode && Object.keys(metrics.brokenSteps || {}).length > 0 && (
-                <div className="mt-2 flex items-start gap-2.5 p-2 rounded bg-amber-500/5 border border-amber-500/10">
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                    <p className="text-[10px] text-amber-500/60 italic leading-snug">
-                        Evidence integrity check detected minor data variance in {Object.keys(metrics.brokenSteps).length} downstream nodes. Confidence adjusted.
-                    </p>
                 </div>
             )}
         </div>

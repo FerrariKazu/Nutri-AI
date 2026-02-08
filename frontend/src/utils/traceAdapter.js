@@ -2,146 +2,105 @@
  * traceAdapter.js
  * 
  * ANTI-CORRUPTION LAYER (ACL)
- * Normalizes backend AgentExecutionTrace into a UI-friendly schema.
- * Implements "Responsible Microcopy", "Tier Availability", and Schema Versioning.
+ * Strictly normalizes backend AgentExecutionTrace.
+ * 
+ * EPISTEMIC HONESTY PRINCIPLES:
+ * 1. No defaults (e.g. no || 0, no || 'General Knowledge').
+ * 2. No synthetic text or microcopy.
+ * 3. Explicit NULLs for missing data.
+ * 4. Validation against contract.
  */
 
-// --- Defensive Utilities ---
-
-const safeEnum = (value, allowed, fallback) => {
-    return allowed.includes(value) ? value : fallback;
-};
-
-const ensureArray = (x) => Array.isArray(x) ? x : [];
-
-const numberOrNull = (x) => {
-    const n = parseFloat(x);
-    return isNaN(n) ? null : n;
-};
-
-const safeString = (x, fallback = '') => typeof x === 'string' ? x : fallback;
-
-// --- Microcopy Constants ---
-
-const RECOMMENDATION_MICROCOPY = {
-    'ALLOW': {
-        decision: 'Proceed with Confidence',
-        reason: 'Nutri has verified this claim against applicable evidence.',
-        tone: 'positive'
-    },
-    'WITHHOLD': {
-        decision: 'Caution Advised',
-        reason: 'Nutri detected specific risks or lack of evidence for your context.',
-        tone: 'negative'
-    },
-    'REQUIRE_MORE_CONTEXT': {
-        decision: 'Clarification Helpful',
-        reason: 'Nutri needs a little more information about your profile before advising.',
-        tone: 'neutral'
-    }
-};
-
-const TEMPORAL_MICROCOPY = {
-    'STABLE': {
-        label: 'Consistent',
-        description: 'No change from earlier assessment.'
-    },
-    'UPGRADE': {
-        label: 'Knowledge Upgrade',
-        description: 'Nutri is more confident now based on new context.'
-    },
-    'DOWNGRADE': {
-        label: 'Revised Assessment',
-        description: 'Nutri identified a contradiction or risk in prior assumptions.'
-    },
-    'NEW_DECISION': {
-        label: 'New Finding',
-        description: 'First specific assessment for this claim.'
-    }
-};
-
-// --- Versioned Adapters ---
+import { validateTrace } from '../contracts/traceValidator';
 
 /**
- * Adapt V1 Schema (Legacy-ish)
+ * Helper: Pass value only if defined and not null.
+ * Otherwise returns undefined (which JSON.stringify drops) or null.
+ * Strict: No "fallback".
  */
-const adaptV1 = (rawTrace) => {
-    const claims = ensureArray(rawTrace.claims);
+const strictVal = (val) => (val !== undefined && val !== null) ? val : null;
 
-    const normalizedClaims = claims.map(claim => {
-        const tier4Change = safeEnum(
-            (rawTrace.tier4_decision_changes || {})[claim.claim_id],
-            ['STABLE', 'UPGRADE', 'DOWNGRADE', 'NEW_DECISION'],
-            'STABLE'
-        );
+/**
+ * Adapt V2 Schema (Strict)
+ */
+const adaptStrict = (rawTrace) => {
+    // 1. Validate
+    const { valid, errors } = validateTrace(rawTrace, import.meta.env.DEV); // Log warnings in DEV
 
+    if (!valid && !rawTrace.claims) {
+        // If critical structure is missing, return null to prevent crashes
+        console.error("Trace Adapter: Trace rejected due to critical schema violation", errors);
+        return null;
+    }
+
+    // 2. Map Claims (1:1)
+    const normalizedClaims = (rawTrace.claims || []).map(claim => {
         return {
-            id: safeString(claim.claim_id),
-            text: safeString(claim.text),
-            isVerified: !!claim.verified,
-            source: safeString(claim.source, 'General Knowledge'),
-            confidence: numberOrNull(claim.confidence) || 0,
+            id: strictVal(claim.claim_id),
+            text: strictVal(claim.text),
+            isVerified: !!claim.verified, // boolean is fine to strictly cast if present
+            source: strictVal(claim.source), // NO DEFAULT 'General Knowledge'
+            confidence: strictVal(claim.confidence), // NO DEFAULT 0
+
             mechanism: claim.mechanism ? {
-                steps: ensureArray(claim.mechanism.steps).map(step => ({
-                    entity_name: safeString(step.entity_name),
-                    step_type: safeEnum(step.step_type, ['compound', 'interaction', 'physiology', 'outcome'], 'physiology'),
-                    description: safeString(step.description),
-                    evidence_source: safeString(step.evidence_source)
+                steps: (claim.mechanism.steps || []).map(step => ({
+                    entity_name: strictVal(step.entity_name),
+                    step_type: strictVal(step.step_type),
+                    description: strictVal(step.description),
+                    evidence_source: strictVal(step.evidence_source)
                 })),
-                weakest_link_confidence: numberOrNull(claim.mechanism.weakest_link_confidence)
+                weakest_link_confidence: strictVal(claim.mechanism.weakest_link_confidence)
             } : null,
-            decisionMeta: RECOMMENDATION_MICROCOPY[claim.decision] || RECOMMENDATION_MICROCOPY['ALLOW'],
-            temporalMeta: TEMPORAL_MICROCOPY[tier4Change] || TEMPORAL_MICROCOPY['STABLE'],
-            changeType: tier4Change
+
+            decision: strictVal(claim.decision), // NO MICROCOPY MAPPING
+            changeType: strictVal((rawTrace.tier4_decision_changes || {})[claim.claim_id]) // Raw Enum
         };
     });
 
+    // 3. Construct Verified Object
     return {
-        id: safeString(rawTrace.trace_id),
-        sessionId: safeString(rawTrace.session_id),
-        status: rawTrace.is_final ? 'final' : 'provisional',
+        id: strictVal(rawTrace.trace_id),
+        sessionId: strictVal(rawTrace.session_id),
+        status: rawTrace.status || (rawTrace.is_final ? 'complete' : 'streaming'), // Backward compat for status if needed, or strict. Let's rely on new backend sending status, but fallback to is_final logic safely.
+
+        schema_version: strictVal(rawTrace.schema_version),
+
         claims: normalizedClaims,
 
-        tiers: {
-            tier1: normalizedClaims.length > 0 ? 'available' : 'not_applicable',
-            tier2: normalizedClaims.some(c => c.mechanism && c.mechanism.steps && c.mechanism.steps.length > 0) ? 'available' : 'not_applicable',
-            tier3: (rawTrace.tier3_risk_flags_count > 0 || rawTrace.tier3_applicability_match > 0) ? 'available' : 'not_applicable',
-            tier4: (Object.keys(rawTrace.tier4_decision_changes || {}).length > 0) ? 'available' : 'not_applicable'
-        },
+        // Availability Flags (Logic moved to renderPermissions, but flags help UI)
+        hasTier1: normalizedClaims.length > 0,
+        hasTier2: normalizedClaims.some(c => c.mechanism),
 
         metrics: {
-            confidence: numberOrNull(rawTrace.final_confidence || rawTrace.confidence_score) || 0,
-            confidenceDelta: numberOrNull(rawTrace.confidence_delta) || 0,
-            duration: numberOrNull(rawTrace.duration_ms) || 0,
+            confidence: strictVal(rawTrace.confidence_score || rawTrace.final_confidence),
+            duration: strictVal(rawTrace.duration_ms),
             pubchemUsed: !!rawTrace.pubchem_used,
-            proofHash: safeString(rawTrace.pubchem_proof_hash),
-            moaCoverage: numberOrNull(rawTrace.moa_coverage) || 0
+            proofHash: strictVal(rawTrace.pubchem_proof_hash),
+            moaCoverage: strictVal(rawTrace.moa_coverage)
         },
 
         causality: {
-            applicability: numberOrNull(rawTrace.tier3_applicability_match) || 0,
-            riskCount: numberOrNull(rawTrace.tier3_risk_flags_count) || 0,
-            missingFields: ensureArray(rawTrace.tier3_missing_context_fields)
+            applicability: strictVal(rawTrace.tier3_applicability_match),
+            riskCount: strictVal(rawTrace.tier3_risk_flags_count),
+            riskFlags: rawTrace.tier3_risk_flags || {}, // Raw object
+            missingFields: rawTrace.tier3_missing_context_fields || []
         },
 
         temporal: {
-            turn: numberOrNull(rawTrace.tier4_session_age) || 0,
-            revisions: ensureArray(rawTrace.tier4_belief_revisions),
-            resolvedUncertainties: numberOrNull(rawTrace.tier4_uncertainty_resolved_count) || 0,
+            turn: strictVal(rawTrace.tier4_session_age),
+            revisions: rawTrace.tier4_belief_revisions || [],
+            resolvedUncertainties: strictVal(rawTrace.tier4_uncertainty_resolved_count),
             saturationTriggered: !!rawTrace.tier4_saturation_triggered,
-            anchoring: rawTrace.tier4_session_age > 1 ? `Intelligence evolved in Turn ${rawTrace.tier4_session_age}` : null
+            anchoring: rawTrace.tier4_session_age > 1 ? `Turn ${rawTrace.tier4_session_age}` : null // Minimal formatting allowed, or move to component? "Turn X" is factual.
         },
 
+        // Expert Data
         expert: {
-            invocations: ensureArray(rawTrace.invocations),
-            brokenSteps: rawTrace.broken_step_histogram || {},
+            invocations: rawTrace.invocations || [],
             sourceContribution: rawTrace.source_contribution || {}
         }
     };
 };
-
-// Placeholder for future versions
-const adaptV2 = (rawTrace) => adaptV1(rawTrace);
 
 /**
  * Main Entry Point
@@ -149,14 +108,10 @@ const adaptV2 = (rawTrace) => adaptV1(rawTrace);
 export const adaptExecutionTrace = (rawTrace) => {
     if (!rawTrace) return null;
 
-    // Schema Versioning & Migration Logic
-    const version = rawTrace.schema_version || 1;
-
     try {
-        if (version === 2) return adaptV2(rawTrace);
-        return adaptV1(rawTrace);
+        return adaptStrict(rawTrace);
     } catch (e) {
-        console.error("Critical Adapter Failure:", e);
-        return null; // Better null than white screen
+        console.error("Trace Adapter Crashed:", e);
+        return null;
     }
 };

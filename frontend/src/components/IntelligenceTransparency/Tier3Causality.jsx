@@ -1,18 +1,30 @@
 import React from 'react';
-import { Target, ShieldAlert, AlertCircle, HelpCircle, UserCheck } from 'lucide-react';
-import { TierBadge, RiskThermometer, ConfidenceMeter, ResponsibleDecision, Tooltip } from './UIUtils';
+import { Target, ShieldAlert, HelpCircle, UserCheck } from 'lucide-react';
+import { TierBadge, RiskThermometer, ConfidenceMeter, Tooltip } from './UIUtils';
+import { renderPermissions } from '../../contracts/renderPermissions';
 
 /**
  * Tier3Causality
  * 
- * Integrates:
- * - Applicability (Match quality meter)
- * - Risk Engine (Severity thermometer)
- * - Responsible Decision (Microcopy-mapped recommendations)
+ * STRICT MODE:
+ * - No "friendly" microcopy.
+ * - Raw Enums for Decision.
+ * - Explicit Unavailable state.
  */
 const Tier3Causality = React.memo(({ uiTrace, claimIdx, expertMode }) => {
+    // 1. Permission Gate
+    if (!renderPermissions.canRenderTier3(uiTrace)) {
+        return (
+            <div className="p-4 rounded bg-neutral-900/30 border border-dashed border-neutral-800">
+                <TierBadge tier={3} label="Causality" />
+                <p className="mt-2 text-[10px] text-neutral-600 font-mono">Causality metrics unavailable</p>
+            </div>
+        );
+    }
+
     const { causality } = uiTrace;
     const currentClaim = uiTrace.claims[claimIdx] || uiTrace.claims[0];
+    const decision = currentClaim.decision || "UNKNOWN";
 
     return (
         <div className="space-y-6">
@@ -20,17 +32,21 @@ const Tier3Causality = React.memo(({ uiTrace, claimIdx, expertMode }) => {
                 <div className="flex items-center gap-2">
                     <TierBadge tier={3} label="Causality" />
                     <Target className="w-3 h-3 text-amber-400 opacity-50" />
-                    <Tooltip text="Analyzes how well Nutri's general knowledge matches your specific biological profile and clinical context." />
+                    <Tooltip text="Applicability and Risk Analysis." />
                 </div>
             </div>
 
             {/* Applicability Match */}
             <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                    <ConfidenceMeter
-                        value={causality.applicability}
-                        label="Context Applicability Match"
-                    />
+                    {causality.applicability !== null ? (
+                        <ConfidenceMeter
+                            value={causality.applicability}
+                            label="Context Applicability Match"
+                        />
+                    ) : (
+                        <span className="text-[10px] text-neutral-600 font-mono">Applicability: NULL</span>
+                    )}
                 </div>
 
                 {causality.missingFields.length > 0 && (
@@ -38,47 +54,58 @@ const Tier3Causality = React.memo(({ uiTrace, claimIdx, expertMode }) => {
                         <HelpCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                         <div>
                             <div className="flex items-center gap-2">
-                                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-tight">Information Gap Detected</p>
-                                <Tooltip text="Nutri identified missing parameters in your profile that would increase reasoning precision." />
+                                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-tight">Context Gap</p>
                             </div>
                             <p className="text-[11px] text-neutral-400 mt-1 leading-snug">
-                                Nutri needs a little more information about your <span className="font-bold text-amber-400/80">{causality.missingFields.join(', ')}</span> for a specialized assessment.
+                                Missing parameters: <span className="font-bold text-amber-400/80">{causality.missingFields.join(', ')}</span>
                             </p>
                         </div>
                     </div>
                 )}
             </div>
 
-            {/* Risk Assessment */}
+            {/* Risk Assessment - STRICT RAW VALUES */}
             <div className="pt-6 border-t border-neutral-800/50 space-y-4">
-                <RiskThermometer severity={causality.riskCount > 0 ? 0.8 : 0.1} />
+                {causality.riskCount !== null && (
+                    <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-neutral-500 font-mono uppercase">Risk Flags</span>
+                        <span className="text-[11px] font-mono font-bold text-neutral-300">{causality.riskCount}</span>
+                    </div>
+                )}
 
                 {causality.riskCount > 0 && (
-                    <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/10 flex items-start gap-3 animate-pulse-slow">
+                    <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/10 flex items-start gap-3">
                         <ShieldAlert className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                         <div>
                             <div className="flex items-center gap-2">
-                                <p className="text-[10px] font-bold text-red-500 uppercase tracking-tight text-glow-red">Active Safety Guardrails</p>
-                                <Tooltip text="Clinical safety filters triggered based on your medical profile (e.g., allergies, conditions, or medications)." />
+                                <p className="text-[10px] font-bold text-red-500 uppercase tracking-tight">Clinical Guardrails Active</p>
                             </div>
                             <p className="text-[11px] text-neutral-400 mt-1 leading-snug">
-                                Potential clinical risks or contraindications detected. Nutri has adjusted recommendations to prioritize your safety.
+                                {Object.keys(causality.riskFlags || {}).join(', ') || 'Unspecified risks detected'}
                             </p>
                         </div>
                     </div>
                 )}
             </div>
 
-            {/* Final Decision Gate */}
+            {/* Final Decision Gate - RAW ENUM */}
             <div className="pt-4 border-t border-neutral-800/50">
-                <ResponsibleDecision meta={currentClaim.decisionMeta} />
+                <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono text-neutral-500 uppercase">Decision</span>
+                    <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${decision === 'ALLOW' ? 'text-green-400 border-green-900 bg-green-900/20' :
+                            decision === 'WITHHOLD' ? 'text-red-400 border-red-900 bg-red-900/20' :
+                                'text-amber-400 border-amber-900 bg-amber-900/20'
+                        }`}>
+                        {decision}
+                    </span>
+                </div>
             </div>
 
             {expertMode && (
                 <div className="mt-4 p-2 rounded bg-neutral-950/40 border border-neutral-800/30 flex items-center justify-center gap-2">
                     <UserCheck className="w-3 h-3 text-neutral-600" />
                     <span className="text-[9px] text-neutral-600 font-mono uppercase tracking-[0.15em]">
-                        Logic: Contextual Causality Engine (Tier 3)
+                        Tier 3 Logic
                     </span>
                 </div>
             )}
