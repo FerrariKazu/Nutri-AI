@@ -145,11 +145,18 @@ const PhaseStream = ({ messages, streamStatus, onPromptSelect }) => {
                             )}
 
                             {/* 🧠 Intelligence Transparency Panel (Replaces legacy Tier 1 report) */}
-                            {msg.executionTrace && (
-                                <NutriIntelligencePanel
-                                    uiTrace={adaptExecutionTrace(msg.executionTrace)}
-                                />
-                            )}
+                            {msg.executionTrace && (() => {
+                                const adapted = adaptExecutionTrace(msg.executionTrace);
+                                console.log("[PhaseStream] executionTrace detected:", msg.executionTrace);
+                                console.log("[PhaseStream] adapted trace:", adapted);
+                                return adapted ? (
+                                    <NutriIntelligencePanel uiTrace={adapted} />
+                                ) : (
+                                    <div className="text-[10px] text-red-500 font-mono italic">
+                                        Intelligence Trace suppressed: Registry validation failed
+                                    </div>
+                                );
+                            })()}
 
                             {/* Coming Soon: Regenerate */}
                             {!msg.isStreaming && msg.content && (
