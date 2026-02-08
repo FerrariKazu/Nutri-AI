@@ -156,7 +156,7 @@ class NutriOrchestrator:
             logger.info("[ORCH] Background task started.")
             start_time = time.perf_counter()  # Fix: Ensure start_time is always initialized
             orchestration_status = "success"
-            orchestration_error = ""
+            orchestration_metadata = {}
             done_emitted = False
 
             async def push_done(status: str, message: str = ""):
@@ -693,7 +693,7 @@ class NutriOrchestrator:
                 push_event("nutrition_report", nutrition_report)
                 
                 logger.info("[ORCH] Generation finished.")
-                await push_done("success", {"nutrition_report": nutrition_report})
+                orchestration_metadata = {"nutrition_report": nutrition_report}
                 # Update session context after response
                 new_context = await run_sync(memory_extractor.extract_context, user_message, "")
                 if new_context:
@@ -705,7 +705,7 @@ class NutriOrchestrator:
             except RuntimeError as e:
                 # Catch ResourceBudgetExceeded specifically if needed, otherwise general
                 orchestration_status = "RESOURCE_EXCEEDED"
-                orchestration_error = str(e)
+                orchestration_metadata = {"error": str(e)}
                 logger.error(f"[ORCH] Resource Rejection: {e}")
                 push_event("error_event", {
                     "message": str(e), 
@@ -715,7 +715,7 @@ class NutriOrchestrator:
                 })
             except Exception as e:
                 orchestration_status = "FAILED"
-                orchestration_error = str(e)
+                orchestration_metadata = {"error": str(e)}
                 logger.error(f"Orchestration failure: {e}", exc_info=True)
                 push_event("error_event", {
                     "message": str(e), 
@@ -743,7 +743,9 @@ class NutriOrchestrator:
 
                 # 2. ✅ Final DONE (Only if not already emitted by something else)
                 if not done_emitted:
-                    await push_done(orchestration_status, orchestration_error)
+                    # Pass metadata if success, otherwise error message
+                    final_content = orchestration_metadata if orchestration_status == "success" else orchestration_metadata.get("error", "")
+                    await push_done(orchestration_status, final_content)
 
                 # 3. 🏁 SENTINEL
                 await event_queue.put(None)
