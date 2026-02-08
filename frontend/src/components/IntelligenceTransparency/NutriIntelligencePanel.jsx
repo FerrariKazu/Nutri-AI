@@ -75,11 +75,12 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
         setTimeout(() => setCopied(false), 2000);
     }, [uiTrace]);
 
-    if (!uiTrace || !uiTrace.claims) return null;
+    if (!uiTrace) return null;
 
     // Safety: Ensure selected index is valid
-    const currentClaim = uiTrace.claims[selectedClaimIdx] || uiTrace.claims[0];
-    if (!currentClaim) return null;
+    const currentClaim = uiTrace.claims && uiTrace.claims.length > 0
+        ? (uiTrace.claims[selectedClaimIdx] || uiTrace.claims[0])
+        : null;
 
     // Schema/Status Checks
     const isStreaming = uiTrace.status === 'streaming';
@@ -208,54 +209,67 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
 
                                 {/* Main Grid */}
                                 <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-10 bg-neutral-900/40">
-                                    <div className="space-y-10">
-                                        <section>
-                                            <Tier1Evidence
-                                                trace={uiTrace}
-                                                claim={currentClaim}
-                                                metrics={uiTrace.metrics}
-                                                expertMode={isExpertMode}
-                                            />
-                                        </section>
+                                    {currentClaim ? (
+                                        <>
+                                            <div className="space-y-10">
+                                                <section>
+                                                    <Tier1Evidence
+                                                        trace={uiTrace}
+                                                        claim={currentClaim}
+                                                        metrics={uiTrace.metrics}
+                                                        expertMode={isExpertMode}
+                                                    />
+                                                </section>
 
-                                        {renderPermissions.canRenderTier2({ claims: [currentClaim] }) && (
-                                            <section className="pt-10 border-t border-neutral-800/50">
-                                                <Tier2Mechanism
-                                                    trace={uiTrace}
-                                                    claim={currentClaim}
-                                                    expertMode={isExpertMode}
-                                                />
-                                            </section>
-                                        )}
-                                    </div>
+                                                {renderPermissions.canRenderTier2({ claims: [currentClaim] }) && (
+                                                    <section className="pt-10 border-t border-neutral-800/50">
+                                                        <Tier2Mechanism
+                                                            trace={uiTrace}
+                                                            claim={currentClaim}
+                                                            expertMode={isExpertMode}
+                                                        />
+                                                    </section>
+                                                )}
+                                            </div>
 
-                                    <div className="space-y-10">
-                                        <section>
-                                            <Tier3Causality
-                                                uiTrace={uiTrace}
-                                                claimIdx={selectedClaimIdx}
-                                                expertMode={isExpertMode}
-                                            />
-                                        </section>
+                                            <div className="space-y-10">
+                                                <section>
+                                                    <Tier3Causality
+                                                        uiTrace={uiTrace}
+                                                        claimIdx={selectedClaimIdx}
+                                                        expertMode={isExpertMode}
+                                                    />
+                                                </section>
 
-                                        {renderPermissions.canRenderTier4(uiTrace) && (
-                                            <section className="pt-10 border-t border-neutral-800/50">
-                                                <Tier4Temporal
-                                                    uiTrace={uiTrace}
-                                                    claimIdx={selectedClaimIdx}
-                                                    expertMode={isExpertMode}
-                                                />
-                                            </section>
-                                        )}
+                                                {renderPermissions.canRenderTier4(uiTrace) && (
+                                                    <section className="pt-10 border-t border-neutral-800/50">
+                                                        <Tier4Temporal
+                                                            uiTrace={uiTrace}
+                                                            claimIdx={selectedClaimIdx}
+                                                            expertMode={isExpertMode}
+                                                        />
+                                                    </section>
+                                                )}
 
-                                        <section className="pt-10 border-t border-neutral-800/50">
-                                            <ConfidenceTracker
-                                                uiTrace={uiTrace}
-                                                claimIdx={selectedClaimIdx}
-                                                expertMode={isExpertMode}
-                                            />
-                                        </section>
-                                    </div>
+                                                <section className="pt-10 border-t border-neutral-800/50">
+                                                    <ConfidenceTracker
+                                                        uiTrace={uiTrace}
+                                                        claimIdx={selectedClaimIdx}
+                                                        expertMode={isExpertMode}
+                                                    />
+                                                </section>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="col-span-full py-20 flex flex-col items-center justify-center gap-4 text-neutral-500">
+                                            <Info className="w-8 h-8 opacity-20" />
+                                            <p className="text-xs font-mono uppercase tracking-widest text-center max-w-xs leading-relaxed">
+                                                No structured claims were produced for this response.
+                                                <br />
+                                                <span className="opacity-50 mt-2 block">(All tokens were direct synthesis)</span>
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             </>
                         )}

@@ -55,6 +55,7 @@ class AgentExecutionTrace:
     session_id: str
     trace_id: str
     start_ts: float = field(default_factory=time.time)
+    schema_version: int = 1  # Contract version for UI adaptation
     invocations: List[AgentInvocation] = field(default_factory=list)
     system_audit: Dict[str, Any] = field(default_factory=dict)
     

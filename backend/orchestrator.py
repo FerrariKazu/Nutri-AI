@@ -78,6 +78,7 @@ class NutriOrchestrator:
             # Attempt to import create_trace dynamically or verify scope
             from backend.utils.execution_trace import create_trace
             trace = create_trace(session_id, trace_id)
+            trace.schema_version = 2
             # Add Audit Data to Trace
             trace.system_audit = {
                 "rag": "enabled",
@@ -105,6 +106,7 @@ class NutriOrchestrator:
                     self.tier4_saturation_triggered = False
                     self.tier4_clarification_attempts = 0
                     self.tier4_session_age = 0
+                    self.schema_version = 2 # Align with UI contract
 
                 def to_dict(self):
                     return {
@@ -113,7 +115,8 @@ class NutriOrchestrator:
                         "error": self.error,
                         "tiers": {},
                         "metrics": {"duration": 0},
-                        "claims": []
+                        "claims": [],
+                        "schema_version": self.schema_version
                     }
                 
                 def add_invocation(self, *args, **kwargs): pass
@@ -667,12 +670,7 @@ class NutriOrchestrator:
                 logger.info(f"[ORCH] Generating final tailored response in mode {mode.value}...")
                 await self.engine.generate(session_id, user_message, mode, final_data, stream_callback=stream_callback)
                 
-                # 🟢 Emit Execution Trace for Observability
-                trace_start_ts = start_time # Align with orchestrator start
-                trace_dict = trace.to_dict()
-                push_event("execution_trace", trace_dict)
-                
-                # 🥗 Emit Nutrition Intelligence Report
+                # 🥗 Emit Nutrition Intelligence Report (Legacy companion)
                 nutrition_report = {
                     "session_id": session_id,
                     "confidence_score": trace.confidence_score,
@@ -724,6 +722,14 @@ class NutriOrchestrator:
                 gpu_monitor.sample_after()
                 logger.info("[ORCH] Ending task and pushing sentinels.")
                 
+                # 🟢 FINAL EMISSION: Every request must produce an execution_trace
+                try:
+                    trace_dict = trace.to_dict()
+                    push_event("execution_trace", trace_dict)
+                    logger.info(f"[ORCH] Trace emitted in finally block (claims={len(trace.claims)})")
+                except Exception as te:
+                    logger.error(f"[ORCH] Failed to emit trace in finally: {te}")
+
                 # FINAL ASSERTION: Exactly one terminal event
                 if not done_emitted:
                     logger.warning("[ORCH] Development Warning: No [DONE] emitted! Failsafe triggered.")
