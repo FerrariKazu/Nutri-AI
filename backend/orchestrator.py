@@ -39,6 +39,7 @@ from backend.session_reset_policy import SessionResetPolicy
 from backend.response_modes import ResponseMode
 from backend.mode_classifier import classify_response_mode
 from backend.nutri_engine import NutriEngine
+from backend.utils.execution_trace import create_trace, AgentInvocation
 
 logger = logging.getLogger(__name__)
 
@@ -71,15 +72,55 @@ class NutriOrchestrator:
         Executes the Nutri pipeline with true non-blocking streaming.
         Uses a background task to drive generation while the generator drains an event queue.
         """
-        # 🟢 Initialize Trace per Session (Mandatory)
+        # 🟢 Initialize Trace per Session (Mandatory, but Non-Fatal)
         trace_id = f"tr_{int(time.time())}_{uuid.uuid4().hex[:6]}"
-        trace = create_trace(session_id, trace_id)
-        
-        # Add Audit Data to Trace
-        trace.system_audit = {
-            "rag": "enabled",
-            "model": self.pipeline.engine.llm.model_name
-        }
+        try:
+            # Attempt to import create_trace dynamically or verify scope
+            from backend.utils.execution_trace import create_trace
+            trace = create_trace(session_id, trace_id)
+            # Add Audit Data to Trace
+            trace.system_audit = {
+                "rag": "enabled",
+                "model": self.pipeline.engine.llm.model_name
+            }
+        except Exception as e:
+            logger.warning(f"Trace initialization failed (non-fatal): {e}")
+            # Safe Minimal Fallback to prevent orchestration crash
+            class FallbackTrace:
+                def __init__(self, t_id, err):
+                    self.id = t_id
+                    self.status = "trace_error"
+                    self.error = str(err)
+                    self.system_audit = {}
+                    self.claims = []
+                    self.variance_drivers = {}
+                    self.compounds = []
+                    self.enforcement_failures = []
+                    self.pubchem_proof_hash = ""
+                    self.confidence_score = 0.0
+                    self.tier4_belief_revisions = []
+                    self.tier4_decision_changes = {}
+                    self.tier4_confidence_delta = {}
+                    self.tier4_uncertainty_resolved_count = 0
+                    self.tier4_saturation_triggered = False
+                    self.tier4_clarification_attempts = 0
+                    self.tier4_session_age = 0
+
+                def to_dict(self):
+                    return {
+                        "id": self.id,
+                        "status": "trace_error",
+                        "error": self.error,
+                        "tiers": {},
+                        "metrics": {"duration": 0},
+                        "claims": []
+                    }
+                
+                def add_invocation(self, *args, **kwargs): pass
+                def set_claims(self, *args, **kwargs): pass
+                def set_pubchem_enforcement(self, *args, **kwargs): pass
+
+            trace = FallbackTrace(trace_id, e)
         loop = asyncio.get_running_loop()
         event_queue = asyncio.Queue()
         seq_counter = 0
@@ -93,7 +134,8 @@ class NutriOrchestrator:
                 event_queue.put({
                     "type": event_type, 
                     "content": content,
-                    "seq": seq_counter
+                    "seq": seq_counter,
+                    "stream_id": trace_id
                 }), 
                 loop
             )
@@ -108,8 +150,8 @@ class NutriOrchestrator:
 
         async def orchestration_task():
             logger.info("[ORCH] Background task started.")
+            start_time = time.perf_counter()  # Fix: Ensure start_time is always initialized
             done_emitted = False
-            seq_counter = 0  # Move to task scope for proper nonlocal binding
 
             async def push_done(status: str, message: str = ""):
                 nonlocal done_emitted
@@ -119,7 +161,11 @@ class NutriOrchestrator:
                     # Status contract: OK | FAILED | RESOURCE_EXCEEDED
                     await event_queue.put({
                         "type": "done",
-                        "content": {"status": status, "message": message},
+                        "content": {
+                            "status": status, 
+                            "message": message
+                        },
+                        "stream_id": trace_id,
                         "seq": seq_counter
                     })
                     logger.debug(f"[ORCH] push_done: {status} (seq={seq_counter})")
@@ -203,7 +249,8 @@ class NutriOrchestrator:
                 
 
                 # 🕐 Tier 4: Belief State & Turn Management
-                session_ctx = self.memory.get_context(session_id)
+                session_ctx_obj = self.memory.get_context(session_id)
+                session_ctx = session_ctx_obj.to_dict() if hasattr(session_ctx_obj, "to_dict") else session_ctx_obj
                 current_turn = session_ctx.get("current_turn", 0) + 1
                 session_ctx["current_turn"] = current_turn
                 
@@ -262,7 +309,7 @@ class NutriOrchestrator:
                         "tier4_metrics": trace.to_dict().get("tier4", {}),
                     }
                     
-                    await run_sync(self.engine.generate, session_id, user_message, mode, final_data, stream_callback=stream_callback)
+                    await self.engine.generate(session_id, user_message, mode, final_data, stream_callback=stream_callback)
                     logger.info("[ORCH] Generation finished.")
                     await push_done("success")
                     return
@@ -281,7 +328,7 @@ class NutriOrchestrator:
                     
                     # Execute phase (simplified: use synthesis engine)
                     emit_status("synthesis", f"Analyzing ({phase.value})...")
-                    phase_result_raw = await run_sync(self.pipeline.engine.synthesize, augmented_query, docs, intent, stream_callback=None)
+                    phase_result_raw = await self.pipeline.engine.synthesize(augmented_query, docs, intent, stream_callback=None)
 
                     
                     # Unpack (recipe, enforcement_meta)
@@ -331,7 +378,7 @@ class NutriOrchestrator:
                         "context_prompt": None,
                         "tier4_metrics": trace.to_dict().get("tier4", {}),
                     }
-                    await run_sync(self.engine.generate, session_id, user_message, mode, final_data, stream_callback=stream_callback)
+                    await self.engine.generate(session_id, user_message, mode, final_data, stream_callback=stream_callback)
                     await push_done("success")
                     return
                 
@@ -463,11 +510,26 @@ class NutriOrchestrator:
                     missing_fields = []
                     for r in tier3_results:
                         missing_fields.extend(r["applicability_match"].get("missing_fields", []))
-                    if missing_fields:
+                    
+                    unique_missing = list(set(missing_fields))
+                    trace.tier3_missing_context_fields = unique_missing
+                    
+                    if unique_missing:
                         context_prompt = context_prompt_engine.suggest_missing_context(
-                            list(set(missing_fields)),
+                            unique_missing,
                             user_message
                         )
+                
+                # Aggregate Tier 3 metrics into trace
+                if tier3_results:
+                    trace.tier3_applicability_match = sum(r["applicability_match"]["score"] for r in tier3_results) / len(tier3_results)
+                    trace.tier3_risk_flags_count = sum(len(r["risk_assessment"]["risks"]) for r in tier3_results)
+                    
+                    dist = {}
+                    for r in tier3_results:
+                        dec = r["recommendation"]["decision"]
+                        dist[dec] = dist.get(dec, 0) + 1
+                    trace.tier3_recommendation_distribution = dist
                 
 
                 # 🧠 Tier 4: Temporal & Epistemic Consistency Logic
@@ -592,11 +654,16 @@ class NutriOrchestrator:
                     "context_prompt": context_prompt,
                     "claim_type": claim_type,
                     "moa_analysis": moa_explanations,
-                    "tier4_metrics": trace.to_dict().get("tier4", {}),
+                    "tier4_metrics": {
+                        "decision_changes": trace.tier4_decision_changes,
+                        "confidence_delta": trace.tier4_confidence_delta,
+                        "session_age": trace.tier4_session_age,
+                        "saturation_triggered": trace.tier4_saturation_triggered
+                    },
                 }
 
                 logger.info(f"[ORCH] Generating final tailored response in mode {mode.value}...")
-                await run_sync(self.engine.generate, session_id, user_message, mode, final_data, stream_callback=stream_callback)
+                await self.engine.generate(session_id, user_message, mode, final_data, stream_callback=stream_callback)
                 
                 # 🟢 Emit Execution Trace for Observability
                 trace_start_ts = start_time # Align with orchestrator start
@@ -607,18 +674,18 @@ class NutriOrchestrator:
                 nutrition_report = {
                     "session_id": session_id,
                     "confidence_score": trace.confidence_score,
-                    "final_confidence": getattr(trace, "final_confidence", trace.confidence_score),
+                    "final_confidence": getattr(trace, "final_confidence", getattr(trace, "confidence_score", 0.0)),
                     "weakest_link_id": getattr(trace, "weakest_link_id", None),
-                    "compounds_resolved": len(trace.pubchem_compounds),
+                    "compounds_resolved": len(trace.compounds),
                     "compounds_unverified": len(trace.enforcement_failures),
                     "unverified_list": trace.enforcement_failures,
                     "proof_hash": trace.pubchem_proof_hash,
-                    "verified_claims": sum(1 for c in trace.claims if c.get("verified")),
+                    "verified_claims": sum(1 for c in trace.claims if isinstance(c, dict) and c.get("verified")),
                     "total_claims": len(trace.claims),
                     "claims": trace.claims, # Deep claim evidence
                     "variance_drivers": trace.variance_drivers,
-                    "conflicts_detected": any(c.get("has_conflict") for c in trace.claims),
-                    "summary": f"Nutrition verified via PubChem & USDA ({len(trace.pubchem_compounds)} compounds, {len(trace.claims)} verifiable claims)"
+                    "conflicts_detected": any(c.get("has_conflict") for c in trace.claims if isinstance(c, dict)),
+                    "summary": f"Nutrition verified via PubChem & USDA ({len(trace.compounds)} compounds, {len(trace.claims)} verifiable claims)"
                 }
                 push_event("nutrition_report", nutrition_report)
                 
@@ -635,11 +702,21 @@ class NutriOrchestrator:
             except RuntimeError as e:
                 # Catch ResourceBudgetExceeded specifically if needed, otherwise general
                 logger.error(f"[ORCH] Resource Rejection: {e}")
-                push_event("error_event", {"message": str(e), "phase": "resource_guard", "status": "RESOURCE_EXCEEDED"})
+                push_event("error_event", {
+                    "message": str(e), 
+                    "phase": "resource_guard", 
+                    "status": "RESOURCE_EXCEEDED",
+                    "stream_id": trace_id
+                })
                 await push_done("RESOURCE_EXCEEDED", str(e))
             except Exception as e:
                 logger.error(f"Orchestration failure: {e}", exc_info=True)
-                push_event("error_event", {"message": str(e), "phase": "orchestration", "status": "FAILED"})
+                push_event("error_event", {
+                    "message": str(e), 
+                    "phase": "orchestration", 
+                    "status": "FAILED",
+                    "stream_id": trace_id
+                })
                 await push_done("FAILED", str(e))
             finally:
                 gpu_monitor.sample_after()

@@ -405,11 +405,14 @@ function App() {
                     />
 
                     {/* Memory Transparency Signal */}
-                    {memoryScope === 'session' && messages.length > 0 && streamStatus === 'IDLE' && (
-                        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-neutral-900/80 border border-neutral-800 px-3 py-1 rounded-full text-[9px] font-mono uppercase tracking-widest text-neutral-500 animate-fade-in pointer-events-none z-10">
+                    <div className="absolute bottom-24 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 pointer-events-none z-10">
+                        <div className="bg-neutral-900/80 border border-neutral-800 px-3 py-1 rounded-full text-[9px] font-mono uppercase tracking-widest text-neutral-500 animate-fade-in">
                             Nutri remembers this conversation
                         </div>
-                    )}
+                        <div className="text-[8px] font-mono text-neutral-700 opacity-50">
+                            Build: d4f9149
+                        </div>
+                    </div>
                 </div>
 
                 {/* Control Rail - REMOVED (Dead Code) */}

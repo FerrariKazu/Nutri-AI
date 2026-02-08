@@ -27,6 +27,7 @@ app = FastAPI(title="Nutri Unified API", description="Integrated 13-Phase Food S
 # Explicit CORS for production and development
 origins = [
     "https://nutri-ai-ochre.vercel.app",
+    "https://chatdps.dpdns.org",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
@@ -201,7 +202,7 @@ async def handle_chat_execution(
         try:
             while True:
                 await asyncio.sleep(1) # Aggressive heartbeat for proxies
-                await queue.put({"type": "ping", "content": {}, "ts": time.time()})
+                await queue.put({"type": "ping", "content": {}, "ts": time.time(), "stream_id": session_id})
         except asyncio.CancelledError:
             pass
 
@@ -218,7 +219,7 @@ async def handle_chat_execution(
                     logger.info("[SSE] Sentinel received from orchestrator.")
                     if not done_sent:
                         logger.warning("[SSE] Forcing DONE emission before exit.")
-                        yield format_sse_event("done", {})
+                        yield format_sse_event("done", {"stream_id": session_id})
                         done_sent = True
                     break
                 
@@ -233,6 +234,9 @@ async def handle_chat_execution(
                 if event_type == "done":
                     done_sent = True
                     logger.info(f"[SSE] Emitting DONE event: {content}")
+
+                if isinstance(item, dict) and "stream_id" not in item:
+                    item["stream_id"] = session_id
 
                 formatted_chunk = format_sse_event(event_type, item) # Pass whole item (already JSONized in sse_utils)
                 
@@ -250,18 +254,20 @@ async def handle_chat_execution(
                 logger.warning("[SSE] Emitting explicit ABORTED terminal event.")
                 yield format_sse_event("done", {
                     "status": "aborted",
-                    "reason": "client_disconnect"
+                    "reason": "client_disconnect",
+                    "stream_id": session_id
                 })
                 done_sent = True
             raise
         except Exception as e:
             logger.error(f"[SSE] Critical Stream Error: {e}")
-            yield format_sse_event("error_event", {"message": str(e)})
+            yield format_sse_event("error_event", {"message": str(e), "stream_id": session_id})
             if not done_sent:
                 yield format_sse_event("done", {
                     "status": "error",
                     "reason": "exception",
-                    "message": str(e)
+                    "message": str(e),
+                    "stream_id": session_id
                 })
                 done_sent = True
             raise
@@ -272,7 +278,8 @@ async def handle_chat_execution(
                 try:
                     yield format_sse_event("done", {
                         "status": "forced",
-                        "reason": "sentinel_without_done"
+                        "reason": "sentinel_without_done",
+                        "stream_id": session_id
                     })
                     done_sent = True
                 except Exception as final_e:

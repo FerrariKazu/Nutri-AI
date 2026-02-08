@@ -138,7 +138,12 @@ class NutritionEnforcer:
                 kwargs["pubchem_data"] = res
                 
                 # 5. Execute
-                return await func(self, *args, **kwargs)
+                if asyncio.iscoroutinefunction(func):
+                    return await func(self, *args, **kwargs)
+                else:
+                    # Offload long-running sync LLM calls to a thread
+                    loop = asyncio.get_running_loop()
+                    return await loop.run_in_executor(None, lambda: func(self, *args, **kwargs))
             finally:
                 await enforcer.resolver.client.close()
                 
