@@ -410,7 +410,7 @@ function App() {
                             Nutri remembers this conversation
                         </div>
                         <div className="text-[8px] font-mono text-neutral-700 opacity-50">
-                            Build: f491f73
+                            Build: 2026-02-08-1545
                         </div>
                     </div>
                 </div>

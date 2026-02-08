@@ -18,6 +18,7 @@ pip-delete-this-directory.txt
 *.sqlite3
 *.jsonl
 *.parquet
+*.tar.gz
 data/
 processed/
 **/data/
@@ -51,6 +52,11 @@ ollama.log
 .orchids/
 nutri_sessions.db
 benchmark_4b.json
+llama-server
+llama_build_temp/
+examples/
+tmp/
+build/
 
 # Nested git repos
 .git/
