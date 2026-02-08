@@ -725,8 +725,14 @@ class NutriOrchestrator:
                 # 🟢 FINAL EMISSION: Every request must produce an execution_trace
                 try:
                     trace_dict = trace.to_dict()
-                    push_event("execution_trace", trace_dict)
-                    logger.info(f"[ORCH] Trace emitted in finally block (claims={len(trace.claims)})")
+                    seq_counter += 1
+                    await event_queue.put({
+                        "type": "execution_trace",
+                        "content": trace_dict,
+                        "seq": seq_counter,
+                        "stream_id": trace_id
+                    })
+                    logger.info(f"[ORCH] Trace emitted in finally block (claims={len(trace.claims)}, seq={seq_counter})")
                 except Exception as te:
                     logger.error(f"[ORCH] Failed to emit trace in finally: {te}")
 
