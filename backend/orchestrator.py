@@ -152,6 +152,7 @@ class NutriOrchestrator:
             return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
 
         async def orchestration_task():
+            nonlocal seq_counter
             logger.info("[ORCH] Background task started.")
             start_time = time.perf_counter()  # Fix: Ensure start_time is always initialized
             orchestration_status = "success"
