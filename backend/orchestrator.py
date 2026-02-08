@@ -154,6 +154,8 @@ class NutriOrchestrator:
         async def orchestration_task():
             logger.info("[ORCH] Background task started.")
             start_time = time.perf_counter()  # Fix: Ensure start_time is always initialized
+            orchestration_status = "success"
+            orchestration_error = ""
             done_emitted = False
 
             async def push_done(status: str, message: str = ""):
@@ -697,10 +699,12 @@ class NutriOrchestrator:
                     self.memory.update_context(session_id, new_context)
                 
                 logger.info("[ORCH] Generation complete.")
-                await push_done("success")
+                # push_done removed here, moved to finally to ensure trace precedes it
 
             except RuntimeError as e:
                 # Catch ResourceBudgetExceeded specifically if needed, otherwise general
+                orchestration_status = "RESOURCE_EXCEEDED"
+                orchestration_error = str(e)
                 logger.error(f"[ORCH] Resource Rejection: {e}")
                 push_event("error_event", {
                     "message": str(e), 
@@ -708,8 +712,9 @@ class NutriOrchestrator:
                     "status": "RESOURCE_EXCEEDED",
                     "stream_id": trace_id
                 })
-                await push_done("RESOURCE_EXCEEDED", str(e))
             except Exception as e:
+                orchestration_status = "FAILED"
+                orchestration_error = str(e)
                 logger.error(f"Orchestration failure: {e}", exc_info=True)
                 push_event("error_event", {
                     "message": str(e), 
@@ -717,12 +722,11 @@ class NutriOrchestrator:
                     "status": "FAILED",
                     "stream_id": trace_id
                 })
-                await push_done("FAILED", str(e))
             finally:
                 gpu_monitor.sample_after()
-                logger.info("[ORCH] Ending task and pushing sentinels.")
+                logger.info(f"[ORCH] Finalizing stream (status={orchestration_status}). Guaranteeing trace -> done.")
                 
-                # 🟢 FINAL EMISSION: Every request must produce an execution_trace
+                # 1. 🟢 ALWAYS emit execution_trace
                 try:
                     trace_dict = trace.to_dict()
                     seq_counter += 1
@@ -732,16 +736,15 @@ class NutriOrchestrator:
                         "seq": seq_counter,
                         "stream_id": trace_id
                     })
-                    logger.info(f"[ORCH] Trace emitted in finally block (claims={len(trace.claims)}, seq={seq_counter})")
+                    logger.info(f"[ORCH] Trace emitted (claims={len(trace.claims)}, seq={seq_counter})")
                 except Exception as te:
-                    logger.error(f"[ORCH] Failed to emit trace in finally: {te}")
+                    logger.error(f"[ORCH] Failed to emit trace: {te}")
 
-                # FINAL ASSERTION: Exactly one terminal event
+                # 2. ✅ Final DONE (Only if not already emitted by something else)
                 if not done_emitted:
-                    logger.warning("[ORCH] Development Warning: No [DONE] emitted! Failsafe triggered.")
-                    await push_done("OK")
-                
-                # Push Sentinel directly (no race with async await above)
+                    await push_done(orchestration_status, orchestration_error)
+
+                # 3. 🏁 SENTINEL
                 await event_queue.put(None)
 
 
