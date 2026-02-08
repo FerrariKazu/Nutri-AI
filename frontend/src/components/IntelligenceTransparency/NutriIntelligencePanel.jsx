@@ -121,7 +121,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                     <div>
                         <div className="flex items-center gap-2">
                             <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-neutral-200 group-hover:text-white transition-colors">
-                                Reasoning Trace
+                                Nutri Intelligence Panel v2
                             </h3>
                         </div>
                         <p className="text-[10px] text-neutral-500 font-mono mt-0.5">

@@ -12,8 +12,11 @@ import ChatHeader from './components/ChatHeader';
 
 // Input value setter for starter prompts
 let inputValueSetter = null;
-
 function App() {
+    useEffect(() => {
+        console.log("%c NUTRI SYSTEM %c Build ID: " + import.meta.env.VITE_GIT_SHA, "background: #22c55e; color: white; font-weight: bold; padding: 2px 4px; border-radius: 4px;", "color: #22c55e; font-weight: bold;");
+    }, []);
+
     const [messages, setMessages] = useState([]);
 
     // State Machine: 'IDLE' | 'HYDRATING' | 'STREAMING' | 'DONE' | 'ERROR'
@@ -410,7 +413,7 @@ function App() {
                             Nutri remembers this conversation
                         </div>
                         <div className="text-[8px] font-mono text-neutral-700 opacity-50">
-                            Build: 2026-02-08-1545
+                            Build: {import.meta.env.VITE_GIT_SHA}
                         </div>
                     </div>
                 </div>
