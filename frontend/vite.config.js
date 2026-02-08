@@ -4,12 +4,16 @@ import path from "path"
 import { execSync } from 'child_process'
 
 // Resolve Git SHA for build identity
-let gitSha = 'untracked';
-try {
-    gitSha = execSync('git rev-parse --short HEAD').toString().trim();
-} catch (e) {
-    console.warn('Git SHA not found, using placeholder');
+let gitSha = process.env.VERCEL_GIT_COMMIT_SHA || 'dev-' + Date.now();
+if (!process.env.VERCEL_GIT_COMMIT_SHA) {
+    try {
+        gitSha = execSync('git rev-parse --short HEAD').toString().trim();
+    } catch (e) {
+        // Fallback already set
+    }
 }
+// Clean for UI
+gitSha = typeof gitSha === 'string' ? gitSha.substring(0, 7) : gitSha;
 
 // https://vitejs.dev/config/
 export default defineConfig({
