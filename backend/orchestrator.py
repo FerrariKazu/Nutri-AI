@@ -321,6 +321,7 @@ class NutriOrchestrator:
                 
                 valid_phase_count = 0
                 phase_results = {}
+                recipe_result = ""  # Fix: Initialize recipe_result for parallel DAG
                 
                 for phase in selected_phases:
                     phase_start = time.perf_counter()
@@ -355,6 +356,7 @@ class NutriOrchestrator:
                     
                     valid_phase_count += 1
                     phase_results[phase.value] = phase_result
+                    recipe_result = str(phase_result)  # Update for DAG consumption
                     
                     # Duration for the thinking phase specifically
                     phase_duration = int((time.perf_counter() - phase_start) * 1000)
