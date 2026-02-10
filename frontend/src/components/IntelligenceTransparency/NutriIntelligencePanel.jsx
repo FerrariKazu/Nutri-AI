@@ -13,7 +13,10 @@ import {
     Share2,
     FileJson,
     Loader2,
-    AlertTriangle
+    AlertTriangle,
+    ZapOff,
+    FileSearch,
+    DatabaseZap
 } from 'lucide-react';
 import Tier1Evidence from './Tier1Evidence';
 import Tier2Mechanism from './Tier2Mechanism';
@@ -89,8 +92,16 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
     // Integrity Message - NO FLUFF
     const integrityMessage = useMemo(() => {
         if (uiTrace.metrics.pubchemUsed) return "Verified via PubChem P0 Protocol";
+        if (uiTrace.claims.length === 0) return "Descriptive Response Evaluation";
         return "Synthesized from Knowledge Graph";
     }, [uiTrace]);
+
+    // Detection Rule for Semantic 'No Verification Required'
+    const isNoClaimsDescriptive = useMemo(() => {
+        return uiTrace.claims.length === 0 &&
+            (uiTrace.warnings || []).includes("No claims found in trace");
+    }, [uiTrace]);
+
 
     return (
         <div className="mt-6 border border-neutral-800 rounded-xl overflow-hidden bg-neutral-900/20 backdrop-blur-sm animate-fade-in shadow-2xl text-card-foreground">
@@ -211,6 +222,8 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                 <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-10 bg-neutral-900/40">
                                     {currentClaim ? (
                                         <>
+                                            {/* ... existing tiers rendering ... */}
+                                            {/* (Note: Truncated for diff simplicity, keeping original logic) */}
                                             <div className="space-y-10">
                                                 <section>
                                                     <Tier1Evidence
@@ -260,6 +273,55 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                 </section>
                                             </div>
                                         </>
+                                    ) : isNoClaimsDescriptive ? (
+                                        <div className="col-span-full py-16 flex flex-col items-center text-center animate-in fade-in slide-in-from-bottom-2 duration-700">
+                                            <div className="p-4 rounded-full bg-blue-500/10 border border-blue-500/20 mb-6">
+                                                <Info className="w-8 h-8 text-blue-400/80" />
+                                            </div>
+
+                                            <h4 className="text-lg font-bold text-neutral-100 mb-2">
+                                                No verification required
+                                            </h4>
+
+                                            <p className="text-xs text-neutral-400 max-w-md leading-relaxed mb-10">
+                                                The assistant response contains descriptive or experiential information.
+                                                It does not introduce biochemical, medical, or nutritional claims
+                                                that require evidence validation.
+                                            </p>
+
+                                            <div className="flex flex-wrap justify-center gap-3">
+                                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-800/50 border border-neutral-700/30 text-[10px] font-mono text-neutral-400">
+                                                    <Brain className="w-3 h-3 text-accent/60" />
+                                                    DIRECT SYNTHESIS
+                                                </div>
+                                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-800/50 border border-neutral-700/30 text-[10px] font-mono text-neutral-400">
+                                                    <ZapOff className="w-3 h-3 text-yellow-500/60" />
+                                                    NO EXTERNAL DATA
+                                                </div>
+                                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-800/50 border border-neutral-700/30 text-[10px] font-mono text-neutral-400">
+                                                    <ShieldCheck className="w-3 h-3 text-green-500/60" />
+                                                    NO RISK ANALYSIS TRIGGERED
+                                                </div>
+                                            </div>
+
+                                            {/* Execution Telemetry Summary (for non-expert view) */}
+                                            {!isExpertMode && (
+                                                <div className="mt-12 pt-8 border-t border-neutral-800/50 w-full max-w-xs flex justify-around opacity-40 grayscale">
+                                                    <div className="flex flex-col items-center gap-1">
+                                                        <div className="w-1 h-1 rounded-full bg-blue-500 opacity-50" />
+                                                        <span className="text-[8px] font-mono uppercase tracking-tighter">Streaming Status</span>
+                                                    </div>
+                                                    <div className="flex flex-col items-center gap-1">
+                                                        <div className="w-1 h-1 rounded-full bg-green-500 opacity-50" />
+                                                        <span className="text-[8px] font-mono uppercase tracking-tighter">Validation Stage</span>
+                                                    </div>
+                                                    <div className="flex flex-col items-center gap-1">
+                                                        <div className="w-1 h-1 rounded-full bg-accent opacity-50" />
+                                                        <span className="text-[8px] font-mono uppercase tracking-tighter">Trace Available</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
                                     ) : (
                                         <div className="col-span-full py-20 flex flex-col items-center justify-center gap-4 text-neutral-500">
                                             <Info className="w-8 h-8 opacity-20" />
