@@ -12,14 +12,11 @@ import { renderPermissions } from '../../contracts/renderPermissions';
  * - Explicit Unavailable state.
  */
 const Tier3Causality = React.memo(({ uiTrace, claimIdx, expertMode }) => {
+    const [expanded, setExpanded] = useState(true);
+
     // 1. Permission Gate
-    if (!renderPermissions.canRenderTier3(uiTrace)) {
-        return (
-            <div className="p-4 rounded bg-neutral-900/30 border border-dashed border-neutral-800">
-                <TierBadge tier={3} label="Causality" />
-                <p className="mt-2 text-[10px] text-neutral-600 font-mono">Causality metrics unavailable</p>
-            </div>
-        );
+    if (!renderPermissions.canRenderTier3(uiTrace).allowed) {
+        return null;
     }
 
     const { causality } = uiTrace;
@@ -93,8 +90,8 @@ const Tier3Causality = React.memo(({ uiTrace, claimIdx, expertMode }) => {
                 <div className="flex items-center justify-between">
                     <span className="text-[10px] font-mono text-neutral-500 uppercase">Decision</span>
                     <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${decision === 'ALLOW' ? 'text-green-400 border-green-900 bg-green-900/20' :
-                            decision === 'WITHHOLD' ? 'text-red-400 border-red-900 bg-red-900/20' :
-                                'text-amber-400 border-amber-900 bg-amber-900/20'
+                        decision === 'WITHHOLD' ? 'text-red-400 border-red-900 bg-red-900/20' :
+                            'text-amber-400 border-amber-900 bg-amber-900/20'
                         }`}>
                         {decision}
                     </span>

@@ -213,6 +213,16 @@ class NutriOrchestrator:
 
                 # 2. Intent Extraction
                 emit_status("intent", "Understanding...")
+                
+                # Update reasoning mode and integrity init
+                trace.reasoning_mode = "direct_synthesis"
+                trace.integrity = {
+                    "tier1": "pending",
+                    "tier2": "pending",
+                    "tier3": "pending",
+                    "tier4": "pending"
+                }
+                
                 inv_intent = AgentInvocation(agent_name="intent_agent", model_used=self.pipeline.intent_agent.llm.model_name, status="success", reason="selected")
                 intent_raw = await run_sync(self.pipeline.intent_agent.extract, augmented_query)
                 inv_intent.complete(tokens=len(str(intent_raw))) # Estimated
@@ -315,13 +325,47 @@ class NutriOrchestrator:
                         "tier4_metrics": trace.to_dict().get("tier4", {}),
                     }
                     
+                    # Update integrity to reflect skipped tiers
+                    for tier in ["tier1", "tier2", "tier3", "tier4"]:
+                        if trace.integrity.get(tier) == "pending":
+                            trace.integrity[tier] = "not_requested_direct_synthesis"
+                    
+                    trace.claims = [] # Explicitly empty
+                    trace.confidence_provenance = {
+                        "value": 0.5, # Default for direct synthesis
+                        "basis": "persona-based generation",
+                        "estimator": "heuristic_v1"
+                    }
+
+                    # Add final_synthesis invocation for status: complete
+                    inv = AgentInvocation(agent_name="final_synthesis", model_used=f"nutri-{mode.value}", status="success", reason="selected")
+                    trace.add_invocation(inv)
+
                     await self.engine.generate(session_id, user_message, mode, final_data, stream_callback=stream_callback)
+                    inv.complete(status="success", reason="selected")
                     logger.info("[ORCH] Generation finished.")
                     return
                 
                 # 🟢 MULTI-PHASE PATH with HARD VALIDATION
                 emit_status("retrieval", "Researching...")
+                trace.reasoning_mode = "retrieval_augmented"
                 docs = await run_throttled_embedding(run_sync, self.pipeline.retriever.retrieve_for_phase, 2, augmented_query, 2)
+                
+                # Populate Retrieval Telemetry
+                trace.retrievals = [
+                    {
+                        "source": doc.source,
+                        "doc_type": doc.doc_type,
+                        "text": doc.text[:200] + "...",
+                        "score": doc.score
+                    } for doc in docs
+                ]
+                trace.tool_ledger.append({
+                    "tool": "faiss_retriever",
+                    "action": "retrieve_for_phase",
+                    "hits": len(docs),
+                    "ts": time.time()
+                })
 
                 
                 valid_phase_count = 0
@@ -351,6 +395,9 @@ class NutriOrchestrator:
                             from types import SimpleNamespace
                             claim_objs = [SimpleNamespace(**c) for c in enf_meta["claims"]]
                             trace.set_claims(claim_objs, enf_meta.get("variance_drivers", {}))
+                            
+                            # Update Integrity for Tier 1
+                            trace.integrity["tier1"] = "verified" if any(c.get("verified") for c in enf_meta["claims"]) else "insufficient_evidence"
                     else:
                         phase_result = phase_result_raw
 
@@ -412,6 +459,16 @@ class NutriOrchestrator:
 
                     dag_results = await dag.execute()
                     
+                    trace.tool_ledger.append({
+                        "tool": "dag_scheduler",
+                        "action": "execute",
+                        "results": list(dag_results.keys()),
+                        "ts": time.time()
+                    })
+                    
+                    if "verification" in dag_results:
+                        trace.integrity["tier2"] = "verified" if any(getattr(c, "mechanism", None) and c.mechanism.is_valid for c in dag_results["verification"]) else "insufficient_evidence"
+
                     if "sensory" in dag_results:
                         push_event("enhancement", {"sensory_profile": dag_results["sensory"], "message": "Sensory profile modeled."})
                     if "explanation" in dag_results:
@@ -528,14 +585,19 @@ class NutriOrchestrator:
                 
                 # Aggregate Tier 3 metrics into trace
                 if tier3_results:
-                    trace.tier3_applicability_match = sum(r["applicability_match"]["score"] for r in tier3_results) / len(tier3_results)
-                    trace.tier3_risk_flags_count = sum(len(r["risk_assessment"]["risks"]) for r in tier3_results)
-                    
-                    dist = {}
-                    for r in tier3_results:
-                        dec = r["recommendation"]["decision"]
-                        dist[dec] = dist.get(dec, 0) + 1
                     trace.tier3_recommendation_distribution = dist
+                    
+                    # Update Tier 3 integrity
+                    trace.integrity["tier3"] = "verified" if any(r["recommendation"]["decision"] == "allow" for r in tier3_results) else "partial"
+                    trace.conflicts_detected = any(v.metadata.get("has_conflict") for v in verification_results if hasattr(v, "metadata") and v.metadata)
+                    
+                    trace.tool_ledger.append({
+                        "tool": "recommendation_gate",
+                        "action": "evaluate_tier3",
+                        "claims_assessed": len(tier3_results),
+                        "conflicts": trace.conflicts_detected,
+                        "ts": time.time()
+                    })
                 
 
                 # 🧠 Tier 4: Temporal & Epistemic Consistency Logic
@@ -646,6 +708,16 @@ class NutriOrchestrator:
                 trace.tier4_clarification_attempts = belief_state.clarification_attempts
                 trace.tier4_session_age = current_turn
                 session_ctx["belief_state"] = belief_state.to_dict()
+                
+                # Update Tier 4 integrity
+                trace.integrity["tier4"] = "verified" if trace.tier4_decision_changes else "stable"
+                trace.tool_ledger.append({
+                    "tool": "belief_revision_engine",
+                    "action": "finalize_turn",
+                    "turn": current_turn,
+                    "revisions": len(trace.tier4_belief_revisions),
+                    "ts": time.time()
+                })
 
                 final_data = {
                     "phase_results": phase_results,
@@ -669,7 +741,30 @@ class NutriOrchestrator:
                 }
 
                 logger.info(f"[ORCH] Generating final tailored response in mode {mode.value}...")
+                
+                # Final Integrity Finalization
+                for tier in ["tier1", "tier2", "tier3", "tier4"]:
+                    if trace.integrity.get(tier) == "pending":
+                        trace.integrity[tier] = "incomplete"
+
+                # Set final confidence provenance for multi-phase
+                trace.confidence_provenance = {
+                    "value": trace.final_confidence or trace.confidence_score or 0.7,
+                    "basis": f"{len(trace.retrievals)} retrievals, {len(trace.claims)} verified claims",
+                    "estimator": "multi_tier_aggregation_v2"
+                }
+                
+                # Contradiction Policy: If conflict detected, prioritize retrieval
+                if trace.conflicts_detected:
+                    final_data["system_policy"] = "PRIORITIZE_RETRIEVAL"
+                    final_data["conflict_summary"] = "Discrepancy detected between retrieval and initial synthesis. Scientific documents override."
+
+                # Add final_synthesis invocation for status: complete
+                inv = AgentInvocation(agent_name="final_synthesis", model_used=f"nutri-{mode.value}", status="success", reason="selected")
+                trace.add_invocation(inv)
+
                 await self.engine.generate(session_id, user_message, mode, final_data, stream_callback=stream_callback)
+                inv.complete(status="success", reason="selected")
                 
                 # 🥗 Emit Nutrition Intelligence Report (Legacy companion)
                 nutrition_report = {

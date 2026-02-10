@@ -55,11 +55,19 @@ class AgentExecutionTrace:
     session_id: str
     trace_id: str
     start_ts: float = field(default_factory=time.time)
-    schema_version: int = 1  # Contract version for UI adaptation
+    schema_version: int = 2  # Current Contract: v2
     invocations: List[AgentInvocation] = field(default_factory=list)
     system_audit: Dict[str, Any] = field(default_factory=dict)
     
-    # 📋 Claim-Level Intelligence Fields
+    # 📋 Intelligence Trace Fields (Epistemic Honesty)
+    reasoning_mode: str = "direct_synthesis" # "direct_synthesis" | "retrieval_augmented"
+    integrity: Dict[str, str] = field(default_factory=dict) # tier_id -> "verified" | "partial" | "insufficient_evidence"
+    confidence_provenance: Dict[str, Any] = field(default_factory=dict) # { value, basis, estimator }
+    conflicts_detected: bool = False
+    tool_ledger: List[Dict[str, Any]] = field(default_factory=list) # List of tool calls/results
+    retrievals: List[Dict[str, Any]] = field(default_factory=list) # Document hits
+    
+    # 📝 Claims & Variance (CRITICAL: Must be fields for assertions)
     claims: List[Dict[str, Any]] = field(default_factory=list)
     variance_drivers: Dict[str, float] = field(default_factory=dict)
     
@@ -93,7 +101,8 @@ class AgentExecutionTrace:
 
     def add_invocation(self, invocation: AgentInvocation):
         self.invocations.append(invocation)
-        logger.info(f"[AGENT_TRACE] {invocation.agent_name} | {invocation.status} | {invocation.duration_ms:.2f}ms")
+        dur = invocation.duration_ms if invocation.duration_ms is not None else 0.0
+        logger.info(f"[AGENT_TRACE] {invocation.agent_name} | {invocation.status} | {dur:.2f}ms")
     
     def set_claims(self, claims: List[Any], variance_drivers: Dict[str, float] = None):
         """
@@ -101,12 +110,14 @@ class AgentExecutionTrace:
         """
         self.claims = [
             {
-                "claim_id": c.claim_id,
+                "id": c.claim_id,
+                "text": c.metadata.get("text") if c.metadata else None,
                 "verified": c.verified,
                 "source": c.source,
+                "source_type": getattr(c, "source_type", "model"), # retrieval | model | derived
                 "confidence": c.confidence,
-                "text": c.metadata.get("text") if c.metadata else None,
-                "mechanism": c.mechanism.to_dict() if hasattr(c, "mechanism") and c.mechanism else None
+                "mechanism": c.mechanism.to_dict() if hasattr(c, "mechanism") and c.mechanism else None,
+                "decision": self._map_status_to_decision(getattr(c, "status", "verified"))
             } for c in claims
         ]
         if variance_drivers:
@@ -141,6 +152,15 @@ class AgentExecutionTrace:
         
         logger.info(f"[CLAIM_TRACE] Recorded {len(self.claims)} claims with {len(self.variance_drivers)} drivers")
         logger.info(f"[MOA_METRICS] Coverage: {self.moa_coverage:.1f}%, Broken: {self.broken_step_histogram}, Sources: {self.source_contribution}")
+
+    def _map_status_to_decision(self, status: str) -> str:
+        """verified -> ALLOW, rejected -> WITHHOLD, pending -> REQUIRE_MORE_CONTEXT"""
+        mapping = {
+            "verified": "ALLOW",
+            "rejected": "WITHHOLD",
+            "pending": "REQUIRE_MORE_CONTEXT"
+        }
+        return mapping.get(status, "ALLOW")
     
     def set_pubchem_enforcement(self, enforcement_meta: Dict[str, Any]):
         """
@@ -174,9 +194,26 @@ class AgentExecutionTrace:
 
     def to_dict(self) -> Dict[str, Any]:
         """
-        Convert trace to dictionary, including PubChem proof data.
+        Convert trace to dictionary, ensuring EXACT frontend contract compliance.
         """
         data = asdict(self)
+        
+        # 1. Integrity Transformation
+        raw_integrity = data.get("integrity", {})
+        missing = [k for k, v in raw_integrity.items() if v in ["pending", "incomplete"]]
+        data["integrity"] = {
+            "complete": len(missing) == 0,
+            "missing_segments": missing
+        }
+
+        # 2. Status & Timing
+        is_complete = any(inv.get("agent_name") == "final_synthesis" for inv in data.get("invocations", []))
+        data["status"] = "complete" if is_complete else "streaming"
+        data["duration_ms"] = (time.time() - self.start_ts) * 1000
+
+        # 3. Missing Root Fields
+        data["tier3_risk_flags"] = {}
+        if data.get("moa_coverage") is None: data["moa_coverage"] = 0.0
         
         # Explicit PubChem verification block in root if used
         if self.pubchem_used:

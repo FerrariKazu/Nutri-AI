@@ -16,7 +16,7 @@ const Tier2Mechanism = React.memo(({ trace, claim, expertMode }) => {
     const [expandedStep, setExpandedStep] = useState(null);
 
     // 1. Permission Gate
-    if (!renderPermissions.canRenderTier2({ claims: [claim] })) { // Check specific claim
+    if (!renderPermissions.canRenderTier2({ claims: [claim] }).allowed) { // Check specific claim
         return (
             <div className="space-y-4 opacity-60">
                 <div className="flex items-center gap-2">

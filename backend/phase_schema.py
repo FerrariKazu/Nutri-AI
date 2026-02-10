@@ -36,8 +36,9 @@ PHASE_ORDER = [
 class PhaseSelector:
     """Rules-based phase selection with confidence gates and user adaptation."""
     
-    @staticmethod
+    @classmethod
     def select_phases(
+        cls,
         message: str, 
         mode: ResponseMode, 
         intent: Optional[IntentOutput],
@@ -55,11 +56,17 @@ class PhaseSelector:
         - "What if I change X?" → [PREDICT, MODEL]
         - Simple question → []  # No phases
         """
-        # CONFIDENCE GATE: Silence > wrong structure
-        if intent is None or (hasattr(intent, 'confidence') and intent.confidence < 0.6):
-            return []  # Zero-phase fallback for ambiguous inputs
-        
         msg_lower = message.lower()
+        
+        # SCIENTIFIC DOMAIN: Detect topics like chemistry, nutrition, or compounds
+        # This bypasses the confidence gate to ensure Retrieval-First policy.
+        is_scientific = cls._is_scientific_query(message)
+        
+        # CONFIDENCE GATE: Silence > wrong structure
+        if not is_scientific:
+            if intent is None or (hasattr(intent, 'confidence') and intent.confidence < 0.6):
+                return []  # Zero-phase fallback for ambiguous inputs
+        
         phases = []
         
         # Pattern matching for phase selection
@@ -91,7 +98,8 @@ class PhaseSelector:
             phases = [ThinkingPhase.DIAGNOSE, ThinkingPhase.RECOMMEND]
         elif is_predictive:
             phases = [ThinkingPhase.PREDICT, ThinkingPhase.MODEL]
-        elif is_why_question:
+        elif is_why_question or is_scientific:
+            # Force MODEL for scientific queries to ensure retrieval/analysis
             phases = [ThinkingPhase.MODEL]
         elif is_diagnostic and not is_procedural:
             phases = [ThinkingPhase.DIAGNOSE]
@@ -179,6 +187,19 @@ class PhaseSelector:
         """Detects explicit 'why' questions."""
         return any(phrase in message.lower() for phrase in ["why does", "why is", "how come", "what causes"])
     
+    @staticmethod
+    def _is_scientific_query(message: str) -> bool:
+        """Detects queries about chemistry, nutrition, or biology."""
+        scientific_keywords = [
+            "chemistry", "molecule", "compound", "protein", "enzyme", 
+            "reaction", "nutrient", "vitamin", "mineral", "biological",
+            "cellular", "molecular", "synthesis", "extract", "ingredient",
+            "explain", "how does", "what is the mechanism", "capsaicin",
+            "metabolism", "digestion", "absorption"
+        ]
+        msg_lower = message.lower()
+        return any(kw in msg_lower for kw in scientific_keywords)
+
     @staticmethod
     def validate_phase_content(phase: ThinkingPhase, content: str) -> bool:
         """

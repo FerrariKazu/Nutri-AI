@@ -16,8 +16,13 @@ export const renderPermissions = {
      * Req: Claims exist and are array.
      */
     canRenderTier1: (trace) => {
-        if (!trace || !trace.claims) return false;
-        return Array.isArray(trace.claims) && trace.claims.length > 0;
+        const reasons = [];
+        if (!trace) { reasons.push("Trace missing"); return { allowed: false, reasons }; }
+        if (!trace.claims || !Array.isArray(trace.claims) || trace.claims.length === 0) {
+            reasons.push("No verification claims found");
+            return { allowed: false, reasons };
+        }
+        return { allowed: true, reasons };
     },
 
     /**
@@ -25,12 +30,17 @@ export const renderPermissions = {
      * Req: At least one claim has a non-empty mechanism.
      */
     canRenderTier2: (trace) => {
-        if (!trace || !trace.claims) return false;
-        return trace.claims.some(c =>
+        const reasons = [];
+        if (!trace || !trace.claims) { reasons.push("No claims"); return { allowed: false, reasons }; }
+
+        const hasMechanism = trace.claims.some(c =>
             c.mechanism &&
             Array.isArray(c.mechanism.steps) &&
             c.mechanism.steps.length > 0
         );
+
+        if (!hasMechanism) reasons.push("No mechanism steps found in any claim");
+        return { allowed: hasMechanism, reasons };
     },
 
     /**
@@ -38,18 +48,17 @@ export const renderPermissions = {
      * Req: Causality metrics exist.
      */
     canRenderTier3: (trace) => {
-        // We render Tier 3 container always if trace exists, but inner content depends on data.
-        // This gate is for specific sub-sections or the whole card if we want to collapse empty tier 3.
-        if (!trace) return false;
+        const reasons = [];
+        if (!trace) { reasons.push("Trace missing"); return { allowed: false, reasons }; }
 
-        // If all Tier 3 metrics are missing/zero/null, maybe we shouldn't render?
-        // But Tier 3 includes risk flags. 
-        // Let's check for existence of keys.
-        return (
+        const hasMetrics = (
             trace.tier3_risk_flags_count !== undefined ||
             trace.tier3_applicability_match !== undefined ||
             (trace.tier3_missing_context_fields && trace.tier3_missing_context_fields.length > 0)
         );
+
+        if (!hasMetrics) reasons.push("No causality metrics available");
+        return { allowed: hasMetrics, reasons };
     },
 
     /**
@@ -57,10 +66,15 @@ export const renderPermissions = {
      * Req: Temporal fields exist.
      */
     canRenderTier4: (trace) => {
-        if (!trace) return false;
-        return (
+        const reasons = [];
+        if (!trace) { reasons.push("Trace missing"); return { allowed: false, reasons }; }
+
+        const hasTemporal = (
             trace.tier4_session_age !== undefined ||
             trace.tier4_decision_changes !== undefined
         );
+
+        if (!hasTemporal) reasons.push("No temporal data available");
+        return { allowed: hasTemporal, reasons };
     }
 };

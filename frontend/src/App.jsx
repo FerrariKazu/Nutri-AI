@@ -53,8 +53,9 @@ function App() {
                     targetSid = list[0].session_id;
                     localStorage.setItem('nutri_session_id', targetSid);
                 } else if (!targetSid) {
-                    // Create new if truly nothing
-                    targetSid = await createNewSession();
+                    // Lazy Load: Do NOT create session yet.
+                    targetSid = null;
+                    clearSession();
                 }
 
                 setSessionId(targetSid);
@@ -117,14 +118,13 @@ function App() {
     const handleNewChat = async () => {
         if (streamStatus === 'STREAMING') return;
 
-        const newSid = await createNewSession();
-        setSessionId(newSid);
+        // Lazy: Just clear state
+        clearSession();
+        setSessionId(null);
+        setMessages([]);
+        setTurnCount(0);
+        setMemoryScope('new');
 
-        // Optimistic update of list (will be empty/new entry)
-        const newConv = { session_id: newSid, title: 'New Conversation', last_active: new Date().toISOString(), preview: 'Ready to start' };
-        setConversations(prev => [newConv, ...prev]);
-
-        await hydrateSession(newSid);
         setIsSidebarOpen(false);
     };
 
@@ -135,6 +135,23 @@ function App() {
     };
 
     const handleSend = async (query) => {
+        // JIT Session Creation
+        let currentSid = sessionId;
+        if (!currentSid) {
+            // Generate client-side ID immediately
+            currentSid = getSessionId(); // This updates localStorage
+            setSessionId(currentSid);
+
+            // Add to list optimistically
+            const newConv = {
+                session_id: currentSid,
+                title: query.slice(0, 30) + (query.length > 30 ? '...' : ''),
+                last_active: new Date().toISOString(),
+                preview: 'Just now'
+            };
+            setConversations(prev => [newConv, ...prev]);
+        }
+
         // Circuit Breaker: Force-stop any existing stream
         if (abortRef.current) {
             console.warn('[CIRCUIT BREAKER] Aborting previous stream.');

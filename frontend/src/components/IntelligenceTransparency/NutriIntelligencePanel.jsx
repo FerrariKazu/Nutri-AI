@@ -221,7 +221,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                     />
                                                 </section>
 
-                                                {renderPermissions.canRenderTier2({ claims: [currentClaim] }) && (
+                                                {renderPermissions.canRenderTier2({ claims: [currentClaim] }).allowed && (
                                                     <section className="pt-10 border-t border-neutral-800/50">
                                                         <Tier2Mechanism
                                                             trace={uiTrace}
@@ -241,7 +241,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                     />
                                                 </section>
 
-                                                {renderPermissions.canRenderTier4(uiTrace) && (
+                                                {renderPermissions.canRenderTier4(uiTrace).allowed && (
                                                     <section className="pt-10 border-t border-neutral-800/50">
                                                         <Tier4Temporal
                                                             uiTrace={uiTrace}

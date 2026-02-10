@@ -11,10 +11,10 @@ import { renderPermissions } from '../../contracts/renderPermissions';
  * - Raw Enums only (STABLE, UPGRADE, etc.).
  */
 const Tier4Temporal = React.memo(({ uiTrace, claimIdx, expertMode }) => {
+    const [expanded, setExpanded] = useState(true);
+
     // 1. Permission Gate
-    if (!renderPermissions.canRenderTier4(uiTrace)) {
-        return null; // Collapse completely if no temporal data
-    }
+    if (!renderPermissions.canRenderTier4(uiTrace).allowed) return null; // Collapse completely if no temporal data
 
     const { temporal } = uiTrace;
     const currentClaim = uiTrace.claims[claimIdx] || uiTrace.claims[0];

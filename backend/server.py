@@ -66,14 +66,35 @@ class ChatRequest(BaseModel):
     execution_mode: Optional[str] = None
 
 
+def get_current_user(request: Request) -> str:
+    """
+    Extracts strict user identity from headers.
+    In a real app, this would verify a JWT.
+    Here, we trust the client-generated UUID per the low-friction auth goal.
+    Fallback to query param 'x_user_id' for EventSource (which can't set headers).
+    """
+    user_id = request.headers.get("X-User-Id") or request.query_params.get("x_user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Missing X-User-Id header or param")
+    return user_id
+
 @app.get("/api/conversation")
 async def get_conversation(request: Request, session_id: Optional[str] = Query(None)):
     """
     Returns the canonical conversation history and state for hydration.
     """
-    logger.debug(f"GET /api/conversation?session_id={session_id}")
+    user_id = get_current_user(request)
+    logger.debug(f"GET /api/conversation?session_id={session_id} [user={user_id}]")
+    
     if not session_id:
         return JSONResponse({"messages": [], "status": "new_session"})
+        
+    # Security Gate
+    if not memory_store.check_ownership(session_id, user_id):
+        # Fallback: Check if session exists at all? 
+        # For now, uniform 403 to prevent enumeration
+        raise HTTPException(status_code=403, detail="Access denied or session not found")
+
     try:
         data = memory_store.get_conversation(session_id)
         return JSONResponse(data)
@@ -84,10 +105,12 @@ async def get_conversation(request: Request, session_id: Optional[str] = Query(N
 @app.get("/api/conversations")
 async def list_conversations(request: Request):
     """
-    List all available conversation sessions.
+    List all available conversation sessions for the authenticated user.
     """
+    user_id = get_current_user(request)
     try:
-        data = memory_store.list_sessions()
+        # 🔒 Filter by user_id
+        data = memory_store.list_sessions(user_id=user_id)
         return JSONResponse({"conversations": data})
     except Exception as e:
         logger.error(f"Failed to list sessions: {e}")
@@ -96,11 +119,17 @@ async def list_conversations(request: Request):
 @app.post("/api/conversation")
 async def create_conversation(request: Request):
     """
-    Explicitly create a new session ID.
+    Explicitly create a new session ID bound to the user.
     """
+    user_id = get_current_user(request)
     new_id = f"sess_{uuid.uuid4().hex[:12]}_{int(uuid.uuid1().time)}"
+    
     # Pre-warm the session in DB
     memory_store._update_activity(new_id)
+    # 🔒 Bind to user immediately
+    memory_store.set_user_id(new_id, user_id)
+    
+    logger.info(f"Created session {new_id} for user {user_id}")
     
     return JSONResponse({"session_id": new_id, "status": "created"})
 
@@ -117,8 +146,18 @@ async def chat_stream(
     """
     GET-based SSE endpoint for EventSource compatibility. Eliminates preflight.
     """
+    user_id = get_current_user(request)
+    
     if not session_id:
+        # If no session provided for stream, we can't really "create" one easily in GET SSE 
+        # without client knowing the ID. 
+        # Contract says: Client must have created session or provides one.
         raise HTTPException(status_code=400, detail="session_id is required")
+
+    # Security Gate & Lazy Creation
+    if not memory_store.ensure_session(session_id, user_id):
+        logger.warning(f"Access violation: User {user_id} tried to access {session_id}")
+        raise HTTPException(status_code=403, detail="Access denied")
         
     pref_dict = {
         "audience_mode": audience_mode,
@@ -131,8 +170,14 @@ async def chat_stream(
 @app.post("/api/chat")
 async def chat_post(request: Request, payload: ChatRequest):
     """Standard POST endpoint for rich payloads"""
+    user_id = get_current_user(request)
+    
     if not payload.session_id:
         raise HTTPException(status_code=400, detail="session_id is required")
+
+    # Security Gate & Lazy Creation
+    if not memory_store.ensure_session(payload.session_id, user_id):
+        raise HTTPException(status_code=403, detail="Access denied")
         
     pref_dict = payload.preferences.dict() if payload.preferences else {}
     return await handle_chat_execution(

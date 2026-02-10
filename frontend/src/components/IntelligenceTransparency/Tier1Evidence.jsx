@@ -13,13 +13,7 @@ import { renderPermissions } from '../../contracts/renderPermissions';
  */
 const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
     // 1. Permission Gate
-    if (!renderPermissions.canRenderTier1(trace)) {
-        return (
-            <div className="p-4 border border-dashed border-neutral-800 rounded bg-neutral-900/50">
-                <p className="text-[10px] font-mono text-neutral-500 uppercase">Evidence Data Unavailable</p>
-            </div>
-        );
-    }
+    if (!renderPermissions.canRenderTier1(trace).allowed) { return null; }
 
     // 2. Strict Data Access
     const strength = claim.confidence > 0.8 ? 'strong' : claim.confidence > 0.4 ? 'moderate' : 'weak';

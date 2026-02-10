@@ -171,13 +171,13 @@ class SessionMemoryStore:
             )
             conn.commit()
 
-    def list_sessions(self) -> List[Dict[str, Any]]:
-        """Returns all sessions ordered by last_active DESC."""
+    def list_sessions(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Returns sessions for a specific user, ordered by last_active DESC."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             
-            cursor.execute("""
+            query = """
                 SELECT s.session_id, s.title, s.last_active_at, m.content as last_message, s.response_mode
                 FROM sessions s
                 LEFT JOIN messages m ON m.id = (
@@ -185,8 +185,17 @@ class SessionMemoryStore:
                     WHERE session_id = s.session_id 
                     ORDER BY id DESC LIMIT 1
                 )
-                ORDER BY s.last_active_at DESC
-            """)
+                WHERE 1=1
+            """
+            params = []
+            
+            if user_id:
+                query += " AND s.user_id = ?"
+                params.append(user_id)
+            
+            query += " ORDER BY s.last_active_at DESC"
+            
+            cursor.execute(query, tuple(params))
             
             rows = cursor.fetchall()
             return [
@@ -199,6 +208,53 @@ class SessionMemoryStore:
                 }
                 for row in rows
             ]
+
+    def check_ownership(self, session_id: str, user_id: str) -> bool:
+        """Verifies that a session belongs to the given user."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT user_id FROM sessions WHERE session_id = ?", (session_id,))
+            row = cursor.fetchone()
+            if not row:
+                return False # Session doesn't exist
+            
+            owner = row[0]
+            if not owner:
+                # unclaimed session policy: if it has no user_id, it is NOT accessible by strict auth users
+                return False
+                
+            return owner == user_id
+
+    def ensure_session(self, session_id: str, user_id: str) -> bool:
+        """
+        Ensures a session exists and belongs to the user.
+        - If missing: Creates it and binds to user.
+        - If exists: Checks ownership.
+        Returns True if accessible, False (or raises) if access denied.
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT user_id FROM sessions WHERE session_id = ?", (session_id,))
+            row = cursor.fetchone()
+            
+            if row:
+                # Exists - Check Owner
+                owner = row[0]
+                if not owner:
+                    # Claim it? Or deny?
+                    # Policy: Once created without user, it stays implicit?
+                    # For now: Deny access to unclaimed sessions from strict auth
+                    return False
+                return owner == user_id
+            else:
+                # Missing - Create and Claim
+                now = datetime.utcnow().isoformat()
+                cursor.execute("""
+                    INSERT INTO sessions (session_id, title, created_at, last_active_at, user_id)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (session_id, "New Conversation", now, now, user_id))
+                conn.commit()
+                return True
 
     def get_history(self, session_id: str, limit: int = 15) -> List[Dict[str, str]]:
         """Retrieves the most recent messages for a session."""

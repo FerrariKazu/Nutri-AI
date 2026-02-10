@@ -47,10 +47,23 @@ export const validateTrace = (trace, isDevMode = false) => {
     }
 
     const isValid = errors.length === 0;
+    const warnings = [];
 
-    if (isDevMode && !isValid) {
-        console.error(`${LOG_PREFIX} Validation Failed:`, errors);
+    // 5. Warning Checks
+    if (isValid && (!trace.claims || trace.claims.length === 0)) {
+        warnings.push("No claims found in trace");
     }
 
-    return { valid: isValid, errors };
+    // Determine Status
+    let status = 'valid';
+    if (!isValid) status = 'invalid';
+    else if (trace.status === 'streaming') status = 'streaming';
+    else if (warnings.length > 0) status = 'partial';
+
+    if (isDevMode) {
+        if (!isValid) console.error(`${LOG_PREFIX} Validation Failed:`, errors);
+        if (warnings.length > 0) console.warn(`${LOG_PREFIX} Validation Warnings:`, warnings);
+    }
+
+    return { valid: isValid, status, errors, warnings };
 };

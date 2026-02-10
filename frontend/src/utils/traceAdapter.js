@@ -25,12 +25,13 @@ const strictVal = (val) => (val !== undefined && val !== null) ? val : null;
  */
 const adaptStrict = (rawTrace) => {
     // 1. Validate
-    const { valid, errors } = validateTrace(rawTrace, import.meta.env.DEV); // Log warnings in DEV
+    const { valid, status: validationStatus, errors, warnings } = validateTrace(rawTrace, import.meta.env.DEV);
 
     if (!valid && !rawTrace.claims) {
-        // If critical structure is missing, return null to prevent crashes
-        console.error("Trace Adapter: Trace rejected due to critical schema violation", errors);
-        return null;
+        // Log critical failure but ATTEMPT to render what we have (Continuity Principle)
+        console.error("Trace Adapter: Trace rejected due to critical schema violation, but proceeding with empty claims.", errors);
+        // Do NOT return null. Proceed to normalization.
+        rawTrace.claims = []; // Ensure safe array
     }
 
     // 2. Map Claims (1:1)
@@ -61,7 +62,9 @@ const adaptStrict = (rawTrace) => {
     return {
         id: strictVal(rawTrace.trace_id),
         sessionId: strictVal(rawTrace.session_id),
-        status: rawTrace.status || (rawTrace.is_final ? 'complete' : 'streaming'), // Backward compat for status if needed, or strict. Let's rely on new backend sending status, but fallback to is_final logic safely.
+        status: rawTrace.status || (rawTrace.is_final ? 'complete' : 'streaming'),
+        validationStatus,
+        warnings,
 
         schema_version: strictVal(rawTrace.schema_version),
 

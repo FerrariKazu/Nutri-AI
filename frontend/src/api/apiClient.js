@@ -4,6 +4,8 @@
  * Handles all networking, streaming, errors, retries
  */
 
+import { getUserId } from '../utils/memoryManager';
+
 // ============================================================================ 
 // CONFIGURATION
 // ============================================================================ 
@@ -271,6 +273,7 @@ export async function sendPrompt(prompt, mode = 'standard', signal = null) {
                     'Content-Type': 'application/json',
                     'ngrok-skip-browser-warning': 'true',
                     'Bypass-Tunnel-Reminder': 'true',
+                    'X-User-Id': getUserId(),
                 },
                 body: JSON.stringify({
                     message: prompt,
@@ -437,6 +440,7 @@ export function streamPrompt(
                 method: 'GET',
                 headers: {
                     'ngrok-skip-browser-warning': 'true',
+                    'X-User-Id': getUserId(),
                 },
                 signal: combinedSignal,
             });
@@ -563,7 +567,10 @@ export async function getConversationsList() {
     try {
         const baseURL = await getBackendURL();
         const response = await fetch(`${baseURL}/api/conversations`, {
-            headers: { 'ngrok-skip-browser-warning': 'true' }
+            headers: {
+                'ngrok-skip-browser-warning': 'true',
+                'X-User-Id': getUserId(),
+            }
         });
 
         if (!response.ok) throw new Error(`Failed to fetch list: ${response.status}`);
@@ -583,7 +590,10 @@ export async function createNewSession() {
         const baseURL = await getBackendURL();
         const response = await fetch(`${baseURL}/api/conversation`, {
             method: 'POST',
-            headers: { 'ngrok-skip-browser-warning': 'true' }
+            headers: {
+                'ngrok-skip-browser-warning': 'true',
+                'X-User-Id': getUserId(),
+            }
         });
 
         if (!response.ok) throw new Error('Creation failed');
@@ -610,7 +620,10 @@ export async function getConversation(sessionId) {
     try {
         const baseURL = await getBackendURL();
         const response = await fetch(`${baseURL}/api/conversation?session_id=${sessionId}`, {
-            headers: { 'ngrok-skip-browser-warning': 'true' }
+            headers: {
+                'ngrok-skip-browser-warning': 'true',
+                'X-User-Id': getUserId(),
+            }
         });
 
         if (!response.ok) {
@@ -701,7 +714,8 @@ export function streamNutriChat(
                 execution_mode: preferences.execution_mode || '',
                 audience_mode: preferences.audience_mode || 'scientific',
                 optimization_goal: preferences.optimization_goal || 'comfort',
-                verbosity: preferences.verbosity || 'medium'
+                verbosity: preferences.verbosity || 'medium',
+                x_user_id: getUserId() // Fallback passed as query param for EventSource
             });
 
             const url = `${baseURL}/api/chat/stream?${params.toString()}`;

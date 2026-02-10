@@ -1,0 +1,7 @@
+tunnel: 39b45e5b-ddda-4560-a59c-f958e7d5c057
+credentials-file: /home/ferrarikazu/nutri-ai/cloudflared/39b45e5b-ddda-4560-a59c-f958e7d5c057.json
+
+ingress:
+  - hostname: chatdps.dpdns.org
+    service: http://127.0.0.1:8000
+  - service: http_status:404
