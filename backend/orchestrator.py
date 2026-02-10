@@ -148,7 +148,13 @@ class NutriOrchestrator:
             )
 
 
+
+        # Context accumulator for intelligence mandate
+        full_response_text = []
+
         def stream_callback(token: str):
+            # Capture for mandate verification
+            full_response_text.append(token)
             # This is called from the executor thread
             push_event("token", token)
 
@@ -804,6 +810,75 @@ class NutriOrchestrator:
 
                 await self.engine.generate(session_id, user_message, mode, final_data, stream_callback=stream_callback)
                 inv.complete(status="success", reason="selected")
+
+                # 🛡️ MANDATORY INTELLIGENCE ENFORCEMENT V2 🛡️
+                # Strategy: TEXT → ALWAYS EXTRACT → STRUCTURE
+                if trace.trace_required:
+                    final_text = "".join(full_response_text)
+                    logger.info(f"[MANDATE] Trace required. Claims before extraction: {len(trace.claims)}")
+                    
+                    # 1. Always run extraction
+                    try:
+                        extracted_claims = await self.pipeline.engine.extract_claims_fallback(final_text)
+                        
+                        if extracted_claims:
+                            logger.info(f"[MANDATE] Extracted {len(extracted_claims)} new claims from text.")
+                            
+                            # 2. Merge/Set Claims
+                            # Convert to objects for consistency
+                            from types import SimpleNamespace
+                            # extract_claims_fallback returns dicts
+                            new_claim_objs = [SimpleNamespace(**c) for c in extracted_claims]
+                            
+                            # We overwrite with extracted claims because native pipeline is unreliable (claims=0 issue)
+                            # Ideally we would merge, but for now, extraction is the source of truth for the FINAL text.
+                            trace.set_claims(new_claim_objs, {})
+                            logger.info(f"[MANDATE] Final claim count: {len(trace.claims)}")
+                            
+                        else:
+                            logger.warning("[MANDATE] Extraction returned 0 claims.")
+                            
+                    except Exception as e:
+                         logger.error(f"[MANDATE] Extraction failed: {e}")
+
+                    # 3. Critical Guard
+                    if len(trace.claims) == 0:
+                        trace.validation_status = "invalid"
+                        logger.critical("[MANDATE] CRITICAL FAILURE: Scientific content without claims. Marked INVALID.")
+
+                # 🛡️ MANDATORY INTELLIGENCE ENFORCEMENT V2 🛡️
+                # Strategy: TEXT → ALWAYS EXTRACT → STRUCTURE
+                if trace.trace_required:
+                    final_text = "".join(full_response_text)
+                    logger.info(f"[MANDATE] Trace required. Claims before extraction: {len(trace.claims)}")
+                    
+                    # 1. Always run extraction
+                    try:
+                        extracted_claims = await self.pipeline.engine.extract_claims_fallback(final_text)
+                        
+                        if extracted_claims:
+                            logger.info(f"[MANDATE] Extracted {len(extracted_claims)} new claims from text.")
+                            
+                            # 2. Merge/Set Claims
+                            # Convert to objects for consistency
+                            from types import SimpleNamespace
+                            new_claim_objs = [SimpleNamespace(**c) for c in extracted_claims]
+                            
+                            # We overwrite with extracted claims because native pipeline is unreliable (claims=0 issue)
+                            # Ideally we would merge, but for now, extraction is the source of truth for the FINAL text.
+                            trace.set_claims(new_claim_objs, {})
+                            logger.info(f"[MANDATE] Final claim count: {len(trace.claims)}")
+                            
+                        else:
+                            logger.warning("[MANDATE] Extraction returned 0 claims.")
+                            
+                    except Exception as e:
+                         logger.error(f"[MANDATE] Extraction failed: {e}")
+
+                    # 3. Critical Guard
+                    if len(trace.claims) == 0:
+                        trace.validation_status = "invalid"
+                        logger.critical("[MANDATE] CRITICAL FAILURE: Scientific content without claims. Marked INVALID.")
                 
                 # 🥗 Emit Nutrition Intelligence Report (Legacy companion)
                 nutrition_report = {
