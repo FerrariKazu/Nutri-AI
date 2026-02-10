@@ -83,7 +83,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
     // if (!uiTrace) return null; // [MANDATE] Never silently empty.
 
     // Safety: Ensure selected index is valid
-    const currentClaim = uiTrace.claims && uiTrace.claims.length > 0
+    const currentClaim = uiTrace?.claims && uiTrace.claims.length > 0
         ? (uiTrace.claims[selectedClaimIdx] || uiTrace.claims[0])
         : null;
 
@@ -129,10 +129,10 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                 {uiTrace && (
                     <div className="flex items-center gap-3">
                         <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold font-mono border ${['STREAMING', 'ENRICHING', 'INIT'].includes(uiTrace.status)
-                                ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
-                                : uiTrace.status === 'COMPLETE' || uiTrace.status === 'VERIFIED'
-                                    ? 'text-green-400 border-green-500/20 bg-green-500/10'
-                                    : 'text-neutral-500 border-neutral-700/50 bg-neutral-800'
+                            ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
+                            : uiTrace.status === 'COMPLETE' || uiTrace.status === 'VERIFIED'
+                                ? 'text-green-400 border-green-500/20 bg-green-500/10'
+                                : 'text-neutral-500 border-neutral-700/50 bg-neutral-800'
                             }`}>
                             {uiTrace.status ? uiTrace.status.toUpperCase() : 'UNKNOWN'}
                         </span>
@@ -212,10 +212,17 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                             <div className="p-4 bg-neutral-950 font-mono text-[10px] text-green-400 overflow-auto max-h-[500px]">
                                 <pre>{JSON.stringify(uiTrace, null, 2)}</pre>
                             </div>
+                        ) : !uiTrace ? (
+                            <div className="p-16 flex flex-col items-center text-center opacity-40">
+                                <ZapOff className="w-8 h-8 text-neutral-600 mb-4" />
+                                <p className="text-xs font-mono uppercase tracking-widest text-neutral-500">
+                                    No Execution Trace Recorded
+                                </p>
+                            </div>
                         ) : (
                             <>
                                 {/* Claim Selector */}
-                                {uiTrace.claims.length > 1 && (
+                                {uiTrace?.claims?.length > 1 && (
                                     <div className="px-4 py-2 flex items-center gap-2 border-b border-neutral-800 bg-neutral-900/10 overflow-x-auto scrollbar-none">
                                         <MessageSquare className="w-3 h-3 text-neutral-700 shrink-0 mr-1" />
                                         {uiTrace.claims.map((claim, idx) => (
@@ -409,7 +416,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                 </span>
                             </div>
                             <span className="text-[9px] font-mono text-neutral-700">
-                                Schema v{uiTrace.schema_version || '1.0'}
+                                Schema v{uiTrace?.schema_version || '1.0'}
                             </span>
                         </div>
                     </motion.div>
