@@ -35,7 +35,9 @@ MODEL_REGISTRY: Dict[str, ModelSpec] = {
             "variant_selector",
             "explainer_agent",
             "counterfactual_agent",
-            "interactive_explainer"
+            "interactive_explainer",
+            "claim_verifier",
+            "claim_extractor"
         ]
     )
 }

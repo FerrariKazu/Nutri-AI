@@ -704,7 +704,7 @@ class FoodSynthesisEngine:
         """
         
         try:
-            raw_response = self.llm.execute(prompt)
+            raw_response = self.llm.generate_text(prompt, max_tokens=1024, temperature=0.0)
             # Use claim_parser helper to ensure clean list
             return self.claim_parser.parse_from_text(raw_response)
         except Exception as e:
