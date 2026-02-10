@@ -23,6 +23,7 @@ import Tier2Mechanism from './Tier2Mechanism';
 import Tier3Causality from './Tier3Causality';
 import Tier4Temporal from './Tier4Temporal';
 import ConfidenceTracker from './ConfidenceTracker';
+import PerceptionMapper from './PerceptionMapper';
 import { Tooltip, getConfidenceNarrative } from './UIUtils';
 import { renderPermissions } from '../../contracts/renderPermissions';
 
@@ -89,17 +90,20 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
     const isStreaming = uiTrace.status === 'streaming';
     const isComplete = uiTrace.status === 'complete';
 
-    // Integrity Message - NO FLUFF
+    // Integrity Message - Premium Narrative
     const integrityMessage = useMemo(() => {
-        if (uiTrace.metrics.pubchemUsed) return "Verified via PubChem P0 Protocol";
-        if (uiTrace.claims.length === 0) return "Descriptive Response Evaluation";
+        if (uiTrace.validation_status === 'invalid' && uiTrace.trace_required) {
+            return "⚠ Mandatory Intelligence Missing";
+        }
+        if (uiTrace.metrics?.pubchemUsed) return "Verified via PubChem P0 Protocol";
+        if (uiTrace.claims?.some(c => c.origin === 'extracted')) return "Scientific Structuring Complete";
+        if (uiTrace.claims?.length === 0 && !uiTrace.trace_required) return "Descriptive Balance Analysis";
         return "Synthesized from Knowledge Graph";
     }, [uiTrace]);
 
-    // Detection Rule for Semantic 'No Verification Required'
-    const isNoClaimsDescriptive = useMemo(() => {
-        return uiTrace.claims.length === 0 &&
-            (uiTrace.warnings || []).includes("No claims found in trace");
+    // Mandate Check
+    const isMandateFailure = useMemo(() => {
+        return uiTrace.trace_required && uiTrace.claims?.length === 0;
     }, [uiTrace]);
 
 
@@ -207,14 +211,33 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                             <button
                                                 key={claim.id || idx}
                                                 onClick={() => handleClaimSelect(idx)}
-                                                className={`shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-300 ${selectedClaimIdx === idx
-                                                    ? 'bg-neutral-200 text-neutral-950'
+                                                className={`shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-300 flex items-center gap-2 ${selectedClaimIdx === idx
+                                                    ? 'bg-neutral-200 text-neutral-950 shadow-lg scale-105'
                                                     : 'text-neutral-500 hover:text-neutral-300 bg-neutral-800/40'
                                                     }`}
                                             >
                                                 CLAIM {idx + 1}
+                                                {claim.origin === 'extracted' && <FileSearch className="w-2.5 h-2.5 opacity-50" />}
+                                                {claim.origin === 'enriched' && <DatabaseZap className="w-2.5 h-2.5 opacity-50" />}
                                             </button>
                                         ))}
+                                    </div>
+                                )}
+
+                                {/* Coverage & Saturation Metric (New) */}
+                                {uiTrace.coverage_metrics?.mechanisms?.length > 0 && (
+                                    <div className="px-5 py-2.5 bg-accent/5 border-b border-neutral-800/50 flex items-center gap-4">
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <Cpu className="w-3 h-3 text-accent" />
+                                            <span className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Mechanisms Covered:</span>
+                                        </div>
+                                        <div className="flex gap-2 overflow-x-auto scrollbar-none">
+                                            {uiTrace.coverage_metrics.mechanisms.map((m, i) => (
+                                                <span key={i} className="text-[9px] font-mono text-accent/80 bg-accent/10 px-2 py-0.5 rounded border border-accent/20">
+                                                    {m.toUpperCase()}
+                                                </span>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
 
@@ -222,8 +245,6 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                 <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-10 bg-neutral-900/40">
                                     {currentClaim ? (
                                         <>
-                                            {/* ... existing tiers rendering ... */}
-                                            {/* (Note: Truncated for diff simplicity, keeping original logic) */}
                                             <div className="space-y-10">
                                                 <section>
                                                     <Tier1Evidence
@@ -241,6 +262,13 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                             claim={currentClaim}
                                                             expertMode={isExpertMode}
                                                         />
+                                                    </section>
+                                                )}
+
+                                                {/* Tier 2.5: Perception Mapping */}
+                                                {(currentClaim.receptors?.length > 0 || currentClaim.sensory_outcomes?.length > 0) && (
+                                                    <section className="pt-10 border-t border-neutral-800/50">
+                                                        <PerceptionMapper claim={currentClaim} />
                                                     </section>
                                                 )}
                                             </div>
@@ -271,65 +299,85 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                         expertMode={isExpertMode}
                                                     />
                                                 </section>
+
+                                                {/* Origin & Verification Level Badges */}
+                                                <div className="pt-8 flex flex-wrap gap-3">
+                                                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-mono uppercase tracking-tight
+                                                        ${currentClaim.origin === 'extracted' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                                                            currentClaim.origin === 'enriched' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                                                'bg-neutral-800/50 text-neutral-400 border-neutral-700/30'}`}>
+                                                        {currentClaim.origin === 'extracted' && <FileSearch className="w-3 h-3" />}
+                                                        {currentClaim.origin === 'enriched' && <DatabaseZap className="w-3 h-3" />}
+                                                        {currentClaim.origin === 'model' && <Brain className="w-3 h-3" />}
+                                                        Origin: {currentClaim.origin || 'model'}
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-800/50 border border-neutral-700/30 text-[10px] font-mono text-neutral-400">
+                                                        <ShieldCheck className="w-3 h-3 text-green-500/60" />
+                                                        Level: {currentClaim.verification_level || 'theoretical'}
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-800/50 border border-neutral-700/30 text-[10px] font-mono text-neutral-400">
+                                                        <Activity className="w-3 h-3 text-purple-500/60" />
+                                                        Domain: {currentClaim.domain || 'biological'}
+                                                    </div>
+
+                                                    {isExpertMode && (
+                                                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-800/50 border border-neutral-700/30 text-[10px] font-mono text-neutral-400">
+                                                            <Activity className="w-3 h-3 text-blue-500/60" />
+                                                            Priority: {Math.round((currentClaim.importance_score || 0) * 100)}%
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {currentClaim.origin === 'extracted' && (
+                                                    <div className="mt-4 p-3 rounded-lg bg-amber-500/5 border border-amber-500/10 flex items-start gap-3">
+                                                        <AlertTriangle className="w-4 h-4 text-amber-500/60 shrink-0 mt-0.5" />
+                                                        <p className="text-[10px] text-amber-200/50 leading-relaxed italic">
+                                                            Generated via post-response scientific structuring. This insight was extracted from the model's textual output to satisfy the Intelligence Mandate.
+                                                        </p>
+                                                    </div>
+                                                )}
                                             </div>
                                         </>
-                                    ) : isNoClaimsDescriptive ? (
+                                    ) : isMandateFailure ? (
                                         <div className="col-span-full py-16 flex flex-col items-center text-center animate-in fade-in slide-in-from-bottom-2 duration-700">
-                                            <div className="p-4 rounded-full bg-blue-500/10 border border-blue-500/20 mb-6">
-                                                <Info className="w-8 h-8 text-blue-400/80" />
+                                            <div className="p-4 rounded-full bg-red-500/10 border border-red-500/20 mb-6">
+                                                <AlertTriangle className="w-8 h-8 text-red-400/80" />
                                             </div>
 
                                             <h4 className="text-lg font-bold text-neutral-100 mb-2">
-                                                No verification required
+                                                Intelligence Mandate Failure
                                             </h4>
 
-                                            <p className="text-xs text-neutral-400 max-w-md leading-relaxed mb-10">
-                                                The assistant response contains descriptive or experiential information.
-                                                It does not introduce biochemical, medical, or nutritional claims
-                                                that require evidence validation.
+                                            <p className="text-xs text-neutral-400 max-w-md leading-relaxed mb-4">
+                                                The system detected scientific language requiring structured validation, but the structuring engine was unable to parse atomic claims.
+                                            </p>
+
+                                            <div className="px-4 py-2 rounded-lg bg-red-950/20 border border-red-900/40 text-[10px] font-mono text-red-300">
+                                                VALIDATION_STATUS: INVALID
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="col-span-full py-16 flex flex-col items-center text-center opacity-60">
+                                            <div className="p-4 rounded-full bg-neutral-800/50 border border-neutral-700/30 mb-6">
+                                                <Info className="w-8 h-8 text-neutral-500" />
+                                            </div>
+
+                                            <h4 className="text-lg font-bold text-neutral-400 mb-2">
+                                                Descriptive Analysis
+                                            </h4>
+
+                                            <p className="text-xs text-neutral-500 max-w-sm leading-relaxed mb-8">
+                                                This response provides general culinary or sensory information without biochemical claims.
                                             </p>
 
                                             <div className="flex flex-wrap justify-center gap-3">
-                                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-800/50 border border-neutral-700/30 text-[10px] font-mono text-neutral-400">
-                                                    <Brain className="w-3 h-3 text-accent/60" />
-                                                    DIRECT SYNTHESIS
-                                                </div>
-                                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-800/50 border border-neutral-700/30 text-[10px] font-mono text-neutral-400">
-                                                    <ZapOff className="w-3 h-3 text-yellow-500/60" />
-                                                    NO EXTERNAL DATA
-                                                </div>
-                                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-800/50 border border-neutral-700/30 text-[10px] font-mono text-neutral-400">
-                                                    <ShieldCheck className="w-3 h-3 text-green-500/60" />
-                                                    NO RISK ANALYSIS TRIGGERED
+                                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-800/50 border border-neutral-700/30 text-[10px] font-mono text-neutral-500">
+                                                    <Brain className="w-3 h-3" />
+                                                    NATIVE SYNTHESIS
                                                 </div>
                                             </div>
-
-                                            {/* Execution Telemetry Summary (for non-expert view) */}
-                                            {!isExpertMode && (
-                                                <div className="mt-12 pt-8 border-t border-neutral-800/50 w-full max-w-xs flex justify-around opacity-40 grayscale">
-                                                    <div className="flex flex-col items-center gap-1">
-                                                        <div className="w-1 h-1 rounded-full bg-blue-500 opacity-50" />
-                                                        <span className="text-[8px] font-mono uppercase tracking-tighter">Streaming Status</span>
-                                                    </div>
-                                                    <div className="flex flex-col items-center gap-1">
-                                                        <div className="w-1 h-1 rounded-full bg-green-500 opacity-50" />
-                                                        <span className="text-[8px] font-mono uppercase tracking-tighter">Validation Stage</span>
-                                                    </div>
-                                                    <div className="flex flex-col items-center gap-1">
-                                                        <div className="w-1 h-1 rounded-full bg-accent opacity-50" />
-                                                        <span className="text-[8px] font-mono uppercase tracking-tighter">Trace Available</span>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <div className="col-span-full py-20 flex flex-col items-center justify-center gap-4 text-neutral-500">
-                                            <Info className="w-8 h-8 opacity-20" />
-                                            <p className="text-xs font-mono uppercase tracking-widest text-center max-w-xs leading-relaxed">
-                                                No structured claims were produced for this response.
-                                                <br />
-                                                <span className="opacity-50 mt-2 block">(All tokens were direct synthesis)</span>
-                                            </p>
                                         </div>
                                     )}
                                 </div>

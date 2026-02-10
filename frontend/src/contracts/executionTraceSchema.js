@@ -7,21 +7,33 @@
  * @typedef {Object} Claim
  * @property {string} id
  * @property {string} text
+ * @property {string} subject
  * @property {boolean} verified
  * @property {string} source
+ * @property {string} origin
+ * @property {string} domain
+ * @property {string} verification_level
  * @property {number|null} confidence
  * @property {Object|null} mechanism
  * @property {string} decision
+ * @property {number} importance_score
+ * @property {string|null} property
+ * @property {Object[]} receptors
+ * @property {string[]} sensory_outcomes
+ * @property {string|null} notes
  * 
  * @typedef {Object} ExecutionTrace
  * @property {string} trace_id
  * @property {string} session_id
  * @property {number} schema_version
+ * @property {boolean} trace_required
+ * @property {string} validation_status
  * @property {'streaming'|'complete'|'failed'} status
  * @property {Object} integrity
  * @property {boolean} integrity.complete
  * @property {string[]} integrity.missing_segments
  * @property {Claim[]} claims
+ * @property {Object} coverage_metrics
  * @property {number|null} confidence_score
  * @property {number|null} final_confidence
  * @property {number|null} moa_coverage

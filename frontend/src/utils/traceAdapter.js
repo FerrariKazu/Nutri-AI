@@ -37,11 +37,11 @@ const adaptStrict = (rawTrace) => {
     // 2. Map Claims (1:1)
     const normalizedClaims = (rawTrace.claims || []).map(claim => {
         return {
-            id: strictVal(claim.claim_id),
+            claim_id: strictVal(claim.claim_id || claim.id),
             text: strictVal(claim.text),
-            isVerified: !!claim.verified, // boolean is fine to strictly cast if present
-            source: strictVal(claim.source), // NO DEFAULT 'General Knowledge'
-            confidence: strictVal(claim.confidence), // NO DEFAULT 0
+            verified: !!(claim.verified !== undefined ? claim.verified : claim.isVerified),
+            source: strictVal(claim.source),
+            confidence: strictVal(claim.confidence),
 
             mechanism: claim.mechanism ? {
                 steps: (claim.mechanism.steps || []).map(step => ({
@@ -67,6 +67,7 @@ const adaptStrict = (rawTrace) => {
         warnings,
 
         schema_version: strictVal(rawTrace.schema_version),
+        trace_required: !!rawTrace.trace_required,
 
         claims: normalizedClaims,
 
