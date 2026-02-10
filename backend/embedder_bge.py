@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class EmbedderBGE:
     """BGE-M3 embedding wrapper with caching"""
     
-    def __init__(self, model_name: str = "BAAI/bge-m3", use_fp16: bool = True, cache_file: str = None):
+    def __init__(self, model_name: str = "BAAI/bge-m3", use_fp16: bool = False, cache_file: str = None):
         """
         Initialize BGE-M3 embedder
         

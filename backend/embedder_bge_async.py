@@ -17,7 +17,7 @@ class AsyncBGEEmbedder:
         
         logger.info(f"Loading model {model_name} on {self.device} (Resource Guard)")
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModel.from_pretrained(model_name, torch_dtype=torch.float16).to(self.device)
+        self.model = AutoModel.from_pretrained(model_name, torch_dtype=torch.float32).to(self.device)
         self.model.eval()
         
         # Warmup

@@ -31,7 +31,7 @@ class LLMEngine:
         # Check GPU availability
         if torch.cuda.is_available() and config.USE_GPU:
             self.device = "cuda"
-            torch_dtype = torch.float16
+            torch_dtype = torch.float32 # FORCE FLOAT32 for stability
             logger.info(f"✅ GPU detected: {torch.cuda.get_device_name(0)}")
             logger.info(f"✅ CUDA version: {torch.version.cuda}")
         else:
