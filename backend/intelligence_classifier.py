@@ -10,12 +10,12 @@ class IntelligenceClassifier:
         "chemistry": [
             "molecule", "compound", "capsaicin", "glucose", "reactive", "ph ", "acid", 
             "catalyst", "transformation", "bonding", "solvent", "caffeine", "sugar",
-            "carbohydrate", "protein", "lipid", "fat", "amino acid", "enzyme"
+            "carbohydrate", "protein", "lipid", "fat", "amino acid", "enzyme", "salt", "sodium"
         ],
         "biology": [
             "receptor", "trpv1", "tas1r", "tas2r", "neuron", "absorption", "digestion",
             "metabolism", "effect", "interaction", "cell", "tissue", "gut", "brain",
-            "sensory", "perception", "bitter", "sweet", "umami"
+            "sensory", "perception", "bitter", "sweet", "umami", "flavor", "aroma", "taste"
         ],
         "physics": [
             "heat", "temperature", "pressure", "viscosity", "emulsion", "foaming",
@@ -24,7 +24,8 @@ class IntelligenceClassifier:
         ],
         "food_science": [
             "fermentation", "maillard", "caramelization", "denaturation", "hydration",
-            "gelatinization", "crystallization", "oxidation", "preserving"
+            "gelatinization", "crystallization", "oxidation", "preserving", 
+            "leavening", "rise", "rising", "gluten", "yeast", "dough", "bread"
         ]
     }
 
