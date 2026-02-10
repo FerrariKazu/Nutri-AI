@@ -58,18 +58,28 @@ let finalBackendURL = '';
 async function detectBackend() {
     debugLog('BACKEND', '🔍 Starting backend detection...');
 
-    // 0. Check Environment Variable (Vercel/Vite)
-    if (import.meta.env.VITE_API_URL) {
-        const envUrl = import.meta.env.VITE_API_URL.replace(/\/$/, ''); // Remove trailing slash
-        debugLog('BACKEND', `🌍 Using VITE_API_URL: ${envUrl}`);
-        return envUrl;
+    // 0. Environment Guard: If we are in production, FORCE relative URLs to use Vercel Proxy.
+    // This overrides any VITE_API_URL that might be set in the environment.
+    if (import.meta.env.PROD) {
+        debugLog('BACKEND', '🚀 Production detected. Forcing relative URLs for same-origin proxying.');
+        return '';
     }
 
-    // 1. Localhost Proxy Guard
-    // If we are on localhost:5173, force empty string to use Vite Proxy
+    // 1. Explicit VITE_API_URL (Local Development only or if explicitly needed)
+    if (import.meta.env.VITE_API_URL) {
+        const envUrl = import.meta.env.VITE_API_URL.replace(/\/$/, '');
+        // Only allow if it's localhost (local development)
+        if (envUrl.includes('localhost') || envUrl.includes('127.0.0.1')) {
+            debugLog('BACKEND', `🌍 Using Local VITE_API_URL: ${envUrl}`);
+            return envUrl;
+        }
+        debugLog('BACKEND', `🚫 Ignoring remote VITE_API_URL: ${envUrl} (Staying same-origin)`);
+    }
+
+    // 2. Localhost Proxy Guard
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        debugLog('BACKEND', '🛡️ Localhost detected. Forcing relative URLs to use Vite Proxy (CORS-free).');
-        return ''; // Returning empty string makes fetch('/api/...') use the relative path
+        debugLog('BACKEND', '🛡️ Localhost detected. Using relative URL for Vite Proxy.');
+        return '';
     }
 
     // 1. Try local URLs first
