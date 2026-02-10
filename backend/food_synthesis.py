@@ -679,18 +679,16 @@ class FoodSynthesisEngine:
     
     async def extract_claims_fallback(self, response_text: str) -> List[Dict[str, Any]]:
         """
-        4️⃣ FALLBACK CLAIM EXTRACTION (SAFETY NET)
+        4️⃣ FALLBACK CLAIM EXTRACTION (SAFETY NET) - ROBUSTIFIED
         Extracts scientific claims from text when structured telemetry is missing.
         """
-        prompt = f"""Extract atomic scientific claims from the following scientific narrative about food/cooking.
-        Focus on:
-        - Compounds/Molecules
-        - Receptors/Neurons
-        - Mechanisms (activates, inhibits, binds)
-        - Sensory outputs (bitter, burning, sweet)
+        import json
+        import config
 
-        NARRATIVE:
-        {response_text}
+        # 1. Define System/User Prompts
+        system_prompt = "Extract atomic scientific claims from the text. Return JSON list only."
+        user_content = f"""Extract claims from:
+        {response_text[:3000]}  # Truncate to prevent context overflow
 
         OUTPUT FORMAT: JSON List of:
         {{
@@ -700,16 +698,65 @@ class FoodSynthesisEngine:
           "receptor": "receptor name",
           "mechanism": {{ "label": "description" }},
           "perception_outputs": ["effect"]
-        }}
-        """
-        
+        }}"""
+
+        # 2. Build Standard Payload
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content}
+        ]
+
+        # 3. Determine Model Name (Safe Fallback)
+        model_name = getattr(self.llm, 'model_name', config.MODEL_NAME)
+        if not model_name: 
+            model_name = "qwen3-4b" # Hard fallback
+
+        # 4. Log Payload (Debug)
+        payload_debug = {
+            "model": model_name,
+            "messages": messages,
+            "temperature": 0,
+            "max_tokens": 1024 # Note: Client helper maps this to max_new_tokens or max_tokens depending on impl
+        }
+        logger.info(f"[FALLBACK] Sending Payload: {json.dumps(payload_debug, default=str)}")
+
         try:
-            raw_response = self.llm.generate_text(prompt, max_new_tokens=1024, temperature=0.0)
-            # Use claim_parser helper to ensure clean list
+            # Attempt 1: Standard extraction
+            # Note: generate_text handles the HTTP call. We pass messages list.
+            raw_response = self.llm.generate_text(
+                messages, 
+                max_new_tokens=1024, 
+                temperature=0.0
+            ) # Removed invalid args if any
+            
+            logger.info(f"[FALLBACK] Raw Response Length: {len(raw_response)}")
             return self.claim_parser.parse_from_text(raw_response)
+
         except Exception as e:
-            logger.error(f"Fallback extraction failed: {e}")
-            return []
+            logger.error(f"[FALLBACK] Attempt 1 Failed: {e}")
+            
+            # Attempt 2: Retry with MINIMAL safe payload
+            try:
+                logger.info("[FALLBACK] Retrying with MINIMAL payload...")
+                minimal_messages = [
+                    {"role": "system", "content": "Extract scientific claims as JSON."},
+                    {"role": "user", "content": response_text[:1000]} # Aggressive truncation
+                ]
+                
+                raw_response = self.llm.generate_text(
+                    minimal_messages,
+                    max_new_tokens=512,
+                    temperature=0.0
+                )
+                
+                logger.info(f"[FALLBACK] Retry Response Length: {len(raw_response)}")
+                return self.claim_parser.parse_from_text(raw_response)
+                
+            except Exception as e2:
+                logger.error(f"[FALLBACK] Retry Failed: {e2}")
+                # NEVER Return empty if we can avoid it - but here we have no choice if LLM fails twice.
+                # The caller should handle empty list by checking native trace.
+                return []
     
     def _build_context(self, docs: List[RetrievedDocument]) -> str:
         """Build context string from retrieved documents."""
