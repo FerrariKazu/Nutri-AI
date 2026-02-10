@@ -15,7 +15,7 @@ const MAX_STORAGE_SIZE = 5 * 1024 * 1024;
  * @returns {string} - UUID for this user
  */
 export const getUserId = () => {
-    let userId = localStorage.get Item(USER_ID_KEY);
+    let userId = localStorage.getItem(USER_ID_KEY);
     if (!userId) {
         userId = crypto.randomUUID();
         localStorage.setItem(USER_ID_KEY, userId);
