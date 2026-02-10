@@ -99,10 +99,10 @@ async function detectBackend() {
         }
     }
 
-    // 2. Fallback to Railway
-    debugLog('BACKEND', `⚠️ No local backend found. Falling back to: ${RAILWAY_BACKEND_URL}`);
-    console.log(`- Local backend not found. Falling back to Railway: ${RAILWAY_BACKEND_URL}`);
-    return RAILWAY_BACKEND_URL;
+    // 2. Final Fallback: Same-Origin (Relative Paths)
+    // This allows Vercel (Production) or Vite Proxy (Local) to handle the forwarding.
+    debugLog('BACKEND', '📡 Final Fallback: Using relative URL (Same-Origin Proxy Mode)');
+    return '';
 }
 
 // Cached backend URL promise
