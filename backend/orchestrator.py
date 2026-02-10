@@ -532,11 +532,23 @@ class NutriOrchestrator:
                 verification_results = dag_results.get("verification", [])
                 
                 # Check mechanism completeness
+                # Fix: VerificationReport is not iterable, access verified_claims
+                # Note: VerifiedClaim doesn't have mechanism attribute, it has status/justification
+                # We need to map back to original claims or assume verification implies validity?
+                # Actually, claim_extractor extracts text claims.
+                # MoA Gate expects structured mechanisms.
+                # If we are using claim_extractor, we might not have mechanisms.
+                # BUT, if trace.claims exists (from earlier phases or extraction), we should check THOSE.
+                
+                # If verification_results is a VerificationReport, we can't check 'mechanism'.
+                # We should check trace.claims instead, which SHOULD be populated by now.
+                
+                # Let's check trace.claims for MoA validity
                 claims_with_valid_moa = sum(
-                    1 for c in verification_results 
-                    if hasattr(c, "mechanism") and c.mechanism and c.mechanism.is_valid
+                    1 for c in trace.claims 
+                    if hasattr(c, "mechanism") and c.mechanism and getattr(c.mechanism, "is_valid", False)
                 )
-                claims_total = len(verification_results)
+                claims_total = len(trace.claims)
                 
                 if has_causal_intent and claims_total > 0 and claims_with_valid_moa == 0:
                     logger.warning(
