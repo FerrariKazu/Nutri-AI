@@ -666,6 +666,10 @@ class FoodSynthesisEngine:
                     "verified_claims": sum(1 for v in verifications if v.verified),
                     "unverified_claims": sum(1 for v in verifications if not v.verified),
                     "total_claims": len(verifications),
+                    "conflicts_detected": any(v.metadata.get("has_conflict", False) for v in verifications)
+                }
+            })
+            
             # Return response with hardened enforcement metadata
             return (response, enforcement_meta)
             
