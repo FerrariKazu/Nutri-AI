@@ -666,16 +666,46 @@ class FoodSynthesisEngine:
                     "verified_claims": sum(1 for v in verifications if v.verified),
                     "unverified_claims": sum(1 for v in verifications if not v.verified),
                     "total_claims": len(verifications),
-                    "conflicts_detected": any(v.metadata.get("has_conflict") for v in verifications)
-                }
-            })
-            
             # Return response with hardened enforcement metadata
             return (response, enforcement_meta)
             
         except Exception as e:
             logger.error(f"Synthesis failed: {e}")
             return (f"Error: Unable to generate recipe. {str(e)}", enforcement_meta)
+    
+    async def extract_claims_fallback(self, response_text: str) -> List[Dict[str, Any]]:
+        """
+        4️⃣ FALLBACK CLAIM EXTRACTION (SAFETY NET)
+        Extracts scientific claims from text when structured telemetry is missing.
+        """
+        prompt = f"""Extract atomic scientific claims from the following scientific narrative about food/cooking.
+        Focus on:
+        - Compounds/Molecules
+        - Receptors/Neurons
+        - Mechanisms (activates, inhibits, binds)
+        - Sensory outputs (bitter, burning, sweet)
+
+        NARRATIVE:
+        {response_text}
+
+        OUTPUT FORMAT: JSON List of:
+        {{
+          "claim_id": "unique_id",
+          "text": "The claim text",
+          "compound": "molecule name",
+          "receptor": "receptor name",
+          "mechanism": {{ "label": "description" }},
+          "perception_outputs": ["effect"]
+        }}
+        """
+        
+        try:
+            raw_response = self.llm.execute(prompt)
+            # Use claim_parser helper to ensure clean list
+            return self.claim_parser.parse_from_text(raw_response)
+        except Exception as e:
+            logger.error(f"Fallback extraction failed: {e}")
+            return []
     
     def _build_context(self, docs: List[RetrievedDocument]) -> str:
         """Build context string from retrieved documents."""

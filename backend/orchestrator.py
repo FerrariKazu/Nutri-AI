@@ -39,7 +39,9 @@ from backend.session_reset_policy import SessionResetPolicy
 from backend.response_modes import ResponseMode
 from backend.mode_classifier import classify_response_mode
 from backend.nutri_engine import NutriEngine
-from backend.utils.execution_trace import create_trace, AgentInvocation
+from backend.utils.execution_trace import AgentExecutionTrace, AgentInvocation, create_trace, TraceStatus
+from backend.intelligence_classifier import IntelligenceClassifier
+from backend.ranking_engine import RankingEngine, MoleculeReceptorMapper
 
 logger = logging.getLogger(__name__)
 
@@ -79,10 +81,12 @@ class NutriOrchestrator:
             from backend.utils.execution_trace import create_trace
             trace = create_trace(session_id, trace_id)
             trace.schema_version = 2
+            trace.trace_required = IntelligenceClassifier.requires_trace(user_message)
             # Add Audit Data to Trace
             trace.system_audit = {
                 "rag": "enabled",
-                "model": self.pipeline.engine.llm.model_name
+                "model": self.pipeline.engine.llm.model_name,
+                "intelligence_mandated": trace.trace_required
             }
         except Exception as e:
             logger.warning(f"Trace initialization failed (non-fatal): {e}")
@@ -370,7 +374,8 @@ class NutriOrchestrator:
                 
                 valid_phase_count = 0
                 phase_results = {}
-                recipe_result = ""  # Fix: Initialize recipe_result for parallel DAG
+                recipe_result = ""
+                claim_objs = [] # Mandatory Initialization for Intelligence Mandate
                 
                 for phase in selected_phases:
                     phase_start = time.perf_counter()
@@ -380,7 +385,6 @@ class NutriOrchestrator:
                     emit_status("synthesis", f"Analyzing ({phase.value})...")
                     phase_result_raw = await self.pipeline.engine.synthesize(augmented_query, docs, intent, stream_callback=None)
 
-                    
                     # Unpack (recipe, enforcement_meta)
                     if isinstance(phase_result_raw, tuple):
                         phase_result, enf_meta = phase_result_raw
@@ -389,9 +393,6 @@ class NutriOrchestrator:
                         
                         # 📋 PHASE 1-3 Claim Intelligence Integration
                         if "claims" in enf_meta:
-                            # Re-wrap claims into object format for trace helper if needed, 
-                            # but trace.set_claims handles dict/object mapping.
-                            # We'll pass the list directly.
                             from types import SimpleNamespace
                             claim_objs = [SimpleNamespace(**c) for c in enf_meta["claims"]]
                             trace.set_claims(claim_objs, enf_meta.get("variance_drivers", {}))
@@ -465,7 +466,11 @@ class NutriOrchestrator:
                         "results": list(dag_results.keys()),
                         "ts": time.time()
                     })
-                    
+                    await event_queue.put({"type": "status", "content": {"phase": "reset", "message": "New environment initialized."}, "seq": seq_counter, "stream_id": trace_id})
+                    seq_counter += 1
+                
+                    trace.status = TraceStatus.STREAMING
+                  
                     if "verification" in dag_results:
                         trace.integrity["tier2"] = "verified" if any(getattr(c, "mechanism", None) and c.mechanism.is_valid for c in dag_results["verification"]) else "insufficient_evidence"
 
@@ -473,6 +478,39 @@ class NutriOrchestrator:
                         push_event("enhancement", {"sensory_profile": dag_results["sensory"], "message": "Sensory profile modeled."})
                     if "explanation" in dag_results:
                         push_event("enhancement", {"explanation": dag_results["explanation"], "message": "Scientific explanation added."})
+
+                # 🔒 MANDATORY INTELLIGENCE RECOVERY (Extraction Fallback)
+                if trace.trace_required and not trace.claims:
+                    emit_status("structuring", "Post-response scientific structuring...")
+                    logger.info("[ORCH] Mandated intelligence missing. Triggering extraction fallback.")
+                    
+                    # Call fallback extraction on the accumulated result
+                    # We use the raw recipe_result if multiple phases were concatenated
+                    extracted_claims = await self.pipeline.engine.extract_claims_fallback(recipe_result)
+                    
+                    if extracted_claims:
+                        from types import SimpleNamespace
+                        # Set origin to 'extracted' and mapping to contract
+                        for c in extracted_claims:
+                            c_obj = SimpleNamespace(**c)
+                            c_obj.origin = "extracted"
+                            c_obj.verification_level = "heuristic" # Fallback is usually heuristic
+                            c_obj.verified = False
+                            
+                            # 🧬 Tier 2 Enrichment
+                            MoleculeReceptorMapper.enrich_perception(c_obj)
+                            c_obj.importance_score = RankingEngine.calculate_importance(c_obj)
+                            
+                            claim_objs.append(c_obj)
+                        
+                        trace.set_claims(claim_objs)
+                        trace.validation_status = "partial" # Marked as processed after-the-fact
+                        logger.info(f"[ORCH] Successfully extracted {len(extracted_claims)} claims via fallback.")
+                        emit_status("structuring_complete", f"Added {len(extracted_claims)} scientific claims via extraction.")
+                    else:
+                        trace.validation_status = "invalid"
+                        logger.warning("[ORCH] Extraction fallback FAILED to produce claims.")
+                        emit_status("structuring_partial", "No additional claims extracted.")
 
                 # 6. Final Presentation & Trace Emission
                 emit_status("finalizing", "Plating your response...")
@@ -743,6 +781,7 @@ class NutriOrchestrator:
                 logger.info(f"[ORCH] Generating final tailored response in mode {mode.value}...")
                 
                 # Final Integrity Finalization
+                trace.status = TraceStatus.COMPLETE
                 for tier in ["tier1", "tier2", "tier3", "tier4"]:
                     if trace.integrity.get(tier) == "pending":
                         trace.integrity[tier] = "incomplete"
