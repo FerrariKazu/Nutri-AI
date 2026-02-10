@@ -579,7 +579,12 @@ class NutriOrchestrator:
                 
                 # Build Tier 3 assessments for each verified claim
                 tier3_results = []
-                for claim in verification_results:
+                # Build Tier 3 assessments for each verified claim
+                tier3_results = []
+                # Fix: Iterate trace.claims (structured objects) instead of VerificationReport
+                # VerificationReport (verification_results) is not iterable and contains text-based checks.
+                # trace.claims contains the Mechanism objects required here.
+                for claim in trace.claims:
                     if not hasattr(claim, "mechanism") or not claim.mechanism:
                         continue
                     
