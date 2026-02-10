@@ -478,7 +478,11 @@ class NutriOrchestrator:
                     trace.status = TraceStatus.STREAMING
                   
                     if "verification" in dag_results:
-                        trace.integrity["tier2"] = "verified" if any(getattr(c, "mechanism", None) and c.mechanism.is_valid for c in dag_results["verification"]) else "insufficient_evidence"
+                        report = dag_results["verification"]
+                        # Fix: VerificationReport is not iterable, access verified_claims
+                        # Also VerifiedClaim doesn't have mechanism, check status
+                        has_verified = any(vc.status.value == "supported" for vc in report.verified_claims)
+                        trace.integrity["tier2"] = "verified" if has_verified else "insufficient_evidence"
 
                     if "sensory" in dag_results:
                         push_event("enhancement", {"sensory_profile": dag_results["sensory"], "message": "Sensory profile modeled."})
