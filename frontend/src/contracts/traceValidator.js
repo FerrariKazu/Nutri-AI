@@ -10,6 +10,22 @@ import { SCHEMA_VERSION, VALID_STATUSES } from './executionTraceSchema';
 const LOG_PREFIX = '[TraceValidator]';
 
 /**
+ * Validates a single claim object.
+ * @param {Object} claim - The claim object to validate.
+ * @param {number} idx - The index of the claim in the claims array for error reporting.
+ * @returns {string[]} An array of error messages for the claim.
+ */
+export const validateClaim = (claim, idx) => {
+    const errors = [];
+    if (!claim.id) errors.push(`Claim[${idx}] missing id`);
+    if (!claim.statement) errors.push(`Claim[${idx}] missing statement`);
+    if (!claim.domain) errors.push(`Claim[${idx}] missing domain`);
+    if (!claim.mechanism_type) errors.push(`Claim[${idx}] missing mechanism_type`);
+    // Deprecated fields (text, subject) are not validated here, assuming they are being phased out.
+    return errors;
+};
+
+/**
  * Validates a raw trace against the strict contract.
  * @param {Object} trace - The raw backend trace
  * @param {boolean} isDevMode - Whether to log verbose warnings

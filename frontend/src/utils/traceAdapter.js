@@ -37,24 +37,22 @@ const adaptStrict = (rawTrace) => {
     // 2. Map Claims (1:1)
     const normalizedClaims = (rawTrace.claims || []).map(claim => {
         return {
-            claim_id: strictVal(claim.claim_id || claim.id),
-            text: strictVal(claim.text),
+            id: strictVal(claim.id || claim.claim_id),
+            statement: strictVal(claim.statement || claim.text),
+            domain: strictVal(claim.domain),
+            mechanism_type: strictVal(claim.mechanism_type),
+            compounds: strictVal(claim.compounds) || [],
+            receptors: strictVal(claim.receptors) || [],
+            perception_outputs: strictVal(claim.perception_outputs) || [],
+            evidence: strictVal(claim.evidence) || [],
+            verification_level: strictVal(claim.verification_level),
+            importance_score: strictVal(claim.importance_score) || 0,
+
+            // Legacy/Mapping (if still needed by components)
+            claim_id: strictVal(claim.id || claim.claim_id),
+            text: strictVal(claim.statement || claim.text),
             verified: !!(claim.verified !== undefined ? claim.verified : claim.isVerified),
-            source: strictVal(claim.source),
-            confidence: strictVal(claim.confidence),
-
-            mechanism: claim.mechanism ? {
-                steps: (claim.mechanism.steps || []).map(step => ({
-                    entity_name: strictVal(step.entity_name),
-                    step_type: strictVal(step.step_type),
-                    description: strictVal(step.description),
-                    evidence_source: strictVal(step.evidence_source)
-                })),
-                weakest_link_confidence: strictVal(claim.mechanism.weakest_link_confidence)
-            } : null,
-
-            decision: strictVal(claim.decision), // NO MICROCOPY MAPPING
-            changeType: strictVal((rawTrace.tier4_decision_changes || {})[claim.claim_id]) // Raw Enum
+            decision: strictVal(claim.decision),
         };
     });
 

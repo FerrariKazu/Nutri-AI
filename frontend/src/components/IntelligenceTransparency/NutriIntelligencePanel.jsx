@@ -24,6 +24,7 @@ import Tier3Causality from './Tier3Causality';
 import Tier4Temporal from './Tier4Temporal';
 import ConfidenceTracker from './ConfidenceTracker';
 import PerceptionMapper from './PerceptionMapper';
+import IntelligenceGraph from './IntelligenceGraph';
 import { Tooltip, getConfidenceNarrative } from './UIUtils';
 import { renderPermissions } from '../../contracts/renderPermissions';
 
@@ -79,7 +80,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
         setTimeout(() => setCopied(false), 2000);
     }, [uiTrace]);
 
-    if (!uiTrace) return null;
+    // if (!uiTrace) return null; // [MANDATE] Never silently empty.
 
     // Safety: Ensure selected index is valid
     const currentClaim = uiTrace.claims && uiTrace.claims.length > 0
@@ -87,23 +88,27 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
         : null;
 
     // Schema/Status Checks
-    const isStreaming = uiTrace.status === 'streaming';
-    const isComplete = uiTrace.status === 'complete';
+    const isStreaming = uiTrace?.status === 'streaming';
+    const isComplete = uiTrace?.status === 'complete';
 
     // Integrity Message - Premium Narrative
     const integrityMessage = useMemo(() => {
-        if (uiTrace.validation_status === 'invalid' && uiTrace.trace_required) {
+        if (!uiTrace) return "No execution trace recorded";
+        if (uiTrace.status === 'INIT') return "Initializing Scientific Workspace...";
+        if (uiTrace.status === 'STREAMING') return "Reasoning Stream Active...";
+        if (uiTrace.status === 'ENRICHING') return "Enriching Knowledge Topology...";
+        if (uiTrace.status === 'VERIFIED') return "Claim Verification Complete";
+
+        if (uiTrace.validationStatus === 'invalid' && uiTrace.trace_required) {
             return "⚠ Mandatory Intelligence Missing";
         }
         if (uiTrace.metrics?.pubchemUsed) return "Verified via PubChem P0 Protocol";
-        if (uiTrace.claims?.some(c => c.origin === 'extracted')) return "Scientific Structuring Complete";
-        if (uiTrace.claims?.length === 0 && !uiTrace.trace_required) return "Descriptive Balance Analysis";
-        return "Synthesized from Knowledge Graph";
+        return "Deterministic System Telemetry";
     }, [uiTrace]);
 
     // Mandate Check
     const isMandateFailure = useMemo(() => {
-        return uiTrace.trace_required && uiTrace.claims?.length === 0;
+        return uiTrace?.trace_required && uiTrace.claims?.length === 0;
     }, [uiTrace]);
 
 
@@ -114,19 +119,25 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                 {isStreaming ? (
                     <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
                 ) : (
-                    <ShieldCheck className="w-3 h-3 text-neutral-500" />
+                    <ShieldCheck className={`w-3 h-3 ${!uiTrace ? 'text-neutral-700' : 'text-neutral-500'}`} />
                 )}
 
                 <p className="text-[10px] font-mono uppercase tracking-tight text-neutral-400 truncate flex-1">
-                    {isStreaming ? "Reasoning Stream Active..." : integrityMessage}
+                    {integrityMessage}
                 </p>
 
-                <div className="flex items-center gap-3">
-                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold font-mono border ${isStreaming ? 'text-blue-400 border-blue-500/20 bg-blue-500/10' : 'text-neutral-500 border-neutral-700/50 bg-neutral-800'
-                        }`}>
-                        {uiTrace.status ? uiTrace.status.toUpperCase() : 'UNKNOWN'}
-                    </span>
-                </div>
+                {uiTrace && (
+                    <div className="flex items-center gap-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold font-mono border ${['STREAMING', 'ENRICHING', 'INIT'].includes(uiTrace.status)
+                                ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
+                                : uiTrace.status === 'COMPLETE' || uiTrace.status === 'VERIFIED'
+                                    ? 'text-green-400 border-green-500/20 bg-green-500/10'
+                                    : 'text-neutral-500 border-neutral-700/50 bg-neutral-800'
+                            }`}>
+                            {uiTrace.status ? uiTrace.status.toUpperCase() : 'UNKNOWN'}
+                        </span>
+                    </div>
+                )}
             </div>
 
             {/* Header / Trigger */}
@@ -145,7 +156,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                             </h3>
                         </div>
                         <p className="text-[10px] text-neutral-500 font-mono mt-0.5">
-                            {uiTrace.claims.length} Verified Claims • {uiTrace.metrics.duration}ms Latency
+                            {uiTrace ? `${uiTrace.claims?.length || 0} Claims Resolved` : 'Execution Telemetry Missing'} • {uiTrace?.metrics.duration ? `${Math.round(uiTrace.metrics.duration)}ms` : '---'} Latency
                         </p>
                     </div>
                 </div>
@@ -265,8 +276,13 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                     </section>
                                                 )}
 
-                                                {/* Tier 2.5: Perception Mapping */}
-                                                {(currentClaim.receptors?.length > 0 || currentClaim.sensory_outcomes?.length > 0) && (
+                                                {/* Tier 2.1: Intelligence Graph (MANDATE) */}
+                                                <section className="pt-10 border-t border-neutral-800/50">
+                                                    <IntelligenceGraph claim={currentClaim} />
+                                                </section>
+
+                                                {/* Tier 2.5: Perception Mapping (Legacy Bridge) */}
+                                                {(currentClaim.receptors?.length > 0 || currentClaim.perception_outputs?.length > 0) && (
                                                     <section className="pt-10 border-t border-neutral-800/50">
                                                         <PerceptionMapper claim={currentClaim} />
                                                     </section>
