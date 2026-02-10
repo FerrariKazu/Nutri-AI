@@ -705,7 +705,8 @@ class NutriOrchestrator:
 
                 # Reversal Explanations and Confidence Evolution
                 moa_explanations = []
-                for claim in verification_results:
+                # Fix: Iterate trace.claims (structured) instead of VerificationReport
+                for claim in trace.claims:
                     claim_id = getattr(claim, "text", str(claim))
                     delta = deltas.get(claim_id)
                     
