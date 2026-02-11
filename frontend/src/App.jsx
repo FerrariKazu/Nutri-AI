@@ -81,16 +81,25 @@ function App() {
             const data = await getConversation(sid);
 
             if (data.messages && data.messages.length > 0) {
-                setMessages(data.messages.map((m, i) => ({
-                    ...m,
-                    id: `hist - ${i} `,
-                    isStreaming: false
-                })));
+                // Step 7: Hydration MUST preserve execution_trace from API
+                setMessages(data.messages.map((m, i) => {
+                    // API returns snake_case, UI uses camelCase
+                    const trace = m.executionTrace || m.execution_trace || null;
+                    if (trace) {
+                        console.log(`[TRACE_AUDIT] HYDRATED msg ${i}: ${trace.claims?.length || 0} claims`);
+                    }
+                    return {
+                        ...m,
+                        id: `hist-${i}`,
+                        isStreaming: false,
+                        executionTrace: trace, // Step 7: Reuse stored trace
+                    };
+                }));
                 setTurnCount(data.messages.filter(m => m.role === 'user').length);
                 setMemoryScope('session');
 
                 if (data.current_mode) {
-                    console.log(`[HYDRATE] Resuming in mode: ${data.current_mode} `);
+                    console.log(`[HYDRATE] Resuming in mode: ${data.current_mode}`);
                 }
             } else {
                 setMessages([]);
@@ -99,7 +108,6 @@ function App() {
             }
         } catch (e) {
             console.error('[HYDRATE] Failed to hydrate:', e);
-            // Show error in logs but allow user to try typing
         } finally {
             setStreamStatus('IDLE');
         }
@@ -244,26 +252,36 @@ function App() {
                         : m
                 ));
             },
-            // onComplete
+            // onComplete — Step 2: MERGE, never replace
             (statusData) => {
                 console.log(`[SSE] Completed logically via [DONE] with status: ${statusData?.status}`);
 
                 setMessages(prev => {
                     const updated = prev.map(m => {
                         if (m.id === assistantId) {
-                            // Empty Stream Logic
-                            if (!m.content || m.content.trim() === '') {
-                                return {
-                                    ...m,
-                                    isStreaming: false,
-                                    statusMessage: 'Response was empty. (Hint: Try a simpler query)'
-                                };
+                            // Step 5: Nuclear debug — catch trace deletion
+                            if (m.executionTrace) {
+                                console.log(`[TRACE_AUDIT] DONE handler: preserving ${m.executionTrace.claims?.length || 0} claims`);
                             }
-                            return {
+
+                            // Step 2: Explicitly preserve executionTrace
+                            const preserved = {
                                 ...m,
                                 isStreaming: false,
-                                statusMessage: statusData?.status === 'error' ? `Error: ${statusData.message}` : ''
+                                // Step 4: If statusData has no trace, keep existing
+                                executionTrace: m.executionTrace,
+                                statusMessage: (!m.content || m.content.trim() === '')
+                                    ? 'Response was empty. (Hint: Try a simpler query)'
+                                    : (statusData?.status === 'error' ? `Error: ${statusData.message}` : '')
                             };
+
+                            // Step 5: Nuclear guard
+                            if (m.executionTrace && !preserved.executionTrace) {
+                                console.error('[TRACE_AUDIT] 🚨 TRACE DELETED BY DONE HANDLER');
+                                preserved.executionTrace = m.executionTrace;
+                            }
+
+                            return preserved;
                         }
                         return m;
                     });
@@ -344,15 +362,16 @@ function App() {
                         : m
                 ));
             },
-            // onTrace
+            // onTrace — Step 3: PATCH, never create new message
             (trace) => {
                 resetFailsafe();
                 resetStallIndicator();
-                setMessages(prev => prev.map(m =>
-                    m.id === assistantId
-                        ? { ...m, executionTrace: trace }
-                        : m
-                ));
+                console.log(`[TRACE_AUDIT] onTrace: attaching ${trace?.claims?.length || trace?.content?.claims?.length || 0} claims to ${assistantId}`);
+                setMessages(prev => prev.map(m => {
+                    if (m.id !== assistantId) return m;
+                    // Step 3: Patch trace onto existing message, preserve everything
+                    return { ...m, executionTrace: trace.content || trace };
+                }));
             }
         );
     };
