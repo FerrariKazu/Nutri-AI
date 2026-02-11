@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Target, ShieldAlert, HelpCircle, UserCheck } from 'lucide-react';
 import { TierBadge, RiskThermometer, ConfidenceMeter, Tooltip } from './UIUtils';
 import { renderPermissions } from '../../contracts/renderPermissions';

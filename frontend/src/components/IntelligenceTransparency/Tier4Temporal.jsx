@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { History, TrendingUp, TrendingDown, Minus, Anchor, Sparkles } from 'lucide-react';
 import { TierBadge, Tooltip } from './UIUtils';
 import { renderPermissions } from '../../contracts/renderPermissions';
