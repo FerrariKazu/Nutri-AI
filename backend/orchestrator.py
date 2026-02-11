@@ -553,11 +553,11 @@ class NutriOrchestrator:
                 if has_causal_intent and claims_total > 0 and claims_with_valid_moa == 0:
                     logger.warning(
                         f"[MOA_GATE] Causal intent detected but no valid mechanisms available. "
-                        f"Suppressing causal language. Claims: {claims_total}, Valid MoA: {claims_with_valid_moa}"
+                        f"Per MANDATE: Recording unverified assertions instead of suppressing. Claims: {claims_total}"
                     )
-                    # Add gate metadata to final_data
-                    moa_gate_active = True
-                    moa_gate_reason = "Causal claim blocked: No complete mechanism-of-action chains available"
+                    # DISABLE SUPPRESSION per Mandate
+                    moa_gate_active = False 
+                    moa_gate_reason = "Unverified mechanisms detected - flagged for user review"
                 else:
                     moa_gate_active = False
                     moa_gate_reason = None
@@ -846,27 +846,28 @@ class NutriOrchestrator:
                         if extracted_claims:
                             logger.info(f"[MANDATE] Extracted {len(extracted_claims)} new claims from text.")
                             
-                            # 2. Merge/Set Claims
-                            # Convert to objects for consistency
-                            from types import SimpleNamespace
-                            # extract_claims_fallback returns dicts
-                            new_claim_objs = [SimpleNamespace(**c) for c in extracted_claims]
-                            
                             # We overwrite with extracted claims because native pipeline is unreliable (claims=0 issue)
                             # Ideally we would merge, but for now, extraction is the source of truth for the FINAL text.
                             trace.set_claims(new_claim_objs, {})
                             logger.info(f"[MANDATE] Final claim count: {len(trace.claims)}")
                             
+                            # Mark as PARTIAL (Unverified but present)
+                            trace.validation_status = "partial" 
+                            
                         else:
-                            logger.warning("[MANDATE] Extraction returned 0 claims.")
+                            logger.warning("[MANDATE] Parser returned 0 claims.")
                             
                     except Exception as e:
                          logger.error(f"[MANDATE] Extraction failed: {e}")
 
                     # 3. Critical Guard
                     if len(trace.claims) == 0:
+                        # Only invalid if TRULY empty (no parser results)
                         trace.validation_status = "invalid"
                         logger.critical("[MANDATE] CRITICAL FAILURE: Scientific content without claims. Marked INVALID.")
+                    elif trace.validation_status == "invalid":
+                        # If parser found something, rescue status
+                        trace.validation_status = "partial"
 
                 # 🛡️ MANDATORY INTELLIGENCE ENFORCEMENT V2 🛡️
                 # Strategy: TEXT → ALWAYS EXTRACT → STRUCTURE
@@ -884,7 +885,14 @@ class NutriOrchestrator:
                             # 2. Merge/Set Claims
                             # Convert to objects for consistency
                             from types import SimpleNamespace
-                            new_claim_objs = [SimpleNamespace(**c) for c in extracted_claims]
+                            new_claim_objs = []
+                            for c in extracted_claims:
+                                obj = SimpleNamespace(**c)
+                                # FORCE frontend badges
+                                obj.verified = False
+                                obj.evidence_level = "unverified"
+                                obj.verification_level = "heuristic"
+                                new_claim_objs.append(obj)
                             
                             # We overwrite with extracted claims because native pipeline is unreliable (claims=0 issue)
                             # Ideally we would merge, but for now, extraction is the source of truth for the FINAL text.

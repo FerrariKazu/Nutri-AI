@@ -679,84 +679,27 @@ class FoodSynthesisEngine:
     
     async def extract_claims_fallback(self, response_text: str) -> List[Dict[str, Any]]:
         """
-        4️⃣ FALLBACK CLAIM EXTRACTION (SAFETY NET) - ROBUSTIFIED
-        Extracts scientific claims from text when structured telemetry is missing.
+        4️⃣ FALLBACK CLAIM EXTRACTION (SAFETY NET) - DETERMINISTIC
+        Extracts scientific claims using regex/keyword matching.
+        Reliable > Smart.
         """
-        import json
-        import config
-
-        # 1. Define System/User Prompts
-        system_prompt = "Extract atomic scientific claims from the text. Return JSON list only."
-        user_content = f"""Extract claims from:
-        {response_text[:3000]}  # Truncate to prevent context overflow
-
-        OUTPUT FORMAT: JSON List of:
-        {{
-          "claim_id": "unique_id",
-          "text": "The claim text",
-          "compound": "molecule name",
-          "receptor": "receptor name",
-          "mechanism": {{ "label": "description" }},
-          "perception_outputs": ["effect"]
-        }}"""
-
-        # 2. Build Standard Payload
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_content}
-        ]
-
-        # 3. Determine Model Name (Safe Fallback)
-        model_name = getattr(self.llm, 'model_name', config.MODEL_NAME)
-        if not model_name: 
-            model_name = "qwen3-4b" # Hard fallback
-
-        # 4. Log Payload (Debug)
-        payload_debug = {
-            "model": model_name,
-            "messages": messages,
-            "temperature": 0,
-            "max_tokens": 1024 # Note: Client helper maps this to max_new_tokens or max_tokens depending on impl
-        }
-        logger.info(f"[FALLBACK] Sending Payload: {json.dumps(payload_debug, default=str)}")
-
         try:
-            # Attempt 1: Standard extraction
-            # Note: generate_text handles the HTTP call. We pass messages list.
-            raw_response = self.llm.generate_text(
-                messages, 
-                max_new_tokens=1024, 
-                temperature=0.0
-            ) # Removed invalid args if any
+            # Lazy load parser to avoid circular imports during init if any
+            from backend.intelligence.mechanism_parser import MechanismParser
+            parser = MechanismParser()
             
-            logger.info(f"[FALLBACK] Raw Response Length: {len(raw_response)}")
-            return self.claim_parser.parse_from_text(raw_response)
+            claims = parser.parse(response_text)
+            
+            if claims:
+                logger.info(f"[MANDATE-PARSER] Deterministically extracted {len(claims)} claims.")
+            else:
+                logger.warning("[MANDATE-PARSER] No mechanisms detected in text.")
+                
+            return claims
 
         except Exception as e:
-            logger.error(f"[FALLBACK] Attempt 1 Failed: {e}")
-            
-            # Attempt 2: Retry with MINIMAL safe payload
-            try:
-                logger.info("[FALLBACK] Retrying with MINIMAL payload...")
-                minimal_messages = [
-                    {"role": "system", "content": "Extract scientific claims as JSON."},
-                    {"role": "user", "content": response_text[:1000]} # Aggressive truncation
-                ]
-                
-                raw_response = self.llm.generate_text(
-                    minimal_messages,
-                    max_new_tokens=512,
-                    temperature=0.0
-                )
-                
-                logger.info(f"[FALLBACK] Retry Response Length: {len(raw_response)}")
-                return self.claim_parser.parse_from_text(raw_response)
-                
-            except Exception as e2:
-                logger.error(f"[FALLBACK] Retry Failed: {e2}")
-                # NEVER Return empty if we can avoid it - but here we have no choice if LLM fails twice.
-                # The caller should handle empty list by checking native trace.
-                return []
+            logger.error(f"[MANDATE-PARSER] Parsing failed: {e}")
+            return []
     
     def _build_context(self, docs: List[RetrievedDocument]) -> str:
         """Build context string from retrieved documents."""
