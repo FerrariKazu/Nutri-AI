@@ -641,6 +641,16 @@ export async function getConversation(sessionId) {
         }
 
         const data = await response.json();
+
+        // [TRACE_AUDIT] Step 8: Hydration validation
+        const lastMsg = data.messages?.[data.messages.length - 1];
+        if (lastMsg?.executionTrace) {
+            const claims = lastMsg.executionTrace.claims || [];
+            console.log(`[TRACE_AUDIT] TRACE HYDRATED from API: ${claims.length} claims`);
+        } else {
+            console.log(`[TRACE_AUDIT] Trace missing in hydration for session ${sessionId}`);
+        }
+
         debugLog('API', `📥 History received: ${data.messages?.length || 0} messages`);
         return data;
     } catch (error) {
@@ -759,6 +769,12 @@ export function streamNutriChat(
             eventSource.addEventListener('execution_trace', (e) => {
                 processSSE(e, 'execution_trace', (data) => {
                     debugLog('SSE', '🕵️ [EXECUTION_TRACE] received');
+
+                    // [TRACE_AUDIT] Step 6: Frontend acceptance
+                    const rawTrace = data.content || data; // Handle envelope
+                    const claimCount = rawTrace.claims ? rawTrace.claims.length : 0;
+                    console.log(`[TRACE_AUDIT] TRACE RECEIVED: ${claimCount} claims`);
+
                     if (onTrace) onTrace(data);
                 });
             });

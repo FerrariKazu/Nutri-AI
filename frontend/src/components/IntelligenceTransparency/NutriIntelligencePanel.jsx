@@ -42,6 +42,14 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
         console.log("%c INTELLIGENCE PANEL MOUNTED ", "background: #3b82f6; color: white; font-weight: bold; padding: 2px 4px; border-radius: 4px;");
     }, []);
 
+    // [TRACE_AUDIT] Step 7: UI render check
+    useEffect(() => {
+        if (uiTrace) {
+            const claimsLen = uiTrace.claims ? uiTrace.claims.length : 0;
+            console.log(`[TRACE_AUDIT] TRACE RENDER: ${claimsLen} claims available to UI`);
+        }
+    }, [uiTrace]);
+
     const [isOpen, setIsOpen] = useState(false);
     const [isExpertMode, setIsExpertMode] = useState(expertModeDefault);
     const [isRawView, setIsRawView] = useState(false);
