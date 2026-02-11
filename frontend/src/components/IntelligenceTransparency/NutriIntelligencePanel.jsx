@@ -16,7 +16,8 @@ import {
     AlertTriangle,
     ZapOff,
     FileSearch,
-    DatabaseZap
+    DatabaseZap,
+    Activity
 } from 'lucide-react';
 import Tier1Evidence from './Tier1Evidence';
 import Tier2Mechanism from './Tier2Mechanism';
