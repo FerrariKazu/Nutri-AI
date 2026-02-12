@@ -11,15 +11,7 @@ import { FlaskConical, Target, Activity, ChevronRight } from 'lucide-react';
 const IntelligenceGraph = ({ claim }) => {
     const { compounds = [], receptors = [], perception_outputs = [] } = claim;
 
-    if (!compounds.length && !receptors.length && !perception_outputs.length) {
-        return (
-            <div className="p-8 border border-neutral-800 rounded-xl bg-neutral-900/40 text-center">
-                <p className="text-xs font-mono text-neutral-600 uppercase tracking-widest">
-                    No Mechanism Graph Available
-                </p>
-            </div>
-        );
-    }
+    console.log(`[GRAPH_PAINT] Rendering topology for ${claim.id}`);
 
     return (
         <div className="space-y-6">

@@ -10,10 +10,6 @@ import { FlaskConical, Zap, Activity, Eye, ChevronRight, TrendingUp, TrendingDow
 const PerceptionMapper = ({ claim }) => {
     const { receptors = [], perception_outputs = [], compounds = [] } = claim;
 
-    if (compounds.length === 0 && receptors.length === 0 && perception_outputs.length === 0) {
-        return null;
-    }
-
     const directionIcons = {
         'increase': <TrendingUp className="w-2.5 h-2.5 text-blue-400" />,
         'decrease': <TrendingDown className="w-2.5 h-2.5 text-amber-500" />,
