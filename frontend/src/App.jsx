@@ -31,6 +31,35 @@ function App() {
     const [memoryScope, setMemoryScope] = useState('new'); // 'new', 'session', 'decayed'
     const [performanceMode, setPerformanceMode] = useState(false);
 
+    /**
+     * updateMessageTrace - Centralized Single Writer for Scientific Traces.
+     * Enforces monotonic guard and provides source attribution.
+     */
+    const updateMessageTrace = useCallback((targetId, trace, source, seq = 0) => {
+        if (!trace) return;
+
+        console.log(`%c [TRACE_WRITE_ATTEMPT] from=${source} seq=${seq} `, "color: #3b82f6; font-weight: bold;");
+
+        setMessages(prev => prev.map(m => {
+            if (m.id !== targetId) return m;
+
+            const currentSeq = m._lastTraceSeq || 0;
+
+            // MONOTONIC GUARD: Incoming sequence must be >= current
+            if (m.executionTrace && seq < currentSeq) {
+                console.log(`%c [TRACE_GUARD] blocked from=${source} (seq=${seq} < curr=${currentSeq}) `, "color: #ef4444; font-weight: bold;");
+                return m;
+            }
+
+            console.log(`%c [STATE_WRITE] from=${source} seq=${seq} claims=${trace.claims?.length || 0} accepted=true `, "color: #10b981; font-weight: bold;");
+
+            return {
+                ...m,
+                executionTrace: trace,
+                _lastTraceSeq: seq
+            };
+        }));
+    }, []);
 
     const abortRef = useRef(null);
     const timeoutRef = useRef(null);
@@ -86,13 +115,14 @@ function App() {
                     // API returns snake_case, UI uses camelCase
                     const trace = m.executionTrace || m.execution_trace || null;
                     if (trace) {
-                        console.log(`[TRACE_AUDIT] HYDRATED msg ${i}: ${trace.claims?.length || 0} claims`);
+                        console.log(`%c [TRACE_WRITE_ATTEMPT] from=HYDRATION seq=0 `, "color: #3b82f6; font-weight: bold;");
                     }
                     return {
                         ...m,
                         id: `hist-${i}`,
                         isStreaming: false,
-                        executionTrace: trace, // Step 7: Reuse stored trace
+                        executionTrace: trace,
+                        _lastTraceSeq: 0 // Reset sequence for historical data
                     };
                 }));
                 setTurnCount(data.messages.filter(m => m.role === 'user').length);
@@ -264,20 +294,17 @@ function App() {
                                 console.log(`[TRACE_AUDIT] DONE handler: preserving ${m.executionTrace.claims?.length || 0} claims`);
                             }
 
-                            // Step 2: Explicitly preserve executionTrace
+                            // Step 2: Explicitly preserve executionTrace using the single writer logic
                             const preserved = {
                                 ...m,
                                 isStreaming: false,
-                                // Step 4: If statusData has no trace, keep existing
-                                executionTrace: m.executionTrace,
                                 statusMessage: (!m.content || m.content.trim() === '')
                                     ? 'Response was empty. (Hint: Try a simpler query)'
                                     : (statusData?.status === 'error' ? `Error: ${statusData.message}` : '')
                             };
 
-                            // Step 5: Nuclear guard
+                            // Double Check: Ensure we didn't drop the trace
                             if (m.executionTrace && !preserved.executionTrace) {
-                                console.error('[TRACE_AUDIT] 🚨 TRACE DELETED BY DONE HANDLER');
                                 preserved.executionTrace = m.executionTrace;
                             }
 
