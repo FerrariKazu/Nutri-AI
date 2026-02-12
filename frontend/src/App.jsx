@@ -215,7 +215,7 @@ function App() {
         cleanupStream('IDLE');
 
         const newRunId = crypto.randomUUID();
-        const pipeline = preferences.execution_mode || "flavor_explainer";
+        const pipeline = "flavor_explainer"; // Default pipeline
         setActiveRunId(newRunId);
         setActivePipeline(pipeline);
 
