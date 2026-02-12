@@ -40,7 +40,21 @@ const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
 
             <p className="text-sm text-neutral-300 leading-relaxed">
                 Source: <span className="text-white font-medium">{claim.source || 'Unavailable'}</span>
+                {claim.evidence_type && (
+                    <span className="ml-2 text-[8px] font-mono text-neutral-500 border border-neutral-800 px-1 rounded uppercase">
+                        {claim.evidence_type}
+                    </span>
+                )}
             </p>
+
+            {claim.estimated_via_ontology && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/5 border border-amber-500/10">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-500/60" />
+                    <p className="text-[10px] text-amber-500/80 font-medium">
+                        ⚠ Estimated via ontology expansion
+                    </p>
+                </div>
+            )}
 
             {/* Source List / Histograms */}
             <div className="space-y-2">

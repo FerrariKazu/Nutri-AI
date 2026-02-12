@@ -45,6 +45,14 @@ const Tier2Mechanism = React.memo(({ trace, claim, expertMode }) => {
                     <Link2 className="w-3 h-3 text-blue-400 opacity-50" />
                     <Tooltip text="The step-by-step logic chain." />
                 </div>
+                {claim.importance_score > 0.6 && (
+                    <div className="flex items-center gap-1.5 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                        <Zap className="w-2.5 h-2.5 text-blue-400" />
+                        <span className="text-[9px] font-mono text-blue-400 font-bold uppercase tracking-tight">
+                            Major Driver ({Math.round(claim.importance_score * 100)}%)
+                        </span>
+                    </div>
+                )}
             </div>
 
             {/* Vertical Chain */}
