@@ -1,18 +1,25 @@
 import React from 'react';
-import { FlaskConical, Zap, Activity, Eye, ChevronRight } from 'lucide-react';
+import { FlaskConical, Zap, Activity, Eye, ChevronRight, TrendingUp, TrendingDown, Clock, HelpCircle } from 'lucide-react';
 
 /**
- * PerceptionMapper
+ * PerceptionMapper v1.2
  * 
- * Visualizes the Molecule -> Receptor -> Perception chain.
- * Tier 2.5 Feature.
+ * Visualizes the Molecule -> [Receptor] -> Perception chain.
+ * Supports multi-family outputs (Chemical, Process, Physical, Structural).
  */
 const PerceptionMapper = ({ claim }) => {
-    const { receptors = [], sensory_outcomes = [], subject, property } = claim;
+    const { receptors = [], perception_outputs = [], compounds = [] } = claim;
 
-    if (receptors.length === 0 && sensory_outcomes.length === 0) {
+    if (compounds.length === 0 && receptors.length === 0 && perception_outputs.length === 0) {
         return null;
     }
+
+    const directionIcons = {
+        'increase': <TrendingUp className="w-2.5 h-2.5 text-blue-400" />,
+        'decrease': <TrendingDown className="w-2.5 h-2.5 text-amber-500" />,
+        'delay': <Clock className="w-2.5 h-2.5 text-purple-400" />,
+        'neutral': <HelpCircle className="w-2.5 h-2.5 text-neutral-500" />
+    };
 
     return (
         <div className="space-y-4 animate-fade-in">
@@ -25,19 +32,20 @@ const PerceptionMapper = ({ claim }) => {
                 {/* Connection Line */}
                 <div className="absolute left-1/2 top-1/2 -translate-y-1/2 w-full h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent -z-10" />
 
-                {/* Molecule */}
+                {/* Compounds / Stimuli */}
                 <div className="flex-1 flex flex-col items-center gap-1">
                     <div className="p-1.5 rounded-full bg-neutral-900 border border-purple-500/30">
                         <FlaskConical className="w-3 h-3 text-purple-400" />
                     </div>
-                    <span className="text-[9px] font-mono text-neutral-300 uppercase truncate w-full text-center">
-                        {subject}
-                    </span>
-                    {property && (
-                        <span className="text-[7px] font-mono text-neutral-600 uppercase">
-                            {property}
-                        </span>
-                    )}
+                    <div className="flex flex-col items-center">
+                        {compounds.length > 0 ? compounds.map((c, i) => (
+                            <span key={i} className="text-[9px] font-mono text-neutral-300 uppercase truncate w-full text-center">
+                                {c.replace(/_/g, ' ')}
+                            </span>
+                        )) : (
+                            <span className="text-[9px] font-mono text-neutral-300 uppercase">Stimulus</span>
+                        )}
+                    </div>
                 </div>
 
                 <ChevronRight className="w-3 h-3 text-neutral-700 shrink-0" />
@@ -50,26 +58,29 @@ const PerceptionMapper = ({ claim }) => {
                     <div className="flex flex-col items-center">
                         {receptors.length > 0 ? receptors.map((r, i) => (
                             <span key={i} className="text-[9px] font-mono text-neutral-300 uppercase">
-                                {r.receptor}
+                                {r}
                             </span>
                         )) : (
-                            <span className="text-[9px] font-mono text-neutral-600 uppercase italic">Unknown</span>
+                            <span className="text-[9px] font-mono text-neutral-600 uppercase italic">Indirect</span>
                         )}
                     </div>
                 </div>
 
                 <ChevronRight className="w-3 h-3 text-neutral-700 shrink-0" />
 
-                {/* Perception */}
+                {/* Perceptions / Outcomes */}
                 <div className="flex-1 flex flex-col items-center gap-1">
                     <div className="p-1.5 rounded-full bg-neutral-900 border border-purple-500/30">
                         <Activity className="w-3 h-3 text-purple-400" />
                     </div>
                     <div className="flex flex-wrap justify-center gap-1">
-                        {sensory_outcomes.map((s, i) => (
-                            <span key={i} className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 text-[8px] font-bold uppercase">
-                                {s}
-                            </span>
+                        {perception_outputs.map((p, i) => (
+                            <div key={i} className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-500/20 border border-purple-500/30">
+                                <span className="text-purple-300 text-[8px] font-bold uppercase whitespace-nowrap">
+                                    {p.label}
+                                </span>
+                                {directionIcons[p.direction]}
+                            </div>
                         ))}
                     </div>
                 </div>
