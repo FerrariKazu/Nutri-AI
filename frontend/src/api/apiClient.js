@@ -855,7 +855,7 @@ export async function setMode(mode) {
 export async function getHealth() {
     try {
         const baseURL = await getBackendURL();
-        const response = await fetch(`${baseURL}/health`, {
+        const response = await fetch(`${baseURL}/api/health`, {
             headers: { 'ngrok-skip-browser-warning': 'true' }
         });
         if (!response.ok) return { status: 'offline' };
