@@ -710,7 +710,8 @@ export function streamNutriChat(
                 audience_mode: preferences.audience_mode || 'scientific',
                 optimization_goal: preferences.optimization_goal || 'comfort',
                 verbosity: preferences.verbosity || 'medium',
-                x_user_id: getUserId()
+                x_user_id: getUserId(),
+                run_id: preferences.run_id || ''
             });
 
             const url = `${baseURL}/api/chat/stream?${params.toString()}`;

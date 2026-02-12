@@ -278,7 +278,8 @@ function App() {
                 verbosity: 'standard', // Hardcoded default as ControlRail is removed
                 explanations: true,
                 streaming: true,
-                execution_mode: null
+                execution_mode: null,
+                run_id: newRunId
             },
             // onReasoning
             (phaseMessage) => {
