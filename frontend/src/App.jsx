@@ -389,7 +389,7 @@ function App() {
                         : m
                 ));
             },
-            // onTrace — Monotonic Guard: Preserve newer data, ignore older/out-of-order traces
+            // onTrace — Funnel through Single Writer
             (tracePacket) => {
                 resetFailsafe();
                 resetStallIndicator();
@@ -397,26 +397,7 @@ function App() {
                 const trace = tracePacket.content || tracePacket;
                 const incomingSeq = tracePacket.seq || trace.seq || 0;
 
-                setMessages(prev => prev.map(m => {
-                    if (m.id !== assistantId) return m;
-
-                    const currentTrace = m.executionTrace;
-                    const currentSeq = m._lastTraceSeq || 0;
-
-                    // MONOTONIC GUARD: Higher seq wins
-                    if (currentTrace && incomingSeq < currentSeq) {
-                        console.log(`%c [TRACE_GUARD] Ignored older trace (pkg_seq=${incomingSeq} < curr_seq=${currentSeq}) `, "color: #f59e0b; font-weight: bold;");
-                        return m;
-                    }
-
-                    console.log(`%c [STATE_WRITE] seq=${incomingSeq} claims=${trace.claims?.length || 0} accepted=true `, "color: #10b981; font-weight: bold;");
-
-                    return {
-                        ...m,
-                        executionTrace: trace,
-                        _lastTraceSeq: incomingSeq
-                    };
-                }));
+                updateMessageTrace(assistantId, trace, "SSE", incomingSeq);
             }
         );
     };
