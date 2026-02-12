@@ -362,15 +362,33 @@ function App() {
                         : m
                 ));
             },
-            // onTrace — Step 3: PATCH, never create new message
-            (trace) => {
+            // onTrace — Monotonic Guard: Preserve newer data, ignore older/out-of-order traces
+            (tracePacket) => {
                 resetFailsafe();
                 resetStallIndicator();
-                console.log(`[TRACE_AUDIT] onTrace: attaching ${trace?.claims?.length || trace?.content?.claims?.length || 0} claims to ${assistantId}`);
+
+                const trace = tracePacket.content || tracePacket;
+                const incomingSeq = tracePacket.seq || trace.seq || 0;
+
                 setMessages(prev => prev.map(m => {
                     if (m.id !== assistantId) return m;
-                    // Step 3: Patch trace onto existing message, preserve everything
-                    return { ...m, executionTrace: trace.content || trace };
+
+                    const currentTrace = m.executionTrace;
+                    const currentSeq = m._lastTraceSeq || 0;
+
+                    // MONOTONIC GUARD: Higher seq wins
+                    if (currentTrace && incomingSeq < currentSeq) {
+                        console.log(`%c [TRACE_GUARD] Ignored older trace (pkg_seq=${incomingSeq} < curr_seq=${currentSeq}) `, "color: #f59e0b; font-weight: bold;");
+                        return m;
+                    }
+
+                    console.log(`%c [STATE_WRITE] seq=${incomingSeq} claims=${trace.claims?.length || 0} accepted=true `, "color: #10b981; font-weight: bold;");
+
+                    return {
+                        ...m,
+                        executionTrace: trace,
+                        _lastTraceSeq: incomingSeq
+                    };
                 }));
             }
         );

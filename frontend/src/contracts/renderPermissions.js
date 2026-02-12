@@ -12,69 +12,34 @@
 
 export const renderPermissions = {
     /**
-     * Can we render Tier 1 (Evidence)?
-     * Req: Claims exist and are array.
+     * UNBREAKABLE MODE: Always allow Tier 1 if claims array exists.
      */
     canRenderTier1: (trace) => {
         const reasons = [];
-        if (!trace) { reasons.push("Trace missing"); return { allowed: false, reasons }; }
-        if (!trace.claims || !Array.isArray(trace.claims) || trace.claims.length === 0) {
-            reasons.push("No verification claims found");
-            return { allowed: false, reasons };
-        }
+        if (!trace || !trace.claims) return { allowed: false, reasons: ["No data"] };
+        // Even 0 claims should render the container
         return { allowed: true, reasons };
     },
 
     /**
-     * Can we render Tier 2 (Mechanism)?
-     * Req: At least one claim has a non-empty mechanism.
+     * UNBREAKABLE MODE: Always allow Tier 2. 
+     * Specific claim checks handled via placeholders in component.
      */
-    canRenderTier2: (trace) => {
-        const reasons = [];
-        if (!trace || !trace.claims) { reasons.push("No claims"); return { allowed: false, reasons }; }
-
-        const hasMechanism = trace.claims.some(c =>
-            c.mechanism &&
-            Array.isArray(c.mechanism.steps) &&
-            c.mechanism.steps.length > 0
-        );
-
-        if (!hasMechanism) reasons.push("No mechanism steps found in any claim");
-        return { allowed: hasMechanism, reasons };
+    canRenderTier2: () => {
+        return { allowed: true, reasons: [] };
     },
 
     /**
-     * Can we render Tier 3 (Causality)?
-     * Req: Causality metrics exist.
+     * UNBREAKABLE MODE: Always allow Tier 3.
      */
-    canRenderTier3: (trace) => {
-        const reasons = [];
-        if (!trace) { reasons.push("Trace missing"); return { allowed: false, reasons }; }
-
-        const hasMetrics = (
-            trace.tier3_risk_flags_count !== undefined ||
-            trace.tier3_applicability_match !== undefined ||
-            (trace.tier3_missing_context_fields && trace.tier3_missing_context_fields.length > 0)
-        );
-
-        if (!hasMetrics) reasons.push("No causality metrics available");
-        return { allowed: hasMetrics, reasons };
+    canRenderTier3: () => {
+        return { allowed: true, reasons: [] };
     },
 
     /**
-     * Can we render Tier 4 (Temporal)?
-     * Req: Temporal fields exist.
+     * UNBREAKABLE MODE: Always allow Tier 4.
      */
-    canRenderTier4: (trace) => {
-        const reasons = [];
-        if (!trace) { reasons.push("Trace missing"); return { allowed: false, reasons }; }
-
-        const hasTemporal = (
-            trace.tier4_session_age !== undefined ||
-            trace.tier4_decision_changes !== undefined
-        );
-
-        if (!hasTemporal) reasons.push("No temporal data available");
-        return { allowed: hasTemporal, reasons };
+    canRenderTier4: () => {
+        return { allowed: true, reasons: [] };
     }
 };
