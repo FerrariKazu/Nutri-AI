@@ -243,12 +243,8 @@ export async function sendPrompt(prompt, mode = 'standard', signal = null) {
     const { controller, cleanup } = createTimeoutController(API_CONFIG.timeout);
     const baseURL = await getBackendURL();
 
-    // ========== EXTREME DEBUG: REQUEST START ==========
-    debugLog('API', '='.repeat(50));
-    debugLog('API', `📤 SENDING REQUEST: POST ${baseURL}/api/chat`);
-    debugLog('API', `   Mode: ${mode}`);
-    debugLog('API', `   Prompt: ${prompt.substring(0, 100)}...`);
-    debugLog('API', '='.repeat(50));
+    // ========== [REQUEST] Telemetry ==========
+    console.log(`%c [REQUEST] url=${baseURL}/api/chat origin=${window.location.origin} resolved_backend=${baseURL || '(Relative)'} `, "color: #94a3b8; font-family: monospace; font-size: 10px;");
 
     try {
         const response = await retry(async () => {
@@ -699,10 +695,14 @@ export function streamNutriChat(
         handler(parsed, type);
     };
 
-    (async () => {
+    let retryCount = 0;
+    const MAX_SSE_RETRIES = 5;
+
+    const connect = async () => {
+        if (aborted || completed) return;
+
         try {
             const baseURL = await getBackendURL();
-
             const params = new URLSearchParams({
                 message: message,
                 session_id: sessionId,
@@ -710,13 +710,17 @@ export function streamNutriChat(
                 audience_mode: preferences.audience_mode || 'scientific',
                 optimization_goal: preferences.optimization_goal || 'comfort',
                 verbosity: preferences.verbosity || 'medium',
-                x_user_id: getUserId() // Fallback passed as query param for EventSource
+                x_user_id: getUserId()
             });
 
             const url = `${baseURL}/api/chat/stream?${params.toString()}`;
-            debugLog('SSE', `🔗 [OPEN] Opening EventSource: ${url}`);
+
+            // ========== [REQUEST] Telemetry ==========
+            console.log(`%c [REQUEST] type=SSE url=${url} origin=${window.location.origin} resolved_backend=${baseURL || '(Relative)'} `, "color: #94a3b8; font-family: monospace; font-size: 10px;");
 
             eventSource = new EventSource(url);
+
+            console.log(`%c [SSE OPEN] attempt=${retryCount + 1} `, "color: #10b981; font-weight: bold;");
 
             const cleanup = () => {
                 if (eventSource) {
@@ -787,9 +791,17 @@ export function streamNutriChat(
             eventSource.onerror = (e) => {
                 if (completed || aborted) return;
 
-                debugError('SSE', '⚠️ [CONNECTION_ERROR] Stream failed or closed.');
+                debugError('SSE', `⚠️ [CONNECTION_ERROR] Stream failed. Attempt ${retryCount + 1}/${MAX_SSE_RETRIES}`);
                 cleanup();
-                onError(new Error('Stream connection interrupted.'));
+
+                if (retryCount < MAX_SSE_RETRIES) {
+                    retryCount++;
+                    const delay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Max 10s
+                    console.log(`%c [SSE RETRY] Reconnecting in ${delay}ms... `, "color: #f59e0b; font-weight: bold;");
+                    setTimeout(connect, delay);
+                } else {
+                    onError(new Error('Persistent stream connection failure. Backend may be unreachable.'));
+                }
             };
 
             controller.signal.addEventListener('abort', cleanup);
@@ -801,7 +813,9 @@ export function streamNutriChat(
                 onError(error);
             }
         }
-    })();
+    };
+
+    connect();
 
     return () => {
         aborted = true;

@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { streamNutriChat, getSessionId, clearSession, getConversation, getConversationsList, createNewSession, getPerformanceMode } from './api/apiClient';
+import { streamNutriChat, getSessionId, clearSession, getConversation, getConversationsList, createNewSession, getPerformanceMode, getHealth } from './api/apiClient';
 
 
 import SystemStatus from './components/SystemStatus';
@@ -30,6 +30,7 @@ function App() {
     const [turnCount, setTurnCount] = useState(0);
     const [memoryScope, setMemoryScope] = useState('new'); // 'new', 'session', 'decayed'
     const [performanceMode, setPerformanceMode] = useState(false);
+    const [backendStatus, setBackendStatus] = useState('unknown'); // 'unknown' | 'ok' | 'fail'
 
     /**
      * updateMessageTrace - Centralized Single Writer for Scientific Traces.
@@ -91,11 +92,21 @@ function App() {
                 await hydrateSession(targetSid);
 
                 // 3. Set Performance Mode
+                const health = await getHealth();
+                if (health.status === 'offline' || health.status === 'error') {
+                    console.error('%c [CONNECTIVITY] FAIL: Backend unreachable ', "background: #ef4444; color: white; font-weight: bold;");
+                    setBackendStatus('fail');
+                } else {
+                    console.log('%c [CONNECTIVITY] OK ', "background: #10b981; color: white; font-weight: bold;");
+                    setBackendStatus('ok');
+                }
+
                 setPerformanceMode(getPerformanceMode());
 
 
             } catch (e) {
                 console.error('Init failed:', e);
+                setBackendStatus('fail');
                 setStreamStatus('IDLE');
             }
         };
@@ -428,6 +439,24 @@ function App() {
 
                 {/* Main Content Area */}
                 <div className="flex-1 flex flex-col h-full bg-neutral-900/20 relative">
+
+                    {/* Infrastructure Failure Banner */}
+                    {backendStatus === 'fail' && (
+                        <div className="absolute top-0 left-0 right-0 z-50 bg-red-600/90 backdrop-blur-md border-b border-red-500 py-3 px-6 flex items-center justify-between animate-slide-down">
+                            <div className="flex items-center gap-3">
+                                <div className="w-2 h-2 bg-white rounded-full animate-ping"></div>
+                                <span className="text-sm font-bold tracking-tight text-white uppercase">
+                                    Backend unreachable – claims cannot arrive.
+                                </span>
+                            </div>
+                            <button
+                                onClick={() => window.location.reload()}
+                                className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded text-[10px] font-bold text-white uppercase transition-colors"
+                            >
+                                Retry Connection
+                            </button>
+                        </div>
+                    )}
 
                     {/* 2. Chat Header (Fixed Top) */}
                     <ChatHeader
