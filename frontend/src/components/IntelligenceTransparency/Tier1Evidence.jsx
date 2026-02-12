@@ -12,8 +12,9 @@ import { renderPermissions } from '../../contracts/renderPermissions';
  * - No synthetic confidence.
  */
 const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
-    // 1. Permission Gate
-    if (!renderPermissions.canRenderTier1(trace).allowed) { return null; }
+    // 1. Permission Gate - UNBREAKABLE: Never return null.
+    // We render available markers instead.
+    const hasPermission = renderPermissions.canRenderTier1(trace).allowed;
 
     // 2. Strict Data Access
     const strength = claim.confidence > 0.8 ? 'strong' : claim.confidence > 0.4 ? 'moderate' : 'weak';

@@ -183,7 +183,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                             </h3>
                         </div>
                         <p className="text-[10px] text-neutral-500 font-mono mt-0.5">
-                            {uiTrace ? `${uiTrace.claims?.length || 0} Claims Resolved` : 'Execution Telemetry Missing'} • {uiTrace?.metrics.duration ? `${Math.round(uiTrace.metrics.duration)}ms` : '---'} Latency
+                            {uiTrace ? `${claims.length} Claims Resolved` : 'Execution Telemetry Missing'} • {uiTrace?.metrics.duration ? `${Math.round(uiTrace.metrics.duration)}ms` : '---'} Latency
                         </p>
                     </div>
                 </div>
@@ -249,10 +249,10 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                         ) : (
                             <>
                                 {/* Claim Selector */}
-                                {uiTrace?.claims?.length > 1 && (
+                                {claims.length > 1 && (
                                     <div className="px-4 py-2 flex items-center gap-2 border-b border-neutral-800 bg-neutral-900/10 overflow-x-auto scrollbar-none">
                                         <MessageSquare className="w-3 h-3 text-neutral-700 shrink-0 mr-1" />
-                                        {uiTrace.claims.map((claim, idx) => (
+                                        {claims.map((claim, idx) => (
                                             <button
                                                 key={claim.id || idx}
                                                 onClick={() => handleClaimSelect(idx)}

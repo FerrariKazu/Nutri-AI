@@ -12,19 +12,23 @@ import { renderPermissions } from '../../contracts/renderPermissions';
  * - Collapse if execution trace has no mechanism.
  */
 const Tier2Mechanism = React.memo(({ trace, claim, expertMode }) => {
-    const mechanism = claim.mechanism;
+    const mechanism = claim.mechanism || { steps: [] };
     const [expandedStep, setExpandedStep] = useState(null);
 
-    // 1. Permission Gate
-    if (!renderPermissions.canRenderTier2({ claims: [claim] }).allowed) { // Check specific claim
+    // 1. Permission Gate - UNBREAKABLE: Never return null / hide tier.
+    const hasPermission = renderPermissions.canRenderTier2({ claims: [claim] }).allowed;
+    const hasSteps = mechanism.steps && mechanism.steps.length > 0;
+
+    if (!hasSteps) {
         return (
             <div className="space-y-4 opacity-60">
                 <div className="flex items-center gap-2">
                     <TierBadge tier={2} label="Mechanism" />
                     <Link2 className="w-3 h-3 text-blue-400 opacity-50" />
+                    <Tooltip text="The step-by-step logic chain." />
                 </div>
                 <div className="p-4 rounded-xl border border-dashed border-neutral-800 bg-neutral-900/50 text-center">
-                    <p className="text-[10px] font-mono text-neutral-500 uppercase tracking-[0.2em]">No Mechanism Chain</p>
+                    <p className="text-[10px] font-mono text-neutral-500 uppercase tracking-[0.2em]">⚠ Mechanism data incomplete</p>
                 </div>
             </div>
         );
