@@ -53,66 +53,44 @@ function debugError(category, message, error = null) {
     }
 }
 
-let finalBackendURL = '';
+/**
+ * Runtime Backend Detection & Resolution
+ * Priority: 1. window.__NUTRI_BACKEND_URL__ (Deployment injection)
+ *           2. import.meta.env.VITE_BACKEND_URL (Build-time config)
+ *           3. location.origin (Same-origin fallback)
+ */
+async function resolveBackend() {
+    debugLog('CONNECTIVITY', '🔍 Resolving final backend identity...');
 
-async function detectBackend() {
-    debugLog('BACKEND', '🔍 Starting backend detection...');
+    let resolved = '';
 
-    // 0. Environment Guard: If we are in production, FORCE relative URLs to use Vercel Proxy.
-    // This overrides any VITE_API_URL that might be set in the environment.
-    if (import.meta.env.PROD) {
-        debugLog('BACKEND', '🚀 Production detected. Forcing relative URLs for same-origin proxying.');
-        return '';
+    // 1. Runtime Override (Priority 1)
+    if (window.__NUTRI_BACKEND_URL__) {
+        resolved = window.__NUTRI_BACKEND_URL__.replace(/\/$/, '');
+        debugLog('CONNECTIVITY', `🏢 [PRIORITY 1] Injected Backend: ${resolved}`);
     }
-
-    // 1. Explicit VITE_API_URL (Local Development only or if explicitly needed)
-    if (import.meta.env.VITE_API_URL) {
-        const envUrl = import.meta.env.VITE_API_URL.replace(/\/$/, '');
-        // Only allow if it's localhost (local development)
-        if (envUrl.includes('localhost') || envUrl.includes('127.0.0.1')) {
-            debugLog('BACKEND', `🌍 Using Local VITE_API_URL: ${envUrl}`);
-            return envUrl;
-        }
-        debugLog('BACKEND', `🚫 Ignoring remote VITE_API_URL: ${envUrl} (Staying same-origin)`);
+    // 2. Build-time Config (Priority 2)
+    else if (import.meta.env.VITE_BACKEND_URL) {
+        resolved = import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '');
+        debugLog('CONNECTIVITY', `🏗️ [PRIORITY 2] Env Backend: ${resolved}`);
     }
+    // 3. Same-origin fallback
+    else {
+        // In local development, location.origin is usually 5173, so we NEED the Vite Proxy logic
+        // but it must NOT be forced in production.
+        const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-    // 2. Localhost Proxy Guard
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        debugLog('BACKEND', '🛡️ Localhost detected. Using relative URL for Vite Proxy.');
-        return '';
-    }
-
-    // 1. Try local URLs first
-    for (const url of LOCAL_BACKEND_URLS) {
-        try {
-            debugLog('BACKEND', `   Trying: ${url}`);
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
-            const response = await fetch(`${url}/health`, {
-                signal: controller.signal,
-                headers: { 'ngrok-skip-browser-warning': 'true' }
-            });
-            clearTimeout(timeoutId);
-            if (response.ok) {
-                const healthData = await response.json().catch(() => ({}));
-                if (healthData.status === 'constrained') {
-                    _performanceMode = true;
-                    debugLog('BACKEND', '⚠️ Performance Mode active (Resource Constrained)');
-                }
-                debugLog('BACKEND', `✅ Backend found at: ${url}`);
-                console.log(`✅ Local Backend detected, using: ${url}`);
-                return url;
-            }
-
-        } catch (error) {
-            debugLog('BACKEND', `   ❌ ${url} - ${error.message || 'not reachable'}`);
+        if (isLocalHost && !import.meta.env.PROD) {
+            resolved = ''; // Use Vite Proxy
+            debugLog('CONNECTIVITY', `🛡️ [FALLBACK] Localhost detected. Using relative URL (Vite Proxy).`);
+        } else {
+            resolved = window.location.origin;
+            debugLog('CONNECTIVITY', `🌐 [FALLBACK] Same-Origin Resolution: ${resolved}`);
         }
     }
 
-    // 2. Final Fallback: Same-Origin (Relative Paths)
-    // This allows Vercel (Production) or Vite Proxy (Local) to handle the forwarding.
-    debugLog('BACKEND', '📡 Final Fallback: Using relative URL (Same-Origin Proxy Mode)');
-    return '';
+    console.log(`%c [CONNECTIVITY] Resolved: "${resolved || '(Relative/Proxy)'}" `, "background: #1e293b; color: #38bdf8; font-weight: bold; padding: 2px 4px;");
+    return resolved;
 }
 
 // Cached backend URL promise
@@ -120,10 +98,7 @@ let backendUrlPromise = null;
 
 function getBackendURL() {
     if (!backendUrlPromise) {
-        backendUrlPromise = detectBackend().then(url => {
-            console.log(`📡 [API] Final Backend URL selected: "${url}" ${url === '' ? '(Using Vite Proxy)' : ''}`);
-            return url;
-        });
+        backendUrlPromise = resolveBackend();
     }
     return backendUrlPromise;
 }
