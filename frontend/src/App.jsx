@@ -31,6 +31,8 @@ function App() {
     const [memoryScope, setMemoryScope] = useState('new'); // 'new', 'session', 'decayed'
     const [performanceMode, setPerformanceMode] = useState(false);
     const [backendStatus, setBackendStatus] = useState('unknown'); // 'unknown' | 'ok' | 'fail'
+    const [activeRunId, setActiveRunId] = useState(null);
+    const [activePipeline, setActivePipeline] = useState(null);
 
     /**
      * updateMessageTrace - Centralized Single Writer for Scientific Traces.
@@ -212,6 +214,11 @@ function App() {
         // but explicit ordering helps logic clarity)
         cleanupStream('IDLE');
 
+        const newRunId = crypto.randomUUID();
+        const pipeline = preferences.execution_mode || "flavor_explainer";
+        setActiveRunId(newRunId);
+        setActivePipeline(pipeline);
+
         setStreamStatus('STREAMING');
         setTurnCount(prev => prev + 1);
 
@@ -366,12 +373,16 @@ function App() {
                 ));
                 cleanupStream('IDLE'); // Unlock even on error
             },
-            // onStatus
             (statusData) => {
-                resetFailsafe();
-                resetStallIndicator();
                 if (!statusData) return;
-                const { phase, message } = statusData;
+
+                // Border Control
+                if (statusData.run_id && statusData.run_id !== newRunId) {
+                    console.warn(`[RUN_GUARD] Rejected foreign status from ${statusData.run_id}`);
+                    return;
+                }
+
+                resetFailsafe();
                 if (phase === 'reset') {
                     setMemoryScope('decayed');
                     setMessages(prev => [
@@ -392,6 +403,12 @@ function App() {
             },
             // onNutritionReport
             (report) => {
+                // Border Control
+                if (report.run_id && report.run_id !== newRunId) {
+                    console.warn(`[RUN_GUARD] Rejected foreign report from ${report.run_id}`);
+                    return;
+                }
+
                 resetFailsafe();
                 resetStallIndicator();
                 setMessages(prev => prev.map(m =>
@@ -402,6 +419,19 @@ function App() {
             },
             // onTrace — Funnel through Single Writer
             (tracePacket) => {
+                const incomingRunId = tracePacket.run_id || (tracePacket.content && tracePacket.content.run_id);
+                const incomingPipeline = tracePacket.pipeline || (tracePacket.content && tracePacket.content.pipeline);
+
+                // Border Control: No warnings. No merging. No forgiveness.
+                if (incomingRunId && incomingRunId !== newRunId) {
+                    console.warn(`[RUN_GUARD] REJECTED: run=${incomingRunId} (expected ${newRunId})`);
+                    return;
+                }
+                if (incomingPipeline && incomingPipeline !== pipeline) {
+                    console.warn(`[PIPELINE_GUARD] REJECTED: pipeline=${incomingPipeline} (expected ${pipeline})`);
+                    return;
+                }
+
                 resetFailsafe();
                 resetStallIndicator();
 
