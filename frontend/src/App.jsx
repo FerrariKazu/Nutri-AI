@@ -383,6 +383,9 @@ function App() {
                 }
 
                 resetFailsafe();
+                resetStallIndicator();
+
+                const { phase, message } = statusData.content || statusData;
                 if (phase === 'reset') {
                     setMemoryScope('decayed');
                     setMessages(prev => [
