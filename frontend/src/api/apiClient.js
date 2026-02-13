@@ -23,7 +23,7 @@ const RAILWAY_BACKEND_URL = 'https://nutri-ai.up.railway.app';
 // ============================================================================ 
 // EXTREME DEBUG LOGGING - NEVER SUPPRESS
 // ============================================================================ 
-const DEBUG_MODE = true;
+const DEBUG_MODE = false;
 
 function debugLog(category, message, data = null) {
     if (!DEBUG_MODE) return;
