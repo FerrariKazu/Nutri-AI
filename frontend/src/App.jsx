@@ -41,20 +41,14 @@ function App() {
     const updateMessageTrace = useCallback((targetId, trace, source, seq = 0) => {
         if (!trace) return;
 
-        console.log(`%c [TRACE_WRITE_ATTEMPT] from=${source} seq=${seq} `, "color: #3b82f6; font-weight: bold;");
-
         setMessages(prev => prev.map(m => {
             if (m.id !== targetId) return m;
 
             const currentSeq = m._lastTraceSeq || 0;
 
-            // MONOTONIC GUARD: Incoming sequence must be >= current
             if (m.executionTrace && seq < currentSeq) {
-                console.log(`%c [TRACE_GUARD] blocked from=${source} (seq=${seq} < curr=${currentSeq}) `, "color: #ef4444; font-weight: bold;");
                 return m;
             }
-
-            console.log(`%c [STATE_WRITE] from=${source} seq=${seq} claims=${trace.claims?.length || 0} accepted=true `, "color: #10b981; font-weight: bold;");
 
             return {
                 ...m,
@@ -308,11 +302,6 @@ function App() {
                 setMessages(prev => {
                     const updated = prev.map(m => {
                         if (m.id === assistantId) {
-                            // Step 5: Nuclear debug — catch trace deletion
-                            if (m.executionTrace) {
-                                console.log(`[TRACE_AUDIT] DONE handler: preserving ${m.executionTrace.claims?.length || 0} claims`);
-                            }
-
                             // Step 2: Explicitly preserve executionTrace using the single writer logic
                             const preserved = {
                                 ...m,
