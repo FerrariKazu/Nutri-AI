@@ -751,6 +751,9 @@ export function streamNutriChat(
                     debugLog('SSE', '🕵️ [EXECUTION_TRACE] received');
 
                     // [TRACE_AUDIT] Step 6: Frontend acceptance
+                    // TELEMETRY: RAW PACKET ARRIVAL
+                    console.log("📡 RAW TRACE FROM SERVER", data);
+
                     const rawTrace = data.content || data; // Handle envelope
                     const claimCount = rawTrace.claims ? rawTrace.claims.length : 0;
                     console.log(`[TRACE_AUDIT] TRACE RECEIVED: ${claimCount} claims`);
