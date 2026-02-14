@@ -116,6 +116,8 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
 
     useEffect(() => {
         if (claims.length > 0) {
+            // TELEMETRY: NORMALIZATION AUDIT
+            console.log("🧪 AFTER NORMALIZATION", claims);
             console.log(`%c [PAINT] Rendering ${claims.length} claims `, "background: #065f46; color: white; padding: 2px 4px; border-radius: 4px;", claims);
         }
     }, [claims]);

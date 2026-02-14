@@ -41,6 +41,9 @@ function App() {
     const updateMessageTrace = useCallback((targetId, trace, source, seq = 0) => {
         if (!trace) return;
 
+        // TELEMETRY: STATE UPDATE
+        console.log("🧠 REACT STATE TRACE", trace);
+
         setMessages(prev => prev.map(m => {
             if (m.id !== targetId) return m;
 
