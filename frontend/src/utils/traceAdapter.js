@@ -41,6 +41,10 @@ const adaptStrict = (rawTrace) => {
             statement: strictVal(claim.statement || claim.text),
             domain: strictVal(claim.domain),
             mechanism_type: strictVal(claim.mechanism_type),
+            // FIX: Pass Mechanism Data
+            mechanism: strictVal(claim.mechanism),
+            mechanism_topology: strictVal(claim.mechanism_topology || claim.graph),
+
             compounds: strictVal(claim.compounds) || [],
             receptors: strictVal(claim.receptors) || [],
             perception_outputs: strictVal(claim.perception_outputs) || [],
@@ -55,6 +59,11 @@ const adaptStrict = (rawTrace) => {
             decision: strictVal(claim.decision),
         };
     });
+
+    // TELEMETRY: ADAPTER OUT
+    if (normalizedClaims.length > 0) {
+        console.log("🔌 ADAPTER: MAPPED CLAIMS", normalizedClaims);
+    }
 
     // 3. Construct Verified Object
     return {
