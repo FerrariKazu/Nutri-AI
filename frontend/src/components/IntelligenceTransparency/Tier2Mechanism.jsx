@@ -15,9 +15,21 @@ const Tier2Mechanism = React.memo(({ trace, claim, expertMode }) => {
     const mechanism = claim.mechanism || { steps: [] };
     const [expandedStep, setExpandedStep] = useState(null);
 
+    // ADAPTER: Support v2.1 Graph Schema (nodes/edges)
+    let steps = mechanism.steps || [];
+    if (steps.length === 0 && mechanism.nodes && mechanism.nodes.length > 0) {
+        // Linearize the graph for the list view
+        steps = mechanism.nodes.map(node => ({
+            step_type: node.type || 'interaction',
+            entity_name: node.label || node.id,
+            description: `Mechanistic node identified as ${node.type || 'unknown entity'}.`,
+            evidence_source: "Sensory Ontology v2.1"
+        }));
+    }
+
     // 1. Permission Gate - UNBREAKABLE: Never return null / hide tier.
     const hasPermission = renderPermissions.canRenderTier2({ claims: [claim] }).allowed;
-    const hasSteps = mechanism.steps && mechanism.steps.length > 0;
+    const hasSteps = steps.length > 0;
 
     if (!hasSteps) {
         return (

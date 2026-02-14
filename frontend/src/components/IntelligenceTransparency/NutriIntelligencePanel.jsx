@@ -60,8 +60,8 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
             importance_score: c.importance_score || 0.5,
             source: c.source || "System intelligence context",
             confidence: c.confidence || { current: 0.89, prior: 0.85, reason: "Heuristic estimation" },
-            mechanism: c.mechanism || { steps: [] },
-            mechanism_topology: c.mechanism_topology || c.graph || { nodes: [], edges: [] },
+            mechanism: c.mechanism || { steps: [], nodes: [], edges: [] },
+            mechanism_topology: c.mechanism_topology || c.graph || c.mechanism || { nodes: [], edges: [] },
             compounds: c.compounds || [],
             receptors: c.receptors || [],
             perception_outputs: c.perception_outputs || []
