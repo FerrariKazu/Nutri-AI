@@ -76,9 +76,9 @@ const Tier2Mechanism = React.memo(({ trace, claim, expertMode }) => {
                 {/* Connecting Line */}
                 <div className="absolute left-[13px] top-4 bottom-4 w-px bg-gradient-to-b from-blue-500/50 via-blue-500/20 to-transparent shadow-[0_0_8px_rgba(59,130,246,0.3)]" />
 
-                {mechanism.steps.map((step, idx) => {
+                {steps.map((step, idx) => {
                     const Icon = stepIcons[step.step_type] || Activity;
-                    const isLast = idx === mechanism.steps.length - 1;
+                    const isLast = idx === steps.length - 1;
                     const isExpanded = expandedStep === idx;
 
                     return (
