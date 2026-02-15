@@ -119,31 +119,31 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
         ? (claims[selectedClaimIdx] || claims[0])
         : null;
 
+    // Mandate Check
+    const isMandateFailure = useMemo(() => {
+        return uiTrace?.trace_required && uiTrace.claims?.length === 0;
+    }, [uiTrace]);
+
     useEffect(() => {
         if (claims.length > 0) {
             // TELEMETRY: NORMALIZATION AUDIT
             console.log("🧪 AFTER NORMALIZATION", claims);
             console.log(`%c [PAINT] Rendering ${claims.length} claims `, "background: #065f46; color: white; padding: 2px 4px; border-radius: 4px;", claims);
+
+            // ASSERTION: STRICT RENDER
+            claims.forEach((c, i) => {
+                if (c.statement && (c.importance_score === undefined || c.importance_score === null)) {
+                    console.error(`[STRICT_RENDER_FAIL] Claim ${i} is missing importance_score (backend sent null?)`, c);
+                }
+                if (c.statement && (c.verification_level === undefined || c.verification_level === null)) {
+                    console.error(`[STRICT_RENDER_FAIL] Claim ${i} is missing verification_level`, c);
+                }
+                if (c.statement && (c.confidence === undefined || c.confidence === null)) {
+                    console.error(`[STRICT_RENDER_FAIL] Claim ${i} is missing confidence metrics`, c);
+                }
+            });
         }
     }, [claims]);
-
-    // Schema/Status Checks
-    const isStreaming = uiTrace?.status === 'streaming' || uiTrace?.status === 'STREAMING';
-
-    // Integrity Message - Premium Narrative
-    const integrityMessage = useMemo(() => {
-        if (!uiTrace) return "No execution trace recorded";
-        if (uiTrace.status === 'INIT') return "Initializing Scientific Workspace...";
-        if (uiTrace.status === 'STREAMING' || uiTrace.status === 'streaming') return "Reasoning Stream Active...";
-        if (uiTrace.status === 'ENRICHING') return "Enriching Knowledge Topology...";
-        if (uiTrace.status === 'VERIFIED' || uiTrace.status === 'COMPLETE' || uiTrace.status === 'complete') return "Claim Verification Complete";
-        return "Deterministic System Telemetry";
-    }, [uiTrace]);
-
-    // Mandate Check
-    const isMandateFailure = useMemo(() => {
-        return uiTrace?.trace_required && uiTrace.claims?.length === 0;
-    }, [uiTrace]);
 
 
     return (
