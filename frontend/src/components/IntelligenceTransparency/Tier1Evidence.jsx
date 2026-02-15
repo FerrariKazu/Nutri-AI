@@ -21,8 +21,10 @@ const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
     const hasConfidence = claim.confidence !== undefined && claim.confidence !== null;
     const confidenceVal = hasConfidence ? Math.round(claim.confidence * 100) : null;
 
-    // Strict Source
-    const sourceText = claim.source;
+    // Strict Source — handle both string and object forms from backend
+    const sourceText = typeof claim.source === 'object' && claim.source !== null
+        ? claim.source.name || JSON.stringify(claim.source)
+        : claim.source;
 
     return (
         <div className="space-y-4">
