@@ -8,7 +8,10 @@ import { FlaskConical, Zap, Activity, Eye, ChevronRight, TrendingUp, TrendingDow
  * Supports multi-family outputs (Chemical, Process, Physical, Structural).
  */
 const PerceptionMapper = ({ claim }) => {
-    const { receptors = [], perception_outputs = [], compounds = [] } = claim;
+    // STRICT FIX: Handle nulls explicitly (destructuring defaults don't catch null)
+    const receptors = claim.receptors || [];
+    const perception_outputs = claim.perception_outputs || [];
+    const compounds = claim.compounds || [];
 
     const directionIcons = {
         'increase': <TrendingUp className="w-2.5 h-2.5 text-blue-400" />,
