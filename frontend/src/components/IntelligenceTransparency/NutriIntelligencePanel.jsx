@@ -28,6 +28,7 @@ import PerceptionMapper from './PerceptionMapper';
 import IntelligenceGraph from './IntelligenceGraph';
 import { Tooltip, getConfidenceNarrative } from './UIUtils';
 import { renderPermissions } from '../../contracts/renderPermissions';
+import { adaptClaimForUI } from '../../utils/traceAdapter';
 
 /**
  * NutriIntelligencePanel
