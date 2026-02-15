@@ -56,6 +56,11 @@ const adaptStrict = (rawTrace) => {
             // STRICT: Metrics
             verification_level: strictVal(claim.verification_level),
             importance_score: strictVal(claim.importance_score),
+            confidence: strictVal(
+                typeof claim.confidence === 'object' && claim.confidence !== null
+                    ? claim.confidence.current
+                    : claim.confidence
+            ),
 
             // Legacy/Mapping (if still needed by components, but STRICT)
             claim_id: strictVal(claim.id || claim.claim_id),
