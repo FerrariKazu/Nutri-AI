@@ -1,6 +1,6 @@
 import React from 'react';
 import { Database, FlaskConical, AlertCircle, Hash } from 'lucide-react';
-import { TierBadge, EvidenceBadge, Tooltip } from './UIUtils';
+import { TierBadge, Tooltip } from './UIUtils';
 import { renderPermissions } from '../../contracts/renderPermissions';
 
 /**
@@ -34,8 +34,8 @@ const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
                 </div>
                 {hasConfidence ? (
                     <span className={`text-[9px] font-mono px-2 py-0.5 rounded border ${confidenceVal > 80 ? 'text-green-400 bg-green-500/10 border-green-500/20' :
-                            confidenceVal > 50 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
-                                'text-neutral-500 bg-neutral-900 border-neutral-800'
+                        confidenceVal > 50 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
+                            'text-neutral-500 bg-neutral-900 border-neutral-800'
                         }`}>
                         CONFIDENCE: {confidenceVal}%
                     </span>
