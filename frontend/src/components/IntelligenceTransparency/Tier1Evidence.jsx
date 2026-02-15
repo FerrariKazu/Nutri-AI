@@ -74,9 +74,9 @@ const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
                 <div className="flex flex-wrap gap-2">
                     {(expertMode && metrics.sourceContribution && Object.keys(metrics.sourceContribution).length > 0
                         ? Object.keys(metrics.sourceContribution)
-                        : [claim.source]).filter(Boolean).map((src, i) => (
+                        : [sourceText]).filter(Boolean).map((src, i) => (
                             <div key={i} className="px-2.5 py-1 rounded bg-neutral-800/40 border border-neutral-700/30 flex items-center gap-2.5 cursor-default">
-                                <span className="text-[10px] text-neutral-400 font-mono tracking-tight">{src}</span>
+                                <span className="text-[10px] text-neutral-400 font-mono tracking-tight">{typeof src === 'object' ? (src.name || JSON.stringify(src)) : src}</span>
                                 {expertMode && metrics.sourceContribution && (
                                     <span className="text-[9px] text-green-400 font-bold font-mono">
                                         {(metrics.sourceContribution[src] || 0)}%
