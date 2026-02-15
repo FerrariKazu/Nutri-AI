@@ -49,7 +49,7 @@ const Tier3Causality = React.memo(({ uiTrace, claimIdx, expertMode }) => {
                     )}
                 </div>
 
-                {causality.missingFields.length > 0 && (
+                {missingFields.length > 0 && (
                     <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/10 flex items-start gap-3 shadow-inner">
                         <HelpCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                         <div>
@@ -57,7 +57,7 @@ const Tier3Causality = React.memo(({ uiTrace, claimIdx, expertMode }) => {
                                 <p className="text-[10px] font-bold text-amber-500 uppercase tracking-tight">Context Gap</p>
                             </div>
                             <p className="text-[11px] text-neutral-400 mt-1 leading-snug">
-                                Missing parameters: <span className="font-bold text-amber-400/80">{causality.missingFields.join(', ')}</span>
+                                Missing parameters: <span className="font-bold text-amber-400/80">{missingFields.join(', ')}</span>
                             </p>
                         </div>
                     </div>
