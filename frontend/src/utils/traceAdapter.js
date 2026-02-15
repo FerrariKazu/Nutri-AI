@@ -21,49 +21,51 @@ import { validateTrace } from '../contracts/traceValidator';
 const strictVal = (val) => (val !== undefined && val !== null) ? val : null;
 
 /**
+ * REQUIRED FIELDS CONTRACT
+ * If any of these exist in the raw claim but are missing after adaptation,
+ * the adapter has a bug and MUST throw.
+ */
+const REQUIRED_CLAIM_FIELDS = [
+    'verification_level', 'confidence', 'importance_score',
+    'statement', 'domain', 'mechanism', 'compounds', 'receptors'
+];
+
+/**
  * adaptClaimForUI
- * Centralized, strict claim normalization.
- * Enforces NO defaults and explicit NULLs.
+ * 
+ * RULE: PASS-THROUGH, NOT REBUILD.
+ * 1. Spread raw claim first — preserves ALL fields.
+ * 2. Only overlay fields that need UI remapping.
+ * 3. Assert contract: if raw had it, adapted must have it.
  */
 export const adaptClaimForUI = (claim) => {
     if (!claim) return null;
 
-    const adapted = {
-        id: strictVal(claim.id || claim.claim_id),
-        statement: strictVal(claim.statement || claim.text),
-        domain: strictVal(claim.domain),
-        origin: strictVal(claim.origin),
-        verification_level: strictVal(claim.verification_level),
-        importance_score: strictVal(claim.importance_score),
-        source: strictVal(claim.source),
+    // SPREAD FIRST — every field from backend survives.
+    const adapted = { ...claim };
 
-        // STRICT: Pass Mechanism Data
-        mechanism: strictVal(claim.mechanism),
-        mechanism_topology: strictVal(claim.mechanism_topology || claim.graph),
+    // UI REMAPPINGS ONLY (aliases the UI components expect)
+    adapted.id = adapted.id || adapted.claim_id;
+    adapted.claim_id = adapted.id;
+    adapted.statement = adapted.statement || adapted.text;
+    adapted.text = adapted.statement;
+    adapted.mechanism_topology = adapted.mechanism_topology || adapted.graph;
+    adapted.verified = !!(adapted.verified !== undefined ? adapted.verified : adapted.isVerified);
 
-        // STRICT: Lists
-        compounds: strictVal(claim.compounds),
-        receptors: strictVal(claim.receptors),
-        perception_outputs: strictVal(claim.perception_outputs),
-        evidence: strictVal(claim.evidence),
+    // Flatten structured confidence object → number
+    if (typeof adapted.confidence === 'object' && adapted.confidence !== null) {
+        adapted.confidence = adapted.confidence.current ?? null;
+    }
 
-        // STRICT: Metrics (Object-to-Flat flattening)
-        confidence: strictVal(
-            typeof claim.confidence === 'object' && claim.confidence !== null
-                ? claim.confidence.current
-                : claim.confidence
-        ),
-
-        // Legacy/Mapping (if still needed by components, but STRICT)
-        claim_id: strictVal(claim.id || claim.claim_id),
-        text: strictVal(claim.statement || claim.text),
-        verified: !!(claim.verified !== undefined ? claim.verified : claim.isVerified),
-        decision: strictVal(claim.decision),
-    };
-
-    // [STRICT_RENDER_FAIL] Internal Verification
-    if (adapted.statement && (adapted.confidence === null || adapted.verification_level === null)) {
-        console.error("❌ [ADAPTER_ERROR] adaptClaimForUI dropped critical fields!", { raw: claim, adapted });
+    // CONTRACT ASSERTION: If raw had it, adapted MUST have it.
+    for (const field of REQUIRED_CLAIM_FIELDS) {
+        if (claim[field] !== undefined && claim[field] !== null && (adapted[field] === undefined || adapted[field] === null)) {
+            console.error(
+                `%c [ADAPTER_CONTRACT_FAIL] Field "${field}" existed in raw claim but is missing/null in adapted! `,
+                "background: #dc2626; color: white; font-weight: bold; padding: 2px 6px; border-radius: 4px;",
+                { raw: claim, adapted }
+            );
+        }
     }
 
     return adapted;
