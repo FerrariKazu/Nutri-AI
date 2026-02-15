@@ -9,7 +9,10 @@ import { FlaskConical, Target, Activity, ChevronRight } from 'lucide-react';
  * Visualizes the reasoning chain as a directed graph.
  */
 const IntelligenceGraph = ({ claim }) => {
-    const { compounds = [], receptors = [], perception_outputs = [] } = claim;
+    // STRICT FIX: Handle nulls explicitly
+    const compounds = claim.compounds || [];
+    const receptors = claim.receptors || [];
+    const perception_outputs = claim.perception_outputs || [];
 
     console.log(`[GRAPH_PAINT] Rendering topology for ${claim.id}`);
 
