@@ -42,7 +42,7 @@ function App() {
         if (!trace) return;
 
         // TELEMETRY: STATE UPDATE
-        console.log("🧠 REACT STATE TRACE", trace);
+        console.log("🧠 [POINT 3: STATE STORE] REACT STATE TRACE", { trace, source, seq });
 
         setMessages(prev => prev.map(m => {
             if (m.id !== targetId) return m;
