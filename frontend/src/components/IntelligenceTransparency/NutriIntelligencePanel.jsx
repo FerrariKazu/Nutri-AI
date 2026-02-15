@@ -49,22 +49,27 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
 
     // 🧩 STEP 3 — FIELD NAME ADAPTER (CRITICAL)
     const normalizeClaim = useCallback((c) => {
-        if (!c) return null;
+        if (!c || !c.statement) return null; // STRICT: No statement, no render.
+
         return {
             ...c,
-            id: c.id || c.claim_id || `temp-${Math.random()}`,
-            statement: c.statement || c.text || "Theoretical claim structure",
-            domain: c.domain || "biological",
-            origin: c.origin || "model",
-            verification_level: c.verification_level || "theoretical",
-            importance_score: c.importance_score || 0.5,
-            source: c.source || "System intelligence context",
-            confidence: c.confidence || { current: 0.89, prior: 0.85, reason: "Heuristic estimation" },
-            mechanism: c.mechanism || { steps: [], nodes: [], edges: [] },
-            mechanism_topology: c.mechanism_topology || c.graph || c.mechanism || { nodes: [], edges: [] },
-            compounds: c.compounds || [],
-            receptors: c.receptors || [],
-            perception_outputs: c.perception_outputs || []
+            id: c.id || c.claim_id, // Allow ID fallback only for keys
+
+            // STRICT: Verbatim Mapping
+            statement: c.statement,
+            domain: c.domain,
+            origin: c.origin,
+            verification_level: c.verification_level,
+            importance_score: c.importance_score,
+            source: c.source,
+            confidence: c.confidence,
+
+            // STRICT: Structural Objects (Empty arrays allowed if backend sends them)
+            mechanism: c.mechanism,
+            mechanism_topology: c.mechanism_topology,
+            compounds: c.compounds,
+            receptors: c.receptors,
+            perception_outputs: c.perception_outputs
         };
     }, []);
 

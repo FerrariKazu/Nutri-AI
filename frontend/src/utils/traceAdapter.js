@@ -83,11 +83,12 @@ const adaptStrict = (rawTrace) => {
 
         claims: normalizedClaims,
 
-        // Availability Flags (Logic moved to renderPermissions, but flags help UI)
+        // Availability Flags (Strict)
         hasTier1: normalizedClaims.length > 0,
-        hasTier2: normalizedClaims.some(c => c.mechanism),
+        hasTier2: normalizedClaims.some(c => c.mechanism || (c.mechanism_topology && c.mechanism_topology.nodes && c.mechanism_topology.nodes.length > 0)),
 
         metrics: {
+            // STRICT: Confidence must come from backend
             confidence: strictVal(rawTrace.confidence_score || rawTrace.final_confidence),
             duration: strictVal(rawTrace.duration_ms),
             pubchemUsed: !!rawTrace.pubchem_used,
@@ -98,22 +99,22 @@ const adaptStrict = (rawTrace) => {
         causality: {
             applicability: strictVal(rawTrace.tier3_applicability_match),
             riskCount: strictVal(rawTrace.tier3_risk_flags_count),
-            riskFlags: rawTrace.tier3_risk_flags || {}, // Raw object
-            missingFields: rawTrace.tier3_missing_context_fields || []
+            riskFlags: rawTrace.tier3_risk_flags, // Raw object
+            missingFields: rawTrace.tier3_missing_context_fields
         },
 
         temporal: {
             turn: strictVal(rawTrace.tier4_session_age),
-            revisions: rawTrace.tier4_belief_revisions || [],
+            revisions: rawTrace.tier4_belief_revisions,
             resolvedUncertainties: strictVal(rawTrace.tier4_uncertainty_resolved_count),
             saturationTriggered: !!rawTrace.tier4_saturation_triggered,
-            anchoring: rawTrace.tier4_session_age > 1 ? `Turn ${rawTrace.tier4_session_age}` : null // Minimal formatting allowed, or move to component? "Turn X" is factual.
+            anchoring: rawTrace.tier4_session_age > 1 ? `Turn ${rawTrace.tier4_session_age}` : null
         },
 
         // Expert Data
         expert: {
-            invocations: rawTrace.invocations || [],
-            sourceContribution: rawTrace.source_contribution || {}
+            invocations: rawTrace.invocations,
+            sourceContribution: rawTrace.source_contribution
         }
     };
 };
