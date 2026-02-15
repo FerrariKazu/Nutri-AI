@@ -69,22 +69,7 @@ export const RiskThermometer = ({ severity }) => {
     );
 };
 
-export const EvidenceBadge = ({ strength }) => {
-    const configs = {
-        'strong': { color: 'bg-green-500/20 text-green-400 border-green-500/30', label: 'Solid', icon: CheckCircle2 },
-        'moderate': { color: 'bg-blue-500/10 text-blue-400 border-blue-500/20', label: 'Neutral', icon: Info },
-        'weak': { color: 'bg-amber-500/10 text-amber-400 border-amber-500/20', label: 'Cautious', icon: AlertTriangle }
-    };
-
-    const { color, label, icon: Icon } = configs[strength] || configs.moderate;
-
-    return (
-        <div className={`flex items-center gap-1.5 px-2 py-1 rounded border ${color}`}>
-            <Icon className="w-3 h-3" />
-            <span className="text-[10px] font-bold tracking-tight uppercase">{label}</span>
-        </div>
-    );
-};
+// EVIDENCE BADGE REMOVED: Strict rendering policies require direct metric display, not heuristic labels.
 
 export const ResponsibleDecision = ({ meta }) => {
     const { decision, reason, tone } = meta;

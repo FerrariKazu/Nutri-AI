@@ -17,10 +17,12 @@ const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
     const hasPermission = renderPermissions.canRenderTier1(trace).allowed;
 
     // 2. Strict Data Access
-    const strength = claim.confidence > 0.8 ? 'strong' : claim.confidence > 0.4 ? 'moderate' : 'weak';
-
     // Explicit Null Handling for Confidence
-    const hasConfidence = claim.confidence !== null;
+    const hasConfidence = claim.confidence !== undefined && claim.confidence !== null;
+    const confidenceVal = hasConfidence ? Math.round(claim.confidence * 100) : null;
+
+    // Strict Source
+    const sourceText = claim.source;
 
     return (
         <div className="space-y-4">
@@ -31,7 +33,12 @@ const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
                     <Tooltip text="Raw data verification layer." />
                 </div>
                 {hasConfidence ? (
-                    <EvidenceBadge strength={strength} />
+                    <span className={`text-[9px] font-mono px-2 py-0.5 rounded border ${confidenceVal > 80 ? 'text-green-400 bg-green-500/10 border-green-500/20' :
+                            confidenceVal > 50 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
+                                'text-neutral-500 bg-neutral-900 border-neutral-800'
+                        }`}>
+                        CONFIDENCE: {confidenceVal}%
+                    </span>
                 ) : (
                     <span className="text-[9px] font-mono text-neutral-500 bg-neutral-900 px-2 py-0.5 rounded border border-neutral-800">
                         CONFIDENCE: NULL
@@ -40,7 +47,7 @@ const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
             </div>
 
             <p className="text-sm text-neutral-300 leading-relaxed">
-                Source: <span className="text-white font-medium">{claim.source || 'Unavailable'}</span>
+                Source: <span className="text-white font-medium">{sourceText || 'NULL'}</span>
                 {claim.evidence_type && (
                     <span className="ml-2 text-[8px] font-mono text-neutral-500 border border-neutral-800 px-1 rounded uppercase">
                         {claim.evidence_type}
