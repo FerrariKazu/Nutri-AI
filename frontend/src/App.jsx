@@ -434,6 +434,7 @@ function App() {
                 const trace = tracePacket.content || tracePacket;
                 const incomingSeq = tracePacket.seq || trace.seq || 0;
 
+                console.log("💎 [POINT 2: APP RECEIVE] TRACE SIGNAL IN APP", { trace, seq: incomingSeq });
                 updateMessageTrace(assistantId, trace, "SSE", incomingSeq);
             }
         );
