@@ -34,25 +34,30 @@ const adaptStrict = (rawTrace) => {
         rawTrace.claims = []; // Ensure safe array
     }
 
-    // 2. Map Claims (1:1)
+    // 2. Map Claims (1:1 VERBATIM)
     const normalizedClaims = (rawTrace.claims || []).map(claim => {
+        // STRICT: No Default Values. If backend is null, UI is null.
         return {
             id: strictVal(claim.id || claim.claim_id),
             statement: strictVal(claim.statement || claim.text),
             domain: strictVal(claim.domain),
             mechanism_type: strictVal(claim.mechanism_type),
-            // FIX: Pass Mechanism Data
+
+            // STRICT: Pass Mechanism Data
             mechanism: strictVal(claim.mechanism),
             mechanism_topology: strictVal(claim.mechanism_topology || claim.graph),
 
-            compounds: strictVal(claim.compounds) || [],
-            receptors: strictVal(claim.receptors) || [],
-            perception_outputs: strictVal(claim.perception_outputs) || [],
-            evidence: strictVal(claim.evidence) || [],
-            verification_level: strictVal(claim.verification_level),
-            importance_score: strictVal(claim.importance_score) || 0,
+            // STRICT: Lists (Empty array is fine if backend sends it, but fallback to null if missing)
+            compounds: strictVal(claim.compounds),
+            receptors: strictVal(claim.receptors),
+            perception_outputs: strictVal(claim.perception_outputs),
+            evidence: strictVal(claim.evidence),
 
-            // Legacy/Mapping (if still needed by components)
+            // STRICT: Metrics
+            verification_level: strictVal(claim.verification_level),
+            importance_score: strictVal(claim.importance_score),
+
+            // Legacy/Mapping (if still needed by components, but STRICT)
             claim_id: strictVal(claim.id || claim.claim_id),
             text: strictVal(claim.statement || claim.text),
             verified: !!(claim.verified !== undefined ? claim.verified : claim.isVerified),
