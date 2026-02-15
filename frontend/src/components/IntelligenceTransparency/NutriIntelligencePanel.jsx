@@ -146,6 +146,16 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
     }, [claims]);
 
 
+    // Integrity Message - Premium Narrative
+    const integrityMessage = useMemo(() => {
+        if (!uiTrace) return "No execution trace recorded";
+        if (uiTrace.status === 'INIT') return "Initializing Scientific Workspace...";
+        if (uiTrace.status === 'STREAMING' || uiTrace.status === 'streaming') return "Reasoning Stream Active...";
+        if (uiTrace.status === 'ENRICHING') return "Enriching Knowledge Topology...";
+        if (uiTrace.status === 'VERIFIED' || uiTrace.status === 'COMPLETE' || uiTrace.status === 'complete') return "Claim Verification Complete";
+        return "Deterministic System Telemetry";
+    }, [uiTrace]);
+
     // Schema/Status Checks
     const isStreaming = uiTrace?.status === 'streaming' || uiTrace?.status === 'STREAMING';
 
