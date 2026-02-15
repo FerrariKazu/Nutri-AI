@@ -9,18 +9,15 @@ import { Tooltip, getConfidenceNarrative } from './UIUtils';
  * Displays "Previous -> Current" with movement indicators and narrative.
  */
 const ConfidenceTracker = React.memo(({ uiTrace, claimIdx, expertMode }) => {
-    const currentClaim = uiTrace.claims[claimIdx] || uiTrace.claims[0];
-    const confidence = currentClaim.confidence;
+    // STRICT: Render Backend Metrics Only
+    const confidence = uiTrace.metrics.confidence;
 
+    // If backend doesn't provide delta, we do NOT calculate it.
     const delta = uiTrace.metrics.confidenceDelta || 0;
-    const previous = Math.max(0, Math.min(1, confidence - delta));
 
     const percentage = Math.round(confidence * 100);
-    const prevPercentage = Math.round(previous * 100);
-
     const isUp = delta > 0.01;
     const isDown = delta < -0.01;
-    const isStable = !isUp && !isDown;
 
     return (
         <div className="space-y-6">
@@ -42,11 +39,13 @@ const ConfidenceTracker = React.memo(({ uiTrace, claimIdx, expertMode }) => {
             </div>
 
             <div className="flex items-center justify-center gap-10">
-                {/* Previous */}
-                <div className="text-center opacity-30">
-                    <p className="text-[8px] font-mono text-neutral-600 uppercase tracking-tighter mb-1">Prior State</p>
-                    <p className="text-xl font-mono text-neutral-500 leading-none">{prevPercentage}%</p>
-                </div>
+                {/* Previous State - ONLY if backend provides specific previous value or delta */}
+                {delta !== 0 && (
+                    <div className="text-center opacity-30">
+                        <p className="text-[8px] font-mono text-neutral-600 uppercase tracking-tighter mb-1">Prior State</p>
+                        <p className="text-xl font-mono text-neutral-500 leading-none">{Math.round((confidence - delta) * 100)}%</p>
+                    </div>
+                )}
 
                 {/* Arrow */}
                 <div className={`p-2.5 rounded-full border transition-all duration-700 ${isUp ? 'border-green-500/20 text-green-400 bg-green-500/5 shadow-[0_0_15px_rgba(34,197,94,0.1)]' :
