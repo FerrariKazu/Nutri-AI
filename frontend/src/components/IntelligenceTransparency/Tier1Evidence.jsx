@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, FlaskConical, AlertCircle, Hash } from 'lucide-react';
+import { Database, FlaskConical, AlertCircle, Hash, Users, Microscope, Scale, History, ExternalLink, ShieldCheck } from 'lucide-react';
 import { TierBadge, Tooltip } from './UIUtils';
 import { renderPermissions } from '../../contracts/renderPermissions';
 
@@ -25,6 +25,10 @@ const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
     const sourceText = typeof claim.source === 'object' && claim.source !== null
         ? claim.source.name || JSON.stringify(claim.source)
         : claim.source;
+
+    // Evidence Set
+    const evidenceSet = claim.evidence || [];
+    const hasEvidence = evidenceSet.length > 0;
 
     return (
         <div className="space-y-4">
@@ -66,30 +70,94 @@ const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
                 </div>
             )}
 
-            {/* Source List / Histograms */}
-            <div className="space-y-2">
-                <div className="flex items-center gap-1.5 px-0.5">
-                    <p className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Active Data Indices</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    {(expertMode && metrics.sourceContribution && Object.keys(metrics.sourceContribution).length > 0
-                        ? Object.keys(metrics.sourceContribution)
-                        : [sourceText]).filter(Boolean).map((src, i) => (
-                            <div key={i} className="px-2.5 py-1 rounded bg-neutral-800/40 border border-neutral-700/30 flex items-center gap-2.5 cursor-default">
-                                <span className="text-[10px] text-neutral-400 font-mono tracking-tight">{typeof src === 'object' ? (src.name || JSON.stringify(src)) : src}</span>
-                                {expertMode && metrics.sourceContribution && (
-                                    <span className="text-[9px] text-green-400 font-bold font-mono">
-                                        {(metrics.sourceContribution[src] || 0)}%
-                                    </span>
+            {/* Structured Evidence Records (Phase 7 UI Evolution) */}
+            {hasEvidence && (
+                <div className="space-y-3">
+                    <div className="flex items-center gap-1.5 px-0.5">
+                        <p className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Scientific Evidence Base</p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2">
+                        {evidenceSet.map((record, i) => (
+                            <div key={i} className="p-3 rounded-lg bg-neutral-900/50 border border-neutral-800 flex flex-col gap-2">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`p-1 rounded ${record.study_type === 'meta-analysis' ? 'bg-purple-500/10 text-purple-400' :
+                                                record.study_type === 'rct' ? 'bg-blue-500/10 text-blue-400' :
+                                                    'bg-neutral-800 text-neutral-400'
+                                            }`}>
+                                            {record.study_type === 'meta-analysis' || record.study_type === 'systematic-review' ? <Scale className="w-3 h-3" /> :
+                                                record.study_type === 'rct' || record.study_type === 'observational' ? <Users className="w-3 h-3" /> :
+                                                    <Microscope className="w-3 h-3" />}
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-bold text-neutral-200 uppercase">{record.study_type.replace('-', ' ')}</p>
+                                            <p className="text-[9px] text-neutral-500 font-mono">{record.source_identifier}</p>
+                                        </div>
+                                    </div>
+                                    <div className={`text-[8px] font-mono px-1.5 py-0.5 rounded border ${record.evidence_grade === 'strongest' ? 'text-purple-400 border-purple-500/30' :
+                                            record.evidence_grade === 'strong' ? 'text-blue-400 border-blue-500/30' :
+                                                record.evidence_grade === 'weak' ? 'text-amber-500/60 border-amber-500/20' :
+                                                    'text-neutral-500 border-neutral-800'
+                                        }`}>
+                                        {record.evidence_grade.toUpperCase()}
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-4 text-[10px]">
+                                    <div className="flex items-center gap-1 text-neutral-400">
+                                        <Users className="w-3 h-3 opacity-50" />
+                                        <span>n={record.n || 'N/A'}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1 text-neutral-400">
+                                        <History className="w-3 h-3 opacity-50" />
+                                        <span>{record.publication_year || 'N/A'}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <div className={`w-1.5 h-1.5 rounded-full ${record.effect_direction === 'positive' ? 'bg-green-500' :
+                                                record.effect_direction === 'negative' ? 'bg-red-500' :
+                                                    'bg-neutral-500'
+                                            }`} />
+                                        <span className="capitalize text-neutral-500">{record.effect_direction} Effect</span>
+                                    </div>
+                                </div>
+
+                                {record.contradiction_links && record.contradiction_links.length > 0 && (
+                                    <div className="mt-1 flex items-center gap-1.5 text-[9px] text-red-400/80 bg-red-400/5 px-2 py-1 rounded border border-red-400/10">
+                                        <AlertCircle className="w-2.5 h-2.5" />
+                                        <span>Supported by contradicting data ({record.contradiction_links.length} sources)</span>
+                                    </div>
                                 )}
                             </div>
                         ))}
-
-                    {(!claim.source && (!metrics.sourceContribution || Object.keys(metrics.sourceContribution).length === 0)) && (
-                        <span className="text-[10px] text-neutral-600 font-mono italic">No source metadata</span>
-                    )}
+                    </div>
                 </div>
-            </div>
+            )}
+
+            {!hasEvidence && (
+                <div className="space-y-2">
+                    <div className="flex items-center gap-1.5 px-0.5">
+                        <p className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Active Data Indices</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        {(expertMode && metrics.sourceContribution && Object.keys(metrics.sourceContribution).length > 0
+                            ? Object.keys(metrics.sourceContribution)
+                            : [sourceText]).filter(Boolean).map((src, i) => (
+                                <div key={i} className="px-2.5 py-1 rounded bg-neutral-800/40 border border-neutral-700/30 flex items-center gap-2.5 cursor-default">
+                                    <span className="text-[10px] text-neutral-400 font-mono tracking-tight">{typeof src === 'object' ? (src.name || JSON.stringify(src)) : src}</span>
+                                    {expertMode && metrics.sourceContribution && (
+                                        <span className="text-[9px] text-green-400 font-bold font-mono">
+                                            {(metrics.sourceContribution[src] || 0)}%
+                                        </span>
+                                    )}
+                                </div>
+                            ))}
+
+                        {(!claim.source && (!metrics.sourceContribution || Object.keys(metrics.sourceContribution).length === 0)) && (
+                            <span className="text-[10px] text-neutral-600 font-mono italic">No source metadata</span>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* PubChem Proof Section */}
             {metrics.pubchemUsed && (
