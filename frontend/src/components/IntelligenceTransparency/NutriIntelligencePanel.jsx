@@ -146,6 +146,9 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
     }, [claims]);
 
 
+    // Schema/Status Checks
+    const isStreaming = uiTrace?.status === 'streaming' || uiTrace?.status === 'STREAMING';
+
     return (
         <div className="mt-6 border border-neutral-800 rounded-xl overflow-hidden bg-neutral-900/20 backdrop-blur-sm animate-fade-in shadow-2xl text-card-foreground">
             {/* 🛡️ Status & Integrity Banner */}
