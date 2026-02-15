@@ -23,6 +23,9 @@ const Tier3Causality = React.memo(({ uiTrace, claimIdx, expertMode }) => {
     const currentClaim = uiTrace.claims[claimIdx] || uiTrace.claims[0];
     const decision = currentClaim.decision || "UNKNOWN";
 
+    // STRICT: Handle null lists
+    const missingFields = causality.missingFields || [];
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
