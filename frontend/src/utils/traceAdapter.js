@@ -21,6 +21,55 @@ import { validateTrace } from '../contracts/traceValidator';
 const strictVal = (val) => (val !== undefined && val !== null) ? val : null;
 
 /**
+ * adaptClaimForUI
+ * Centralized, strict claim normalization.
+ * Enforces NO defaults and explicit NULLs.
+ */
+export const adaptClaimForUI = (claim) => {
+    if (!claim) return null;
+
+    const adapted = {
+        id: strictVal(claim.id || claim.claim_id),
+        statement: strictVal(claim.statement || claim.text),
+        domain: strictVal(claim.domain),
+        origin: strictVal(claim.origin),
+        verification_level: strictVal(claim.verification_level),
+        importance_score: strictVal(claim.importance_score),
+        source: strictVal(claim.source),
+
+        // STRICT: Pass Mechanism Data
+        mechanism: strictVal(claim.mechanism),
+        mechanism_topology: strictVal(claim.mechanism_topology || claim.graph),
+
+        // STRICT: Lists
+        compounds: strictVal(claim.compounds),
+        receptors: strictVal(claim.receptors),
+        perception_outputs: strictVal(claim.perception_outputs),
+        evidence: strictVal(claim.evidence),
+
+        // STRICT: Metrics (Object-to-Flat flattening)
+        confidence: strictVal(
+            typeof claim.confidence === 'object' && claim.confidence !== null
+                ? claim.confidence.current
+                : claim.confidence
+        ),
+
+        // Legacy/Mapping (if still needed by components, but STRICT)
+        claim_id: strictVal(claim.id || claim.claim_id),
+        text: strictVal(claim.statement || claim.text),
+        verified: !!(claim.verified !== undefined ? claim.verified : claim.isVerified),
+        decision: strictVal(claim.decision),
+    };
+
+    // [STRICT_RENDER_FAIL] Internal Verification
+    if (adapted.statement && (adapted.confidence === null || adapted.verification_level === null)) {
+        console.error("❌ [ADAPTER_ERROR] adaptClaimForUI dropped critical fields!", { raw: claim, adapted });
+    }
+
+    return adapted;
+};
+
+/**
  * Adapt V2 Schema (Strict)
  */
 const adaptStrict = (rawTrace) => {
@@ -34,45 +83,15 @@ const adaptStrict = (rawTrace) => {
         rawTrace.claims = []; // Ensure safe array
     }
 
-    // 2. Map Claims (1:1 VERBATIM)
-    const normalizedClaims = (rawTrace.claims || []).map(claim => {
-        // STRICT: No Default Values. If backend is null, UI is null.
-        return {
-            id: strictVal(claim.id || claim.claim_id),
-            statement: strictVal(claim.statement || claim.text),
-            domain: strictVal(claim.domain),
-            mechanism_type: strictVal(claim.mechanism_type),
+    // TELEMETRY: ADAPTER IN
+    console.log("🔌 [POINT 4: ADAPTER IN] NORMALIZING RAW TRACE", rawTrace);
 
-            // STRICT: Pass Mechanism Data
-            mechanism: strictVal(claim.mechanism),
-            mechanism_topology: strictVal(claim.mechanism_topology || claim.graph),
-
-            // STRICT: Lists (Empty array is fine if backend sends it, but fallback to null if missing)
-            compounds: strictVal(claim.compounds),
-            receptors: strictVal(claim.receptors),
-            perception_outputs: strictVal(claim.perception_outputs),
-            evidence: strictVal(claim.evidence),
-
-            // STRICT: Metrics
-            verification_level: strictVal(claim.verification_level),
-            importance_score: strictVal(claim.importance_score),
-            confidence: strictVal(
-                typeof claim.confidence === 'object' && claim.confidence !== null
-                    ? claim.confidence.current
-                    : claim.confidence
-            ),
-
-            // Legacy/Mapping (if still needed by components, but STRICT)
-            claim_id: strictVal(claim.id || claim.claim_id),
-            text: strictVal(claim.statement || claim.text),
-            verified: !!(claim.verified !== undefined ? claim.verified : claim.isVerified),
-            decision: strictVal(claim.decision),
-        };
-    });
+    // 2. Map Claims (1:1 VERBATIM via centralized adapter)
+    const normalizedClaims = (rawTrace.claims || []).map(adaptClaimForUI);
 
     // TELEMETRY: ADAPTER OUT
     if (normalizedClaims.length > 0) {
-        console.log("🔌 ADAPTER: MAPPED CLAIMS", normalizedClaims);
+        console.log("🔌 [POINT 5: ADAPTER OUT] MAPPED CLAIMS", normalizedClaims);
     }
 
     // 3. Construct Verified Object
