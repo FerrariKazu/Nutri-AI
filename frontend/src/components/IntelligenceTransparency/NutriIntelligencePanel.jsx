@@ -47,30 +47,14 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
         }
     }, [uiTrace]);
 
-    // 🧩 STEP 3 — FIELD NAME ADAPTER (CRITICAL)
+    // 🧩 STEP 3 — Centralized UI Adapter
     const normalizeClaim = useCallback((c) => {
-        if (!c || !c.statement) return null; // STRICT: No statement, no render.
+        const adapted = adaptClaimForUI(c);
 
-        return {
-            ...c,
-            id: c.id || c.claim_id, // Allow ID fallback only for keys
+        // TELEMETRY: NORMALIZATION STEP
+        console.log("🧪 [POINT 6: NORMALIZATION] CLAIM ADAPTED FOR UI", { raw: c, adapted });
 
-            // STRICT: Verbatim Mapping
-            statement: c.statement,
-            domain: c.domain,
-            origin: c.origin,
-            verification_level: c.verification_level,
-            importance_score: c.importance_score,
-            source: c.source,
-            confidence: c.confidence,
-
-            // STRICT: Structural Objects (Empty arrays allowed if backend sends them)
-            mechanism: c.mechanism,
-            mechanism_topology: c.mechanism_topology,
-            compounds: c.compounds,
-            receptors: c.receptors,
-            perception_outputs: c.perception_outputs
-        };
+        return adapted;
     }, []);
 
     const [isOpen, setIsOpen] = useState(false);
@@ -126,24 +110,31 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
 
     useEffect(() => {
         if (claims.length > 0) {
-            // TELEMETRY: NORMALIZATION AUDIT
-            console.log("🧪 AFTER NORMALIZATION", claims);
+            // TELEMETRY: VIEW MODEL READY
+            console.log("🧪 [POINT 7: VIEW MODEL] CLAIMS READY FOR PAINT", claims);
             console.log(`%c [PAINT] Rendering ${claims.length} claims `, "background: #065f46; color: white; padding: 2px 4px; border-radius: 4px;", claims);
 
             // ASSERTION: STRICT RENDER
             claims.forEach((c, i) => {
-                if (c.statement && (c.importance_score === undefined || c.importance_score === null)) {
-                    console.error(`[STRICT_RENDER_FAIL] Claim ${i} is missing importance_score (backend sent null?)`, c);
-                }
-                if (c.statement && (c.verification_level === undefined || c.verification_level === null)) {
-                    console.error(`[STRICT_RENDER_FAIL] Claim ${i} is missing verification_level`, c);
-                }
-                if (c.statement && (c.confidence === undefined || c.confidence === null)) {
-                    console.error(`[STRICT_RENDER_FAIL] Claim ${i} is missing confidence metrics`, c);
+                const failReasons = [];
+                if (c.statement && (c.importance_score === undefined || c.importance_score === null)) failReasons.push("importance_score");
+                if (c.statement && (c.verification_level === undefined || c.verification_level === null)) failReasons.push("verification_level");
+                if (c.statement && (c.confidence === undefined || c.confidence === null)) failReasons.push("confidence");
+
+                if (failReasons.length > 0) {
+                    console.error(
+                        `%c [STRICT_RENDER_FAIL] Claim ${i} is missing: ${failReasons.join(', ')} `,
+                        "background: #ef4444; color: white; font-weight: bold; border-radius: 4px;",
+                        {
+                            adaptedClaim: c,
+                            rawUiTrace: uiTrace,
+                            rawClaimInTrace: uiTrace?.claims?.[i]
+                        }
+                    );
                 }
             });
         }
-    }, [claims]);
+    }, [claims, uiTrace]);
 
 
     // Integrity Message - Premium Narrative
