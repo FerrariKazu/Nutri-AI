@@ -20,6 +20,9 @@ const Tier4Temporal = React.memo(({ uiTrace, claimIdx, expertMode }) => {
     const currentClaim = uiTrace.claims[claimIdx] || uiTrace.claims[0];
     const changeType = currentClaim.changeType || 'UNKNOWN';
 
+    // STRICT: Handle null lists
+    const revisions = temporal.revisions || [];
+
     // Passive Icon Mapping
     const StatusIcon = {
         'UPGRADE': TrendingUp,
@@ -76,11 +79,11 @@ const Tier4Temporal = React.memo(({ uiTrace, claimIdx, expertMode }) => {
                         <span className="text-purple-400 font-bold">{temporal.resolvedUncertainties ?? 'NULL'}</span>
                     </div>
 
-                    {temporal.revisions.length > 0 && (
+                    {revisions.length > 0 && (
                         <div className="space-y-2">
                             <p className="text-[8px] font-mono text-neutral-600 uppercase tracking-widest ml-1">Session Revisions</p>
                             <div className="space-y-1.5">
-                                {temporal.revisions.slice(-2).map((rev, i) => (
+                                {revisions.slice(-2).map((rev, i) => (
                                     <div key={i} className="flex items-center gap-2 text-[10px] text-neutral-500 bg-neutral-950/40 px-3 py-2 rounded border border-neutral-800/50">
                                         <div className="w-1.5 h-1.5 rounded-full bg-purple-500/30" />
                                         <span className="truncate">{rev}</span>
