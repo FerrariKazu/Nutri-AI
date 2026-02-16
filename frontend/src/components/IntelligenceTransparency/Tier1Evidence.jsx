@@ -190,6 +190,37 @@ const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
                     </div>
                 </div>
             )}
+            {/* Phase 10: Confidence Breakdown (Structural Reasoning) */}
+            {breakdown?.rule_firings && breakdown.rule_firings.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-neutral-800/50">
+                    <p className="text-[10px] font-bold text-neutral-500 uppercase mb-2 flex items-center gap-1.5">
+                        <Scale className="w-3 h-3" />
+                        Confidence Breakdown (Policy Logic)
+                    </p>
+                    <div className="space-y-1.5">
+                        {breakdown.rule_firings.map((rf, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-[9px] font-mono">
+                                <div className="flex items-center gap-2">
+                                    <span className={rf.fired ? 'text-neutral-300' : 'text-neutral-500 opacity-50'}>
+                                        {rf.rule_id}
+                                    </span>
+                                    <span className="text-neutral-600">[{rf.category}]</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-neutral-500 italic">in={JSON.stringify(rf.input)}</span>
+                                    <span className={`font-bold ${rf.contribution > 0 ? 'text-green-500' : rf.contribution < 0 ? 'text-red-500' : 'text-neutral-600'}`}>
+                                        {rf.contribution > 0 ? '+' : ''}{rf.contribution.toFixed(2)}
+                                    </span>
+                                </div>
+                            </div>
+                        ))}
+                        <div className="flex items-center justify-between text-[9px] font-mono pt-1 mt-1 border-t border-neutral-800 border-dashed">
+                            <span className="text-neutral-500 italic">Baseline Setup</span>
+                            <span className="text-neutral-400">{breakdown.baseline_used.toFixed(2)}</span>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 });
