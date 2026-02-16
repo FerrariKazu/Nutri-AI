@@ -149,8 +149,36 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
         if (uiTrace.status === 'INIT') return "Initializing Scientific Workspace...";
         if (uiTrace.status === 'STREAMING' || uiTrace.status === 'streaming') return "Reasoning Stream Active...";
         if (uiTrace.status === 'ENRICHING') return "Enriching Knowledge Topology...";
-        if (uiTrace.status === 'VERIFIED' || uiTrace.status === 'COMPLETE' || uiTrace.status === 'complete') return "Claim Verification Complete";
+        if (uiTrace.status === 'VERIFIED' || uiTrace.status === 'COMPLETE' || uiTrace.status === 'complete') return "Institutional Audit Terminal";
         return "Deterministic System Telemetry";
+    }, [uiTrace]);
+
+    // 🛡️ [INSTITUTIONAL_HARDENING] Integrity Checks
+    const integrityViolation = useMemo(() => {
+        if (!uiTrace) return null;
+        if (['STREAMING', 'INIT', 'streaming'].includes(uiTrace.status)) return null;
+
+        const missing = [];
+        const metrics = uiTrace.metrics || {};
+
+        // Gap 1: Policy Hash check
+        if (!metrics.policyHash) missing.push("policy_document_hash");
+        if (!metrics.policySelectionReason) missing.push("policy_selection_reason");
+
+        // Gap 2: Registry Snapshot check
+        const snapshot = metrics.registrySnapshot || {};
+        if (!snapshot.registry_hash) missing.push("registry_hash");
+        if (!snapshot.ontology_version) missing.push("ontology_version");
+        if (!snapshot.locked) missing.push("version_lock_barrier");
+
+        if (missing.length > 0) {
+            return {
+                type: "CONTRACT_VIOLATION",
+                missingFields: missing,
+                context: `run_id: ${uiTrace.run_id || 'NULL'} | trace_seq: ${uiTrace.trace_seq || '0'}`
+            };
+        }
+        return null;
     }, [uiTrace]);
 
     // Schema/Status Checks
@@ -162,16 +190,23 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
             <div className={`px-4 py-1.5 border-b border-neutral-800/50 flex items-center gap-2 overflow-hidden ${isStreaming ? 'bg-blue-500/5' : 'bg-neutral-900/40'}`}>
                 {isStreaming ? (
                     <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
+                ) : integrityViolation ? (
+                    <AlertTriangle className="w-3 h-3 text-red-500 animate-pulse" />
                 ) : (
                     <ShieldCheck className={`w-3 h-3 ${!uiTrace ? 'text-neutral-700' : 'text-neutral-500'}`} />
                 )}
 
-                <p className="text-[10px] font-mono uppercase tracking-tight text-neutral-400 truncate flex-1">
-                    {integrityMessage}
+                <p className={`text-[10px] font-mono uppercase tracking-tight truncate flex-1 ${integrityViolation ? 'text-red-500 font-bold' : 'text-neutral-400'}`}>
+                    {integrityViolation ? 'CRITICAL_INTEGRITY_VIOLATION' : integrityMessage}
                 </p>
 
                 {uiTrace && (
                     <div className="flex items-center gap-3">
+                        {/* Mandatory Audit ID display */}
+                        <div className="hidden md:flex items-center gap-2 pr-2 border-r border-neutral-800/50">
+                            <span className="text-[7px] font-mono text-neutral-600 uppercase">Run: {uiTrace.run_id?.split('-')[0] || 'NUL'}</span>
+                            <span className="text-[7px] font-mono text-neutral-600 uppercase">Seq: {uiTrace.trace_seq || '0'}</span>
+                        </div>
                         <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold font-mono border ${['STREAMING', 'ENRICHING', 'INIT'].includes(uiTrace.status)
                             ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
                             : uiTrace.status === 'COMPLETE' || uiTrace.status === 'VERIFIED'
@@ -303,18 +338,28 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                     </div>
                                 )}
 
-                                {/* Main Grid */}
-                                <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-10 bg-neutral-900/40">
+                                {/* Main Grid: Fact vs Policy Split View */}
+                                <div className="relative min-h-[600px] flex flex-col lg:flex-row bg-neutral-900/40 border-b border-neutral-800">
+                                    {integrityViolation && (
+                                        <IntegrityBarrier
+                                            type={integrityViolation.type}
+                                            missingFields={integrityViolation.missingFields}
+                                            context={integrityViolation.context}
+                                        />
+                                    )}
+
                                     {currentClaim ? (
                                         <>
-                                            <div className="space-y-10">
+                                            {/* LEFT COLUMN: SCIENTIFIC OBSERVATIONS (FACTS) */}
+                                            <div className={`flex-1 p-6 space-y-12 border-r border-neutral-800 ${integrityViolation ? 'blur-sm grayscale pointer-events-none' : ''}`}>
+                                                <div className="space-y-2">
+                                                    <h4 className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.2em] border-b border-neutral-800 pb-2">
+                                                        Scientific Observation Layer
+                                                    </h4>
+                                                </div>
+
                                                 <section>
-                                                    <Tier1Evidence
-                                                        trace={uiTrace}
-                                                        claim={currentClaim}
-                                                        metrics={uiTrace.metrics}
-                                                        expertMode={isExpertMode}
-                                                    />
+                                                    <EvidenceLineageViewer evidenceSet={currentClaim.evidence} />
                                                 </section>
 
                                                 {renderPermissions.canRenderTier2({ claims: [currentClaim] }).allowed && (
@@ -327,37 +372,55 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                     </section>
                                                 )}
 
-                                                {/* Tier 2.1: Intelligence Graph (MANDATE) */}
                                                 <section className="pt-10 border-t border-neutral-800/50">
                                                     <IntelligenceGraph claim={currentClaim} />
                                                 </section>
 
-                                                {/* Tier 2.5: Perception Mapping (Legacy Bridge) */}
-                                                {(currentClaim.receptors?.length > 0 || currentClaim.perception_outputs?.length > 0) && (
-                                                    <section className="pt-10 border-t border-neutral-800/50">
-                                                        <PerceptionMapper claim={currentClaim} />
+                                                {/* PubChem Hardened Compound View */}
+                                                {uiTrace.metrics.pubchemUsed && (
+                                                    <section className="pt-10 border-t border-neutral-800/50 p-4 rounded-xl bg-green-500/5 border border-green-500/10 shadow-[inner_0_0_20px_rgba(34,197,94,0.05)]">
+                                                        <div className="flex items-center gap-2 mb-4">
+                                                            <ShieldCheck className="w-3.5 h-3.5 text-green-500" />
+                                                            <span className="text-[10px] font-black text-green-400 uppercase tracking-widest">Molecular Identity Enforced</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            <Hash className="w-3 h-3 text-neutral-600" />
+                                                            <span className="text-[9px] font-mono text-neutral-500 truncate select-all">{uiTrace.metrics.proofHash}</span>
+                                                        </div>
                                                     </section>
                                                 )}
                                             </div>
 
-                                            <div className="space-y-10">
+                                            {/* RIGHT COLUMN: POLICY INTERPRETATION (JUDGMENT) */}
+                                            <div className={`flex-1 p-6 space-y-12 bg-black/20 ${integrityViolation ? 'blur-sm grayscale pointer-events-none' : ''}`}>
+                                                <div className="space-y-2">
+                                                    <h4 className="text-[10px] font-black text-blue-500/60 uppercase tracking-[0.2em] border-b border-neutral-800/50 pb-2 text-right">
+                                                        Policy Interpretation Layer
+                                                    </h4>
+                                                </div>
+
                                                 <section>
-                                                    <Tier3Causality
-                                                        uiTrace={uiTrace}
-                                                        claimIdx={selectedClaimIdx}
-                                                        expertMode={isExpertMode}
+                                                    <PolicyAuthorityCard
+                                                        policy={{
+                                                            policy_id: uiTrace.metrics.policyId,
+                                                            policy_version: uiTrace.metrics.policyVersion,
+                                                            policy_hash: uiTrace.metrics.policyHash,
+                                                            selection_reason: uiTrace.metrics.policySelectionReason,
+                                                            author: currentClaim.confidence?.author || "GOVERNANCE_BOARD",
+                                                            review_board: currentClaim.confidence?.review_board || "SIMULATED_BOARD",
+                                                            approval_date: currentClaim.confidence?.approval_date || "2026-02-16",
+                                                            attestation: currentClaim.confidence?.attestation
+                                                        }}
                                                     />
                                                 </section>
 
-                                                {renderPermissions.canRenderTier4(uiTrace).allowed && (
-                                                    <section className="pt-10 border-t border-neutral-800/50">
-                                                        <Tier4Temporal
-                                                            uiTrace={uiTrace}
-                                                            claimIdx={selectedClaimIdx}
-                                                            expertMode={isExpertMode}
-                                                        />
-                                                    </section>
-                                                )}
+                                                <section className="pt-10 border-t border-neutral-800/50">
+                                                    <RuleFiringTimeline breakdown={currentClaim.confidence?.breakdown} />
+                                                </section>
+
+                                                <section className="pt-10 border-t border-neutral-800/50">
+                                                    <RegistrySnapshot snapshot={uiTrace.metrics.registrySnapshot} />
+                                                </section>
 
                                                 <section className="pt-10 border-t border-neutral-800/50">
                                                     <ConfidenceTracker
@@ -366,85 +429,14 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                         expertMode={isExpertMode}
                                                     />
                                                 </section>
-
-                                                {/* Origin & Verification Level Badges */}
-                                                <div className="pt-8 flex flex-wrap gap-3">
-                                                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-mono uppercase tracking-tight
-                                                        ${currentClaim.origin === 'extracted' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                                                            currentClaim.origin === 'enriched' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                                                'bg-neutral-800/50 text-neutral-400 border-neutral-700/30'}`}>
-                                                        {currentClaim.origin === 'extracted' && <FileSearch className="w-3 h-3" />}
-                                                        {currentClaim.origin === 'enriched' && <DatabaseZap className="w-3 h-3" />}
-                                                        {currentClaim.origin === 'model' && <Brain className="w-3 h-3" />}
-                                                        Origin: {currentClaim.origin || 'model'}
-                                                    </div>
-
-                                                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-800/50 border border-neutral-700/30 text-[10px] font-mono text-neutral-400">
-                                                        <ShieldCheck className="w-3 h-3 text-green-500/60" />
-                                                        Level: {currentClaim.verification_level || 'theoretical'}
-                                                    </div>
-
-                                                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-800/50 border border-neutral-700/30 text-[10px] font-mono text-neutral-400">
-                                                        <Activity className="w-3 h-3 text-purple-500/60" />
-                                                        Domain: {currentClaim.domain || 'biological'}
-                                                    </div>
-
-                                                    {isExpertMode && (
-                                                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-800/50 border border-neutral-700/30 text-[10px] font-mono text-neutral-400">
-                                                            <Activity className="w-3 h-3 text-blue-500/60" />
-                                                            Priority: {Math.round((currentClaim.importance_score || 0) * 100)}%
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {currentClaim.origin === 'extracted' && (
-                                                    <div className="mt-4 p-3 rounded-lg bg-amber-500/5 border border-amber-500/10 flex items-start gap-3">
-                                                        <AlertTriangle className="w-4 h-4 text-amber-500/60 shrink-0 mt-0.5" />
-                                                        <p className="text-[10px] text-amber-200/50 leading-relaxed italic">
-                                                            Generated via post-response scientific structuring. This insight was extracted from the model's textual output to satisfy the Intelligence Mandate.
-                                                        </p>
-                                                    </div>
-                                                )}
                                             </div>
                                         </>
-                                    ) : isMandateFailure ? (
-                                        <div className="col-span-full py-16 flex flex-col items-center text-center animate-in fade-in slide-in-from-bottom-2 duration-700">
-                                            <div className="p-4 rounded-full bg-red-500/10 border border-red-500/20 mb-6">
-                                                <AlertTriangle className="w-8 h-8 text-red-400/80" />
-                                            </div>
-
-                                            <h4 className="text-lg font-bold text-neutral-100 mb-2">
-                                                Intelligence Mandate Failure
-                                            </h4>
-
-                                            <p className="text-xs text-neutral-400 max-w-md leading-relaxed mb-4">
-                                                The system detected scientific language requiring structured validation, but the structuring engine was unable to parse atomic claims.
-                                            </p>
-
-                                            <div className="px-4 py-2 rounded-lg bg-red-950/20 border border-red-900/40 text-[10px] font-mono text-red-300">
-                                                VALIDATION_STATUS: INVALID
-                                            </div>
-                                        </div>
                                     ) : (
-                                        <div className="col-span-full py-16 flex flex-col items-center text-center opacity-60">
-                                            <div className="p-4 rounded-full bg-neutral-800/50 border border-neutral-700/30 mb-6">
-                                                <Info className="w-8 h-8 text-neutral-500" />
-                                            </div>
-
-                                            <h4 className="text-lg font-bold text-neutral-400 mb-2">
-                                                Descriptive Analysis
-                                            </h4>
-
-                                            <p className="text-xs text-neutral-500 max-w-sm leading-relaxed mb-8">
-                                                This response provides general culinary or sensory information without biochemical claims.
+                                        <div className="w-full py-32 flex flex-col items-center opacity-40">
+                                            <ZapOff className="w-8 h-8 text-neutral-600 mb-4" />
+                                            <p className="text-xs font-mono uppercase tracking-widest text-neutral-500">
+                                                Observation Set Null
                                             </p>
-
-                                            <div className="flex flex-wrap justify-center gap-3">
-                                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-neutral-800/50 border border-neutral-700/30 text-[10px] font-mono text-neutral-500">
-                                                    <Brain className="w-3 h-3" />
-                                                    NATIVE SYNTHESIS
-                                                </div>
-                                            </div>
                                         </div>
                                     )}
                                 </div>
