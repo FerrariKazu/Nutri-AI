@@ -422,6 +422,26 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                     <RegistrySnapshot snapshot={uiTrace.metrics.registrySnapshot} />
                                                 </section>
 
+                                                {renderPermissions.canRenderTier3(uiTrace).allowed && (
+                                                    <section className="pt-10 border-t border-neutral-800/50">
+                                                        <Tier3Causality
+                                                            uiTrace={uiTrace}
+                                                            claimIdx={selectedClaimIdx}
+                                                            expertMode={isExpertMode}
+                                                        />
+                                                    </section>
+                                                )}
+
+                                                {renderPermissions.canRenderTier4(uiTrace).allowed && (
+                                                    <section className="pt-10 border-t border-neutral-800/50">
+                                                        <Tier4Temporal
+                                                            uiTrace={uiTrace}
+                                                            claimIdx={selectedClaimIdx}
+                                                            expertMode={isExpertMode}
+                                                        />
+                                                    </section>
+                                                )}
+
                                                 <section className="pt-10 border-t border-neutral-800/50">
                                                     <ConfidenceTracker
                                                         uiTrace={uiTrace}
