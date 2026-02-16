@@ -52,10 +52,8 @@ export const adaptClaimForUI = (claim) => {
     adapted.mechanism_topology = adapted.mechanism_topology || adapted.graph;
     adapted.verified = !!(adapted.verified !== undefined ? adapted.verified : adapted.isVerified);
 
-    // Flatten structured confidence object → number
-    if (typeof adapted.confidence === 'object' && adapted.confidence !== null) {
-        adapted.confidence = adapted.confidence.current ?? null;
-    }
+    // structured confidence object is PRESERVED.
+    // UI components must now consume .confidence.current.
 
     // CONTRACT ASSERTION: If raw had it, adapted MUST have it.
     for (const field of REQUIRED_CLAIM_FIELDS) {
@@ -119,7 +117,10 @@ const adaptStrict = (rawTrace) => {
             duration: strictVal(rawTrace.duration_ms),
             pubchemUsed: !!rawTrace.pubchem_used,
             proofHash: strictVal(rawTrace.pubchem_proof_hash),
-            moaCoverage: strictVal(rawTrace.moa_coverage)
+            moaCoverage: strictVal(rawTrace.moa_coverage),
+            policyId: strictVal(rawTrace.evidence_policy_id),
+            policyVersion: strictVal(rawTrace.policy_version),
+            policyHash: strictVal(rawTrace.policy_hash)
         },
 
         causality: {
