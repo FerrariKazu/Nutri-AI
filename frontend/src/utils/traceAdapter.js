@@ -76,18 +76,21 @@ const adaptStrict = (rawTrace) => {
     // 1. Validate
     const { valid, status: validationStatus, errors, warnings } = validateTrace(rawTrace, import.meta.env.DEV);
 
-    if (!valid && !rawTrace.claims) {
+    const scientific = rawTrace.scientific_layer || {};
+    const policy = rawTrace.policy_layer || {};
+
+    if (!valid && !scientific.claims) {
         // Log critical failure but ATTEMPT to render what we have (Continuity Principle)
         console.error("Trace Adapter: Trace rejected due to critical schema violation, but proceeding with empty claims.", errors);
         // Do NOT return null. Proceed to normalization.
-        rawTrace.claims = []; // Ensure safe array
+        scientific.claims = []; // Ensure safe array
     }
 
     // TELEMETRY: ADAPTER IN
     console.log("🔌 [POINT 4: ADAPTER IN] NORMALIZING RAW TRACE", rawTrace);
 
     // 2. Map Claims (1:1 VERBATIM via centralized adapter)
-    const normalizedClaims = (rawTrace.claims || []).map(adaptClaimForUI);
+    const normalizedClaims = (scientific.claims || []).map(adaptClaimForUI);
 
     // TELEMETRY: ADAPTER OUT
     if (normalizedClaims.length > 0) {
@@ -117,10 +120,14 @@ const adaptStrict = (rawTrace) => {
             duration: strictVal(rawTrace.duration_ms),
             pubchemUsed: !!rawTrace.pubchem_used,
             proofHash: strictVal(rawTrace.pubchem_proof_hash),
-            moaCoverage: strictVal(rawTrace.moa_coverage),
-            policyId: strictVal(rawTrace.evidence_policy_id),
-            policyVersion: strictVal(rawTrace.policy_version),
-            policyHash: strictVal(rawTrace.policy_hash)
+            moaCoverage: strictVal(scientific.moa_coverage),
+            evidenceCoverage: strictVal(scientific.evidence_coverage),
+            contradictionRatio: strictVal(scientific.contradiction_ratio),
+            policyId: strictVal(policy.policy_id),
+            policyVersion: strictVal(policy.policy_version),
+            policyHash: strictVal(policy.policy_hash),
+            policySelectionReason: strictVal(policy.selection_reason),
+            registrySnapshot: scientific.registry_snapshot
         },
 
         causality: {
