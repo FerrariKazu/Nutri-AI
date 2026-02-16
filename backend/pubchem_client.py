@@ -99,13 +99,20 @@ class PubChemClient:
             raise PubChemError(f"PubChem error: {e}")
 
     async def health_check(self) -> bool:
-        """Simple connectivity check."""
+        """Simple connectivity check with diagnostic logging."""
         try:
             # Search for water (CID 962) - very fast
             url = f"{self.BASE_URL}/compound/cid/962/JSON"
-            response = await self.client.get(url, timeout=1.0)
-            return response.status_code == 200
-        except Exception:
+            response = await self.client.get(url, timeout=3.0)
+            if response.status_code == 200:
+                return True
+            logger.warning(f"[PUBCHEM] Health check returned status {response.status_code}")
+            return False
+        except httpx.TimeoutException:
+            logger.warning("[PUBCHEM] Health check timed out (3.0s)")
+            return False
+        except Exception as e:
+            logger.warning(f"[PUBCHEM] Health check failed: {e}")
             return False
 
     async def close(self):

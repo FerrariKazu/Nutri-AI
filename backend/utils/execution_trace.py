@@ -7,12 +7,24 @@ Tracks every invocation, model used, and reasoning step.
 
 import time
 import json
+import uuid
 import logging
 from dataclasses import dataclass, field, asdict
 from dataclasses import dataclass, field, asdict
-from typing import List, Dict, Any, Optional, Literal
+from typing import List, Dict, Any, Optional, Literal, Union
+from enum import Enum
+
+from backend.ranking_engine import RankingEngine
 
 logger = logging.getLogger(__name__)
+
+class TraceStatus(str, Enum):
+    INIT = "INIT"
+    STREAMING = "STREAMING"
+    ENRICHING = "ENRICHING"
+    VERIFIED = "VERIFIED"
+    COMPLETE = "COMPLETE"
+    ERROR = "ERROR"
 
 @dataclass
 class CompoundTrace:
@@ -54,8 +66,14 @@ class AgentInvocation:
 class AgentExecutionTrace:
     session_id: str
     trace_id: str
+    run_id: str = ""
+    pipeline: str = "flavor_explainer"
     start_ts: float = field(default_factory=time.time)
     schema_version: int = 2  # Current Contract: v2
+    status: TraceStatus = TraceStatus.INIT
+    trace_required: bool = False  # Mandated by Classifier
+    validation_status: str = "valid"  # "valid" | "invalid" | "partial"
+    coverage_metrics: Dict[str, Any] = field(default_factory=dict) # e.g. {"mechanisms": ["fermentation"]}
     invocations: List[AgentInvocation] = field(default_factory=list)
     system_audit: Dict[str, Any] = field(default_factory=dict)
     
@@ -84,6 +102,33 @@ class AgentExecutionTrace:
     broken_step_histogram: Dict[str, int] = field(default_factory=dict)  # Broken by step type
     source_contribution: Dict[str, int] = field(default_factory=dict)  # Steps by source
     
+    # 🧪 Evidence Metrics (Phase 9)
+    evidence_coverage: float = 0.0  # % of claims with verified evidence
+    contradiction_ratio: float = 0.0  # % of evidence set that is contradictory
+    
+    # 📜 Policy Accountability (Phase 10)
+    evidence_policy_id: str = ""
+    policy_version: str = ""
+    policy_hash: str = ""
+    policy_selection_reason: str = ""  # (Phase 11 / Gap 3)
+    
+    # 🔒 Trace Initialization Barrier (Phase 11 / Gap 2)
+    version_lock: bool = False
+    registry_version: str = ""
+    registry_hash: str = ""
+    ontology_version: str = ""
+
+    def lock_versions(self, reg_v: str, reg_h: str, ont_v: str):
+        """
+        Seals the version snapshot into the trace.
+        Must be called BEFORE any resolution logic.
+        """
+        self.registry_version = reg_v
+        self.registry_hash = reg_h
+        self.ontology_version = ont_v
+        self.version_lock = True
+        logger.info(f"[TRACE_BARRIER] Locked versions: reg={reg_v} ont={ont_v}")
+
     # 🎯 Tier 3 Metrics (Contextual Causality)
     tier3_applicability_match: float = 0.0  # Average applicability match score
     tier3_risk_flags_count: int = 0  # Total risk flags detected
@@ -104,54 +149,121 @@ class AgentExecutionTrace:
         dur = invocation.duration_ms if invocation.duration_ms is not None else 0.0
         logger.info(f"[AGENT_TRACE] {invocation.agent_name} | {invocation.status} | {dur:.2f}ms")
     
-    def set_claims(self, claims: List[Any], variance_drivers: Dict[str, float] = None):
+    def add_claims(self, new_claims: List[Any], variance_drivers: Dict[str, float] = None):
         """
-        Record verified claims and variance drivers.
+        Safely MERGE new claims into the trace.
+        IMMUTABILITY GUARD: Never overwrites, only appends unique claims.
         """
-        self.claims = [
-            {
-                "id": c.claim_id,
-                "text": c.metadata.get("text") if c.metadata else None,
-                "verified": c.verified,
-                "source": c.source,
-                "source_type": getattr(c, "source_type", "model"), # retrieval | model | derived
-                "confidence": c.confidence,
-                "mechanism": c.mechanism.to_dict() if hasattr(c, "mechanism") and c.mechanism else None,
-                "decision": self._map_status_to_decision(getattr(c, "status", "verified"))
-            } for c in claims
-        ]
+        import inspect
+        try:
+            caller = inspect.stack()[1]
+            location = f"{caller.filename.split('/')[-1]}:{caller.lineno}"
+        except:
+            location = "unknown"
+
+        logger.info(f"[TRACE_AUDIT] OP=ADD_CLAIMS before={len(self.claims)} incoming={len(new_claims)} location={location}")
+
+        processed_claims = []
+        existing_ids = {c["id"] for c in self.claims}
+
+        for c in new_claims:
+            # 1. Normalize to dict
+            if isinstance(c, dict):
+                c_dict = c.copy()
+                if "importance_score" not in c_dict:
+                    c_dict["importance_score"] = 0.2
+            else:
+                # Handle SimpleNamespace or other objects
+                c_dict = {
+                    "id": getattr(c, "id", getattr(c, "claim_id", str(uuid.uuid4()))),
+                    "text": getattr(c, "text", getattr(c, "statement", None)),
+                    "statement": getattr(c, "statement", getattr(c, "text", None)), # Sync both
+                    "domain": getattr(c, "domain", "biological"),
+                    "importance_score": getattr(c, "importance_score", 0.2),
+                    "verified": getattr(c, "verified", getattr(c, "isVerified", False)),
+                    "verification_level": getattr(c, "verification_level", "heuristic"),
+                    "confidence": getattr(c, "confidence", None),
+                    "mechanism": getattr(c, "mechanism", None),
+                    "receptors": getattr(c, "receptors", []),
+                    "compounds": getattr(c, "compounds", []),
+                    "perception_outputs": getattr(c, "perception_outputs", []),
+                }
+            
+            c_id = c_dict.get("id") or c_dict.get("claim_id") or str(uuid.uuid4())
+            c_dict["id"] = c_id
+            c_dict["claim_id"] = c_id # Support both
+            
+            c_dict["run_id"] = self.run_id
+            c_dict["pipeline"] = self.pipeline
+            
+            # Log incoming claim state
+            has_mech = c_dict.get("mechanism") is not None
+            logger.info(f"[TRACE_ADD] id={c_id} keys={list(c_dict.keys())} mechanism_present={has_mech}")
+            
+            if c_id in existing_ids:
+                continue
+
+            # Ensure decision mapping exists for backwards compatibility
+            if "decision" not in c_dict:
+                status = c_dict.get("status", "verified") if "status" in c_dict else ("verified" if c_dict.get("verified") else "pending")
+                c_dict["decision"] = self._map_status_to_decision(status)
+
+            processed_claims.append(c_dict)
+            existing_ids.add(c_id)
+
+        # MERGE
+        self.claims.extend(processed_claims)
+        
+        # Update Variance Drivers (Merge)
         if variance_drivers:
-            self.variance_drivers = variance_drivers
+            self.variance_drivers.update(variance_drivers)
         
-        # Phase 3: Calculate MoA Metrics
+        # 🏆 Re-Sort by Importance (Safe get for robustness)
+        self.claims = sorted(self.claims, key=lambda x: x.get("importance_score", 0.0), reverse=True)
+
+        self._recalculate_metrics()
+        
+        logger.info(f"[TRACE_AUDIT] OP=COMPLETE total={len(self.claims)} added={len(processed_claims)}")
+
+    def set_claims(self, claims: List[Any], variance_drivers: Dict[str, float] = None):
+        """DEPRECATED: Alias for add_claims to enforce immutability."""
+        self.add_claims(claims, variance_drivers)
+
+    def _recalculate_metrics(self):
+        """Recalculate MoA and coverage metrics on the full claim set."""
+        mechanisms = set()
+        for c in self.claims:
+            # c is now a dict
+            noch_mech = c.get("mechanism_type")
+            if noch_mech and noch_mech != "heuristic":
+                mechanisms.add(noch_mech)
+
+        self.coverage_metrics["mechanisms"] = list(mechanisms)
+        
+        # Simple heuristic for valid MoA in flat dicts (if verified/allow)
         claims_with_valid_moa = sum(
-            1 for c in claims 
-            if hasattr(c, "mechanism") and c.mechanism and c.mechanism.is_valid
+            1 for c in self.claims 
+            if c.get("decision") == "ALLOW" and c.get("mechanism_type") != "heuristic"
         )
-        self.moa_coverage = (claims_with_valid_moa / len(claims) * 100) if claims else 0.0
+        self.moa_coverage = (claims_with_valid_moa / len(self.claims) * 100) if self.claims else 0.0
         
-        # Track broken steps
-        self.broken_step_histogram = {}
-        for c in claims:
-            if hasattr(c, "mechanism") and c.mechanism and not c.mechanism.is_valid:
-                # Try to identify which step type caused the break
-                if c.mechanism.break_reason:
-                    # Simple heuristic: extract step type from break reason
-                    for step_type in ["compound", "interaction", "physiology", "outcome"]:
-                        if step_type in c.mechanism.break_reason.lower():
-                            self.broken_step_histogram[step_type] = self.broken_step_histogram.get(step_type, 0) + 1
-                            break
-        
-        # Track source contribution per step
-        self.source_contribution = {}
-        for c in claims:
-            if hasattr(c, "mechanism") and c.mechanism and c.mechanism.steps:
-                for step in c.mechanism.steps:
-                    source = step.evidence_source
-                    self.source_contribution[source] = self.source_contribution.get(source, 0) + 1
-        
-        logger.info(f"[CLAIM_TRACE] Recorded {len(self.claims)} claims with {len(self.variance_drivers)} drivers")
-        logger.info(f"[MOA_METRICS] Coverage: {self.moa_coverage:.1f}%, Broken: {self.broken_step_histogram}, Sources: {self.source_contribution}")
+        # Calculate Evidence Metrics (Phase 9)
+        total_claims = len(self.claims)
+        if total_claims > 0:
+            claims_with_ev = sum(1 for c in self.claims if c.get("evidence"))
+            self.evidence_coverage = round(claims_with_ev / total_claims, 2)
+            
+            all_evidence = []
+            for c in self.claims:
+                ev_list = c.get("evidence")
+                if isinstance(ev_list, list):
+                    all_evidence.extend(ev_list)
+            
+            if all_evidence:
+                contradictions = sum(1 for e in all_evidence if e.get("effect_direction") == "contradictory")
+                self.contradiction_ratio = round(contradictions / len(all_evidence), 2)
+
+        logger.info(f"[MOA_METRICS] Coverage: {self.moa_coverage:.1f}% | Evidence Cov: {self.evidence_coverage:.2f} | Ctrl Ratio: {self.contradiction_ratio:.2f}")
 
     def _map_status_to_decision(self, status: str) -> str:
         """verified -> ALLOW, rejected -> WITHHOLD, pending -> REQUIRE_MORE_CONTEXT"""
@@ -198,32 +310,72 @@ class AgentExecutionTrace:
         """
         data = asdict(self)
         
+        # Identity root fields
+        data["run_id"] = self.run_id
+        data["pipeline"] = self.pipeline
+        
+        # Policy Accountability Validation
+        if not self.evidence_policy_id or not self.policy_version:
+            err_msg = f"[TRACE_INTEGRITY] Serialization Failure: Missing mandatory policy metadata (ID/Version) for run {self.run_id}"
+            logger.error(err_msg)
+            raise ValueError(err_msg)
+        
+        # ── GAP 3: STRUCTURAL PARTITIONING ──
+        # Explicit separation of Factual Observations vs. Policy Interpretation.
+        scientific_layer = {
+            "claims": data.get("claims", []),
+            "compounds": data.get("compounds", []),
+            "moa_coverage": data.get("moa_coverage", 0.0),
+            "evidence_coverage": data.get("evidence_coverage", 0.0),
+            "contradiction_ratio": data.get("contradiction_ratio", 0.0),
+            "registry_snapshot": {
+                "version": self.registry_version,
+                "hash": self.registry_hash,
+                "ontology_version": self.ontology_version,
+                "locked": self.version_lock
+            }
+        }
+        
+        policy_layer = {
+            "policy_id": self.evidence_policy_id,
+            "policy_version": self.policy_version,
+            "policy_hash": self.policy_hash,
+            "selection_reason": self.policy_selection_reason
+        }
+        
         # 1. Integrity Transformation
         raw_integrity = data.get("integrity", {})
         missing = [k for k, v in raw_integrity.items() if v in ["pending", "incomplete"]]
-        data["integrity"] = {
-            "complete": len(missing) == 0,
-            "missing_segments": missing
+        
+        # Final Assembler
+        result = {
+            "run_id": self.run_id,
+            "pipeline": self.pipeline,
+            "status": self.status.value,
+            "duration_ms": (time.time() - self.start_ts) * 1000,
+            "integrity": {
+                "complete": len(missing) == 0,
+                "missing_segments": missing
+            },
+            "scientific_layer": scientific_layer,
+            "policy_layer": policy_layer,
+            "causality_layer": {
+                "tier3_applicability_match": self.tier3_applicability_match,
+                "tier3_risk_flags_count": self.tier3_risk_flags_count,
+                "tier3_recommendation_distribution": self.tier3_recommendation_distribution
+            },
+            "system_audit": self.system_audit
         }
 
-        # 2. Status & Timing
-        is_complete = any(inv.get("agent_name") == "final_synthesis" for inv in data.get("invocations", []))
-        data["status"] = "complete" if is_complete else "streaming"
-        data["duration_ms"] = (time.time() - self.start_ts) * 1000
-
-        # 3. Missing Root Fields
-        data["tier3_risk_flags"] = {}
-        if data.get("moa_coverage") is None: data["moa_coverage"] = 0.0
-        
         # Explicit PubChem verification block in root if used
         if self.pubchem_used:
-            data["pubchem_proof"] = {
+            result["pubchem_proof"] = {
                 "verified": True,
                 "traceable": len(self.compounds) > 0,
-                "compounds": data.get("compounds", [])
+                "compounds": scientific_layer["compounds"]
             }
         
-        return data
+        return result
 
     def to_json(self) -> str:
         return json.dumps(self.to_dict(), indent=2)

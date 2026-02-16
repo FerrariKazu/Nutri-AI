@@ -99,6 +99,21 @@ def format_sse_event(event: str, data: Any) -> str:
         # 5. Serialize THE ENTIRE ENVELOPE to JSON
         json_envelope = json.dumps(safe_json(payload))
         
+        # [TRACE_AUDIT] Transport Validation
+        try:
+             # Check if this event carries a trace
+             trace = None
+             if event == "execution_trace":
+                 trace = payload.get("content")
+             elif isinstance(payload, dict) and "execution_trace" in payload:
+                 trace = payload["execution_trace"]
+             
+             if trace:
+                 claims = trace.get("claims", [])
+                 logger.info(f"[TRACE_AUDIT] 🚀 SSE SENT TO CLIENT: Event={event}, Claims={len(claims)}")
+        except Exception:
+            pass
+
         return f"event: {event}\ndata: {json_envelope}\n\n"
         
     except Exception as e:

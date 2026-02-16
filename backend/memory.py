@@ -48,10 +48,16 @@ class SessionMemoryStore:
                     conversation_id TEXT,
                     role TEXT CHECK(role IN ('user', 'assistant', 'system')),
                     content TEXT,
+                    execution_trace TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(session_id) REFERENCES sessions(session_id)
                 )
             """)
+            # Check if execution_trace column exists (migration)
+            try:
+                cursor.execute("SELECT execution_trace FROM messages LIMIT 1")
+            except sqlite3.OperationalError:
+                cursor.execute("ALTER TABLE messages ADD COLUMN execution_trace TEXT")
             conn.commit()
             
             # User preferences table (USER-SCOPED)
@@ -143,7 +149,7 @@ class SessionMemoryStore:
                 )
             conn.commit()
 
-    def add_message(self, session_id: str, role: str, content: str):
+    def add_message(self, session_id: str, role: str, content: str, execution_trace: Optional[str] = None):
         """Adds a message to the session history and updates activity."""
         self._update_activity(session_id)
         with sqlite3.connect(self.db_path) as conn:
@@ -166,10 +172,33 @@ class SessionMemoryStore:
                 cursor.execute("UPDATE sessions SET title = ? WHERE session_id = ?", (new_title, session_id))
 
             cursor.execute(
-                "INSERT INTO messages (session_id, conversation_id, role, content) VALUES (?, ?, ?, ?)",
-                (session_id, conv_id, role, content)
+                "INSERT INTO messages (session_id, conversation_id, role, content, execution_trace) VALUES (?, ?, ?, ?, ?)",
+                (session_id, conv_id, role, content, execution_trace)
             )
             conn.commit()
+
+    def update_last_message_trace(self, session_id: str, execution_trace: str):
+        """
+        Updates the execution trace of the most recent message in the session.
+        Critical for post-generation intelligence augmentation (Mandate V2).
+        """
+        self._update_activity(session_id)
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            # Find last message ID
+            cursor.execute("SELECT id FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT 1", (session_id,))
+            row = cursor.fetchone()
+            
+            if row:
+                msg_id = row[0]
+                cursor.execute(
+                    "UPDATE messages SET execution_trace = ? WHERE id = ?",
+                    (execution_trace, msg_id)
+                )
+                conn.commit()
+                logger.debug(f"[MEMORY] Updated trace for message {msg_id}")
+            else:
+                logger.warning(f"[MEMORY] Attempted to update trace for empty session {session_id}")
 
     def list_sessions(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Returns sessions for a specific user, ordered by last_active DESC."""
@@ -210,7 +239,7 @@ class SessionMemoryStore:
             ]
 
     def check_ownership(self, session_id: str, user_id: str) -> bool:
-        """Verifies that a session belongs to the given user."""
+        """Verifies that a session belongs to the given user. Allows 'claiming' unowned sessions."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT user_id FROM sessions WHERE session_id = ?", (session_id,))
@@ -220,8 +249,12 @@ class SessionMemoryStore:
             
             owner = row[0]
             if not owner:
-                # unclaimed session policy: if it has no user_id, it is NOT accessible by strict auth users
-                return False
+                # FIRST-CLAIM POLICY: If session is unowned, the requester claims it.
+                # This fixes 403 errors for legacy sessions after the production integrity upgrade.
+                logger.info(f"Session {session_id} is unowned. Claimed by user {user_id}")
+                cursor.execute("UPDATE sessions SET user_id = ? WHERE session_id = ?", (user_id, session_id))
+                conn.commit()
+                return True
                 
             return owner == user_id
 
@@ -241,10 +274,11 @@ class SessionMemoryStore:
                 # Exists - Check Owner
                 owner = row[0]
                 if not owner:
-                    # Claim it? Or deny?
-                    # Policy: Once created without user, it stays implicit?
-                    # For now: Deny access to unclaimed sessions from strict auth
-                    return False
+                    # Claim the unowned session
+                    logger.info(f"Session {session_id} found unowned in ensure_session. Claimed by {user_id}")
+                    cursor.execute("UPDATE sessions SET user_id = ? WHERE session_id = ?", (user_id, session_id))
+                    conn.commit()
+                    return True
                 return owner == user_id
             else:
                 # Missing - Create and Claim
@@ -256,17 +290,24 @@ class SessionMemoryStore:
                 conn.commit()
                 return True
 
-    def get_history(self, session_id: str, limit: int = 15) -> List[Dict[str, str]]:
+    def get_history(self, session_id: str, limit: int = 15) -> List[Dict[str, Any]]:
         """Retrieves the most recent messages for a session."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT role, content FROM messages WHERE session_id = ? ORDER BY created_at ASC LIMIT ?",
+                "SELECT role, content, execution_trace FROM messages WHERE session_id = ? ORDER BY created_at ASC LIMIT ?",
                 (session_id, limit)
             )
             rows = cursor.fetchall()
-            return [{"role": row["role"], "content": row["content"]} for row in rows]
+            return [
+                {
+                    "role": row["role"], 
+                    "content": row["content"],
+                    "executionTrace": json.loads(row["execution_trace"]) if row["execution_trace"] else None
+                } 
+                for row in rows
+            ]
 
     def get_messages(self, session_id: str, limit: int = 15) -> List[Dict[str, str]]:
         """Alias for get_history (used by NutriEngine)."""

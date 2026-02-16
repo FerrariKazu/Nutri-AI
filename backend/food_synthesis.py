@@ -48,7 +48,7 @@ from backend.sensory.interactive_design_loop import InteractiveDesignLoop
 
 from backend.nutrition_enforcer import (
     CompoundResolver,
-    calculate_confidence_score,
+    calculate_resolution_coverage,
     generate_proof_hash,
     NutritionEnforcementMode,
     ResolvedCompound,
@@ -551,7 +551,7 @@ class FoodSynthesisEngine:
             
             try:
                 # Calculate confidence
-                confidence = calculate_confidence_score(
+                confidence = calculate_resolution_coverage(
                     resolution_result,
                     self.enforcement_mode
                 )

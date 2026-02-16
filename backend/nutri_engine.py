@@ -12,6 +12,7 @@ All paths share the same NUTRI_CORE_PERSONA and conversation memory.
 import logging
 import re
 from typing import Dict, Any, Optional, Callable, List
+import asyncio
 
 from backend.response_modes import ResponseMode
 from backend.persona import NUTRI_CORE_PERSONA
@@ -45,6 +46,7 @@ class NutriEngine:
         mode: ResponseMode,
         synthesis_data: Optional[Dict[str, Any]] = None,
         stream_callback: Optional[Callable[[str], None]] = None,
+        trace: Optional[Any] = None,
         **kwargs
     ) -> str:
         logger.info(f"🎯 NutriEngine generating in {mode.value} mode")
@@ -93,12 +95,100 @@ class NutriEngine:
 
         # 6. Store in shared memory
         self.memory.add_message(session_id, "user", user_message)
-        self.memory.add_message(session_id, "assistant", response)
+
+        # [MANDATE] Primary claim generation from narrative context
+        if trace and trace.trace_required:
+            logger.info("[ENGINE] Executing primary claim extraction from narrative")
+            claims = self.claim_parser.extract_claims_from_thought_stream(response)
+            trace.set_claims(claims)
+            
+            # [INTEGRITY CHECKER]
+            self._verify_narrative_integrity(response, trace)
+
+        trace_json = trace.to_json() if trace and hasattr(trace, "to_dict") else None
+        self.memory.add_message(session_id, "assistant", response, execution_trace=trace_json)
 
         # 7. Update session mode
         self.memory.set_response_mode(session_id, mode)
 
-        return response
+    async def extract_claims_fallback(self, text: str) -> List[Dict[str, Any]]:
+        """
+        Multi-tier extraction fallback to ensure mandatory intelligence.
+        """
+        if not text or len(text) < 20:
+            return []
+
+        logger.info("[ENGINE] Starting multi-tier claim extraction fallback")
+        
+        # --- Tier 1: Fast Regex Recovery ---
+        # Look for simple "Subject contains X" or "Subject helps Y"
+        tier1_claims = []
+        patterns = [
+            r"(\b[A-Za-z]+(?:\s+[A-Za-z]+)?)\b\s+is\s+rich\s+in\s+(\b[A-Za-z]+(?:\s+[A-Za-z]+)?)\b",
+            r"(\b[A-Za-z]+(?:\s+[A-Za-z]+)?)\b\s+(?:helps|supports|aids|promotes)\s+(\b[A-Za-z]+(?:\s+[A-Za-z]+)?)\b"
+        ]
+        for p in patterns:
+            matches = re.finditer(p, text, re.IGNORECASE)
+            for m in matches:
+                subject, obj = m.groups()
+                tier1_claims.append({
+                    "claim_id": f"EXT-T1-{hash(m.group(0)) % 10000}",
+                    "text": m.group(0),
+                    "subject": subject,
+                    "mechanism": f"Direct link between {subject} and {obj}",
+                    "domain": "biological",
+                    "verified": False,
+                    "source": "model_output",
+                    "origin": "extracted",
+                    "confidence": "medium",
+                    "verification_level": "heuristic"
+                })
+        
+        if tier1_claims:
+            logger.info(f"[ENGINE] Tier 1 found {len(tier1_claims)} claims.")
+            return tier1_claims
+
+        # --- Tier 2: LLM Extraction ---
+        # Since we use LLMQwen3, we can't easily switch "tiers" of models,
+        # so we'll use a specialized prompt for extraction.
+        try:
+            from backend.claim_parser import ClaimParser
+            
+            def run_extraction():
+                parser = ClaimParser(llm_engine=self.llm)
+                return parser.parse(text)
+            
+            # 🏎️ Run in executor to prevent blocking heartbeats
+            loop = asyncio.get_event_loop()
+            raw_claims = await asyncio.wait_for(
+                loop.run_in_executor(None, run_extraction),
+                timeout=25.0 # Max wait for extraction
+            )
+            
+            extracted = []
+            for c in raw_claims:
+                extracted.append({
+                    "claim_id": c.claim_id,
+                    "text": c.text,
+                    "subject": c.subject or "unknown_entity",
+                    "mechanism": c.predicate or "None specified",
+                    "domain": "biological",
+                    "verified": False,
+                    "source": "model_output",
+                    "origin": "extracted",
+                    "confidence": "medium",
+                    "verification_level": "heuristic"
+                })
+            
+            if extracted:
+                logger.info(f"[ENGINE] Tier 2 LLM extraction succeeded with {len(extracted)} claims.")
+                return extracted
+        except asyncio.TimeoutError:
+            logger.warning("[ENGINE] LLM extraction pass TIMED OUT. Dropping to heuristic fallback.")
+        except Exception as e:
+            logger.error(f"[ENGINE] LLM extraction failed: {e}")
+
+        return []
 
     def _apply_nutrition_governance(self, text: str, mode: ResponseMode) -> str:
         """
@@ -185,6 +275,19 @@ class NutriEngine:
                                    governed_text)
             
         return governed_text
+
+    def _verify_narrative_integrity(self, text: str, trace: Any):
+        """
+        [INTEGRITY MANDATE]
+        Checks if the assistant text asserts a mechanism that isn't in trace.
+        """
+        mechanism_keywords = ["because", "due to", "causes", "activates", "inhibits", "mechanism", "receptor", "cid:"]
+        if any(k in text.lower() for k in mechanism_keywords):
+            if not trace.claims:
+                logger.error("🚨 [INTEGRITY VIOLATION] Narrative asserts mechanism but Trace claims are empty!")
+                trace.validation_status = "invalid"
+            else:
+                logger.info("✅ [INTEGRITY] Narrative mechanism matches trace presence.")
 
     def _build_prompt(
         self,

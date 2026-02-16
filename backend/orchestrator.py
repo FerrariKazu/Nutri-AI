@@ -13,6 +13,7 @@ from backend.utils.response_formatter import ResponseFormatter
 from backend.execution_plan import ExecutionPlan
 from backend.memory_guard import MemoryGuard
 from backend.resource_budget import ResourceBudget
+from backend.intelligence.claim_enricher import enrich_claims
 from backend.gpu_monitor import gpu_monitor
 from backend.embedding_throttle import run_throttled_embedding
 
@@ -21,11 +22,12 @@ from backend.embedding_throttle import run_throttled_embedding
 from backend.meta_learner import MetaLearner, ExecutionPolicy
 from backend.execution_dag import DAGScheduler, AgentNode
 from backend.nutrition_enforcer import (
-    calculate_confidence_score,
+    calculate_resolution_coverage,
     generate_proof_hash,
     NutritionEnforcementMode
 )
 from backend.explanation_router import ExplanationRouter, ExplanationVerbosity
+from backend.policies.default_policy_v1 import NUTRI_EVIDENCE_V1
 
 from backend.belief_state import initialize_belief_state, BeliefState
 from backend.belief_revision_engine import BeliefRevisionEngine
@@ -68,25 +70,46 @@ class NutriOrchestrator:
         session_id: str, 
         user_message: str, 
         preferences: Dict[str, Any],
-        execution_mode: Optional[str] = None
+        execution_mode: Optional[str] = None, 
+        run_id: Optional[str] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
-        Executes the Nutri pipeline with true non-blocking streaming.
-        Uses a background task to drive generation while the generator drains an event queue.
+        Executes the synthesis loop, yielding SSE event dicts.
+        Identity is enforced: every packet has run_id and pipeline.
         """
-        # 🟢 Initialize Trace per Session (Mandatory, but Non-Fatal)
+        # Identity and Trace Init
+        run_id = run_id or str(uuid.uuid4())
         trace_id = f"tr_{int(time.time())}_{uuid.uuid4().hex[:6]}"
+        
+        # Determine Pipeline name from logic (simplification for now)
+        # In a more complex system, this would be dynamic.
+        active_pipeline = execution_mode or "flavor_explainer"
         try:
             # Attempt to import create_trace dynamically or verify scope
             from backend.utils.execution_trace import create_trace
             trace = create_trace(session_id, trace_id)
-            trace.schema_version = 2
-            trace.trace_required = IntelligenceClassifier.requires_trace(user_message)
+            trace.run_id = run_id
+            trace.pipeline = active_pipeline
             # Add Audit Data to Trace
+            from backend.sensory.sensory_registry import SensoryRegistry
+            snapshot = SensoryRegistry.get_registry_snapshot()
+            trace.lock_versions(
+                reg_v=snapshot["version"],
+                reg_h=snapshot["hash"],
+                ont_v=snapshot["ontology_version"]
+            )
+            
+            trace.evidence_policy_id = NUTRI_EVIDENCE_V1.policy_id
+            trace.policy_version = NUTRI_EVIDENCE_V1.version
+            trace.policy_hash = NUTRI_EVIDENCE_V1.compute_hash()
+            trace.policy_selection_reason = "system_default_profile"
+            
             trace.system_audit = {
                 "rag": "enabled",
                 "model": self.pipeline.engine.llm.model_name,
-                "intelligence_mandated": trace.trace_required
+                "intelligence_mandated": trace.trace_required,
+                "policy_id": trace.evidence_policy_id,
+                "selection_reason": trace.policy_selection_reason
             }
         except Exception as e:
             logger.warning(f"Trace initialization failed (non-fatal): {e}")
@@ -132,17 +155,20 @@ class NutriOrchestrator:
         event_queue = asyncio.Queue()
         seq_counter = 0
 
-        def push_event(event_type: str, content: Any):
+        def push_event(event_type: str, content: Any, agent: str = "orchestrator"):
             nonlocal seq_counter
             seq_counter += 1
-            logger.debug(f"[ORCH] push_event: {event_type} (seq={seq_counter})")
+            logger.debug(f"[ORCH][{active_pipeline}] push_event: {event_type} (seq={seq_counter}) agent={agent}")
             # Safe way to put into queue from ANY thread
             asyncio.run_coroutine_threadsafe(
                 event_queue.put({
                     "type": event_type, 
                     "content": content,
                     "seq": seq_counter,
-                    "stream_id": trace_id
+                    "stream_id": trace_id,
+                    "run_id": run_id,
+                    "pipeline": active_pipeline,
+                    "agent": agent
                 }), 
                 loop
             )
@@ -156,10 +182,95 @@ class NutriOrchestrator:
             # Capture for mandate verification
             full_response_text.append(token)
             # This is called from the executor thread
-            push_event("token", token)
+            push_event("token", token, agent="llm_engine")
 
         async def run_sync(func, *args, **kwargs):
             return await loop.run_in_executor(None, lambda: func(*args, **kwargs))
+
+        async def _enforce_intelligence(trace, full_response_text):
+            """
+            Unbreakable intelligence mandate enforcement.
+            Sequence: Parse -> Deduplicate -> Enrich -> Repair -> Validate -> Snapshot -> Memory.
+            """
+            if not trace.trace_required:
+                return
+
+            final_text = "".join(full_response_text)
+            logger.info(f"[MANDATE] Enforcing intelligence (Unbreakable Flow) for {len(final_text)} characters.")
+            
+            try:
+                # 1. Extraction Fallback (Parser)
+                from backend.intelligence.mechanism_parser import MechanismParser
+                from backend.intelligence.claim_filter import is_mechanistic, create_fallback_claim
+                parser = MechanismParser()
+                extracted_claims = parser.parse(final_text)
+                
+                # 1.5 Purity Gate (Stage 1: Raw Filter) - REMOVED per User Instruction
+                # We send ALL parsed claims to enrichment to ensure we don't kill valid biology 
+                # that just hasn't been tagged yet.
+                # if extracted_claims:
+                #     count_before = len(extracted_claims)
+                #     extracted_claims = [c for c in extracted_claims if is_mechanistic(c)]
+                #     removed = count_before - len(extracted_claims)
+                #     if removed > 0:
+                #         logger.info(f"[FILTER] Removed {removed} non-mechanistic claims after parsing.")
+
+                # 2. Preparation & Merge
+                if extracted_claims:
+                    logger.info(f"[MANDATE] Parser extracted {len(extracted_claims)} valid claims.")
+                    # Deduplication happens inside trace.add_claims via ID check
+                    trace.add_claims(extracted_claims)
+                
+                # 3. Universal Enrichment & Repair (Enforced SSOT)
+                from backend.intelligence.claim_enricher import enrich_claims
+                # Re-enrich EVERYTHING in the trace to ensure 100% compliance
+                if trace.claims:
+                    logger.info(f"[ORCHESTRATOR] Pre-enrichment claims: {len(trace.claims)}")
+                    trace.claims = enrich_claims(trace.claims)
+                    
+                    # Post-Enrichment Audit (User Mandate)
+                    for i, c in enumerate(trace.claims):
+                        c_id = c.get("id")
+                        has_mech = c.get("mechanism") is not None
+                        is_ver = c.get("verified") is True
+                        logger.info(f"[ORCHESTRATOR] Post-enrichment claim[{i}] id={c_id} verified={is_ver} mechanism={has_mech}")
+                        
+                        # ORCHESTRATOR HARD ASSERT
+                        if is_ver and not has_mech:
+                            raise ValueError(f"Orchestrator Integrity Failure: Claim {c_id} is verified but lost mechanism immediately after enrichment.")
+
+                    # 3.5 Purity Gate (Stage 2: Post-Enrichment Sync)
+                    count_before = len(trace.claims)
+                    trace.claims = [c for c in trace.claims if is_mechanistic(c)]
+                    removed = count_before - len(trace.claims)
+                    if removed > 0:
+                        logger.info(f"[FILTER] Removed {removed} non-mechanistic claims after enrichment.")
+                    
+                    if trace.claims:
+                        logger.info(f"[MANDATE] Enriched and Repaired {len(trace.claims)} claims.")
+                
+                # 4. Fallback Logic (Mandatory Purity)
+                if not trace.claims and trace.trace_required:
+                    logger.warning("[MANDATE] 0 claims remain after filtering. Generating fallback.")
+                    fallback = create_fallback_claim(final_text)
+                    trace.add_claims([fallback])
+                    trace.validation_status = "partial"
+                elif trace.claims:
+                    trace.validation_status = "verified" if any(c.get("verified") for c in trace.claims) else "partial"
+                else:
+                    trace.validation_status = "invalid"
+                    
+            except Exception as e:
+                logger.error(f"[MANDATE] Fatal flow failure: {e}", exc_info=True)
+                trace.validation_status = "invalid"
+
+            # 4. Memory Hydration
+            try:
+                trace_json = trace.to_json() if hasattr(trace, "to_json") else str(trace.to_dict())
+                self.memory.update_last_message_trace(session_id, trace_json)
+                logger.info("[ORCH] Hydrated memory with final unbreakable trace.")
+            except Exception as mem_err:
+                logger.error(f"[ORCH] Failed to hydrate memory trace: {mem_err}")
 
         async def orchestration_task():
             nonlocal seq_counter
@@ -182,6 +293,9 @@ class NutriOrchestrator:
                             "message": message
                         },
                         "stream_id": trace_id,
+                        "run_id": run_id,
+                        "pipeline": active_pipeline,
+                        "agent": "orchestrator",
                         "seq": seq_counter
                     })
                     logger.debug(f"[ORCH] push_done: {status} (seq={seq_counter})")
@@ -209,7 +323,7 @@ class NutriOrchestrator:
                             "phase": phase, 
                             "message": msg,
                             "duration_ms": duration_ms
-                        })
+                        }, agent="orchestrator")
 
                 last_status_ts = time.perf_counter()
                 logger.info(f"Orchestrating with Policy: {policy.profile.value}")
@@ -251,6 +365,15 @@ class NutriOrchestrator:
                 previous_mode = self.memory.get_response_mode(session_id)
                 mode = classify_response_mode(user_message, intent, previous_mode)
                 logger.info(f"🎯 Response Mode: {mode.value}")
+                
+                # --- CRITICAL: ROUTING PROVENANCE ASSERTION (User Mandate) ---
+                from backend.mode_classifier import is_biological_context
+                if is_biological_context(user_message) and mode == ResponseMode.CONVERSATION:
+                    # Fail loudly per implementation plan
+                    raise ValueError(
+                        f"Routing Error: Biological query '{user_message}' routed to nutri-conversation. "
+                        "Expert selection (nutri-diagnostic) is MANDATORY for this domain."
+                    )
                 
                 # 🟢 PHASE 5 & 6 INTEGRATION
                 # Memory Extraction and Phase Selection
@@ -353,7 +476,11 @@ class NutriOrchestrator:
 
                     await self.engine.generate(session_id, user_message, mode, final_data, stream_callback=stream_callback)
                     inv.complete(status="success", reason="selected")
-                    logger.info("[ORCH] Generation finished.")
+                    
+                    # 🛡️ MANDATE
+                    await _enforce_intelligence(trace, full_response_text)
+                    
+                    logger.info("[ORCH] Zero-phase path complete.")
                     return
                 
                 # 🟢 MULTI-PHASE PATH with HARD VALIDATION
@@ -440,6 +567,10 @@ class NutriOrchestrator:
                         "tier4_metrics": trace.to_dict().get("tier4", {}),
                     }
                     await self.engine.generate(session_id, user_message, mode, final_data, stream_callback=stream_callback)
+                    
+                    # 🛡️ MANDATE
+                    await _enforce_intelligence(trace, full_response_text)
+                    
                     return
                 
                 # 5. Parallel DAG
@@ -833,84 +964,10 @@ class NutriOrchestrator:
                 await self.engine.generate(session_id, user_message, mode, final_data, stream_callback=stream_callback)
                 inv.complete(status="success", reason="selected")
 
-                # 🛡️ MANDATORY INTELLIGENCE ENFORCEMENT V2 🛡️
-                # Strategy: TEXT → ALWAYS EXTRACT → STRUCTURE
-                if trace.trace_required:
-                    final_text = "".join(full_response_text)
-                    logger.info(f"[MANDATE] Trace required. Claims before extraction: {len(trace.claims)}")
-                    
-                    # 1. Always run extraction
-                    try:
-                        extracted_claims = await self.pipeline.engine.extract_claims_fallback(final_text)
-                        
-                        if extracted_claims:
-                            logger.info(f"[MANDATE] Extracted {len(extracted_claims)} new claims from text.")
-                            
-                            # We overwrite with extracted claims because native pipeline is unreliable (claims=0 issue)
-                            # Ideally we would merge, but for now, extraction is the source of truth for the FINAL text.
-                            trace.set_claims(new_claim_objs, {})
-                            logger.info(f"[MANDATE] Final claim count: {len(trace.claims)}")
-                            
-                            # Mark as PARTIAL (Unverified but present)
-                            trace.validation_status = "partial" 
-                            
-                        else:
-                            logger.warning("[MANDATE] Parser returned 0 claims.")
-                            
-                    except Exception as e:
-                         logger.error(f"[MANDATE] Extraction failed: {e}")
+                # 🛡️ MANDATE (Unified)
+                await _enforce_intelligence(trace, full_response_text)
 
-                    # 3. Critical Guard
-                    if len(trace.claims) == 0:
-                        # Only invalid if TRULY empty (no parser results)
-                        trace.validation_status = "invalid"
-                        logger.critical("[MANDATE] CRITICAL FAILURE: Scientific content without claims. Marked INVALID.")
-                    elif trace.validation_status == "invalid":
-                        # If parser found something, rescue status
-                        trace.validation_status = "partial"
-
-                # 🛡️ MANDATORY INTELLIGENCE ENFORCEMENT V2 🛡️
-                # Strategy: TEXT → ALWAYS EXTRACT → STRUCTURE
-                if trace.trace_required:
-                    final_text = "".join(full_response_text)
-                    logger.info(f"[MANDATE] Trace required. Claims before extraction: {len(trace.claims)}")
-                    
-                    # 1. Always run extraction
-                    try:
-                        extracted_claims = await self.pipeline.engine.extract_claims_fallback(final_text)
-                        
-                        if extracted_claims:
-                            logger.info(f"[MANDATE] Extracted {len(extracted_claims)} new claims from text.")
-                            
-                            # 2. Merge/Set Claims
-                            # Convert to objects for consistency
-                            from types import SimpleNamespace
-                            new_claim_objs = []
-                            for c in extracted_claims:
-                                obj = SimpleNamespace(**c)
-                                # FORCE frontend badges
-                                obj.verified = False
-                                obj.evidence_level = "unverified"
-                                obj.verification_level = "heuristic"
-                                new_claim_objs.append(obj)
-                            
-                            # We overwrite with extracted claims because native pipeline is unreliable (claims=0 issue)
-                            # Ideally we would merge, but for now, extraction is the source of truth for the FINAL text.
-                            trace.set_claims(new_claim_objs, {})
-                            logger.info(f"[MANDATE] Final claim count: {len(trace.claims)}")
-                            
-                        else:
-                            logger.warning("[MANDATE] Extraction returned 0 claims.")
-                            
-                    except Exception as e:
-                         logger.error(f"[MANDATE] Extraction failed: {e}")
-
-                    # 3. Critical Guard
-                    if len(trace.claims) == 0:
-                        trace.validation_status = "invalid"
-                        logger.critical("[MANDATE] CRITICAL FAILURE: Scientific content without claims. Marked INVALID.")
-                
-                # 🥗 Emit Nutrition Intelligence Report (Legacy companion)
+                # 🥗 Emit Nutrition Intelligence Report
                 nutrition_report = {
                     "session_id": session_id,
                     "confidence_score": trace.confidence_score,
@@ -924,21 +981,19 @@ class NutriOrchestrator:
                     "total_claims": len(trace.claims),
                     "claims": trace.claims, # Deep claim evidence
                     "variance_drivers": trace.variance_drivers,
-                    "conflicts_detected": any(c.get("has_conflict") for c in trace.claims if isinstance(c, dict)),
+                    "conflicts_detected": any(c.get("has_conflict") for c in trace.claims if isinstance(c, dict) and c.get("has_conflict")),
                     "summary": f"Nutrition verified via PubChem & USDA ({len(trace.compounds)} compounds, {len(trace.claims)} verifiable claims)"
                 }
-                push_event("nutrition_report", nutrition_report)
+                push_event("nutrition_report", nutrition_report, agent="nutrition_enforcer")
                 
-                logger.info("[ORCH] Generation finished.")
+                logger.info("[ORCH] Generation complete.")
                 orchestration_metadata = {"nutrition_report": nutrition_report}
                 # Update session context after response
                 new_context = await run_sync(memory_extractor.extract_context, user_message, "")
                 if new_context:
                     self.memory.update_context(session_id, new_context)
                 
-                logger.info("[ORCH] Generation complete.")
-                # push_done removed here, moved to finally to ensure trace precedes it
-
+                logger.info("[ORCH] Flow finished.")
             except RuntimeError as e:
                 # Catch ResourceBudgetExceeded specifically if needed, otherwise general
                 orchestration_status = "RESOURCE_EXCEEDED"
@@ -948,8 +1003,10 @@ class NutriOrchestrator:
                     "message": str(e), 
                     "phase": "resource_guard", 
                     "status": "RESOURCE_EXCEEDED",
-                    "stream_id": trace_id
-                })
+                    "stream_id": trace_id,
+                    "run_id": run_id,
+                    "pipeline": active_pipeline
+                }, agent="resource_budget")
             except Exception as e:
                 orchestration_status = "FAILED"
                 orchestration_metadata = {"error": str(e)}
@@ -958,8 +1015,10 @@ class NutriOrchestrator:
                     "message": str(e), 
                     "phase": "orchestration", 
                     "status": "FAILED",
-                    "stream_id": trace_id
-                })
+                    "stream_id": trace_id,
+                    "run_id": run_id,
+                    "pipeline": active_pipeline
+                }, agent="orchestrator")
             finally:
                 gpu_monitor.sample_after()
                 logger.info(f"[ORCH] Finalizing stream (status={orchestration_status}). Guaranteeing trace -> done.")
@@ -972,7 +1031,10 @@ class NutriOrchestrator:
                         "type": "execution_trace",
                         "content": trace_dict,
                         "seq": seq_counter,
-                        "stream_id": trace_id
+                        "stream_id": trace_id,
+                        "run_id": run_id,
+                        "pipeline": active_pipeline,
+                        "agent": "orchestrator"
                     })
                     logger.info(f"[ORCH] Trace emitted (claims={len(trace.claims)}, seq={seq_counter})")
                 except Exception as te:

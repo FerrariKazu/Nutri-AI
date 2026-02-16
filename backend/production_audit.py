@@ -84,14 +84,27 @@ def run_startup_audit():
     else:
         print("   - Session DB: OK")
 
-    # 5. PubChem Connectivity Check
+    # 5. PubChem Connectivity Check (Hardened with Retries)
     print("🧪 Checking PubChem Connectivity...")
     client = get_pubchem_client()
-    if client.health_check():
+    
+    pubchem_ready = False
+    max_retries = 3
+    import time
+    
+    for attempt in range(max_retries):
+        if client.health_check():
+            pubchem_ready = True
+            break
+        if attempt < max_retries - 1:
+            print(f"   ⚠️  Attempt {attempt + 1} failed. Retrying in 2s...")
+            time.sleep(2)
+            
+    if pubchem_ready:
         print("   - PubChem API: [PUBCHEM_READY]")
     else:
         print("   - PubChem API: ❌ UNREACHABLE")
-        violations.append("PubChem API is unreachable. Nutrition intelligence is compromised.")
+        violations.append("PubChem API is unreachable after 3 attempts. Nutrition intelligence is compromised.")
 
     # 6. Summary & Hard Failure
     if violations:

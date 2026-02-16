@@ -4,4 +4,7 @@ credentials-file: /home/ferrarikazu/nutri-ai/cloudflared/39b45e5b-ddda-4560-a59c
 ingress:
   - hostname: chatdps.dpdns.org
     service: http://127.0.0.1:8000
+    originRequest:
+      noTLSVerify: true
+      httpHostHeader: chatdps.dpdns.org
   - service: http_status:404

@@ -2,6 +2,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Literal, Dict, Any, Optional
 from backend.mechanism_engine import MechanismEngine, MechanismChain, MechanismStep
+from backend.ranking_engine import RankingEngine, MoleculeReceptorMapper
 
 logger = logging.getLogger(__name__)
 
@@ -10,15 +11,26 @@ SourceType = Literal["pubchem", "usda", "peer_reviewed_rag", "heuristic"]
 @dataclass
 class ClaimVerification:
     claim_id: str
-    text: str # Added for frontend display
+    text: str 
     verified: bool
     source: SourceType
     evidence: Dict[str, Any]
     confidence: float
     explanation: str
+    subject: str = "unknown_entity"
+    domain: Literal["chemical", "physical", "biological"] = "biological"
+    verification_level: Literal["direct", "inferred", "theoretical", "heuristic"] = "theoretical"
+    origin: Literal["model", "extracted", "enriched", "inferred"] = "model"
     metadata: Dict[str, Any] = field(default_factory=dict)
-    status_label: str = "Supporting" # ✅ Verified | 🟡 Supporting | ⚪ Informational
+    status_label: str = "Supporting" 
     mechanism: Optional[MechanismChain] = None
+    
+    # 🧬 Tier 2 Ontology Extensions
+    importance_score: float = 0.0
+    property: Optional[str] = None
+    receptors: List[Dict[str, Any]] = field(default_factory=list)
+    sensory_outcomes: List[str] = field(default_factory=list)
+    notes: Optional[str] = None
 
 class ClaimVerifier:
     """
@@ -101,22 +113,37 @@ class ClaimVerifier:
         else:
             primary_res.status_label = "Supporting evidence (not definitive)" if primary_res.source != "heuristic" else "Informational"
             
+        # 🥇 Tier 2: Ranking & Perception Optimization
+        MoleculeReceptorMapper.enrich_perception(primary_res)
+        primary_res.importance_score = RankingEngine.calculate_importance(primary_res)
+        
+        logger.info(f"[VERIFIER] Claim {claim.claim_id} prioritized with score {primary_res.importance_score:.2f}")
+        
         return primary_res
 
     def _try_pubchem(self, claim: Any) -> Optional[ClaimVerification]:
-        # Placeholder for PubChem resolution logic
-        compounds = ["iron", "folate", "lycopene", "vitamin c", "quercetin", "allicin"]
-        found_compound = next((c for c in compounds if c in claim.text.lower()), None)
+        # P0: Define specific chemical entities to soften rule (only enrich molecules)
+        MOLECULE_ENTITIES = ["iron", "folate", "lycopene", "vitamin c", "quercetin", "allicin", "capsaicin", "anthocyanin"]
+        found_compound = next((c for c in MOLECULE_ENTITIES if c in claim.text.lower()), None)
         
         if found_compound:
             try:
+                # Check if it's a physical property rather than a molecule
+                # Heuristic: "elasticity", "texture", "density" are physical
+                if any(p in claim.text.lower() for p in ["elasticity", "texture", "density", "foam", "matrix"]):
+                    return None
+
                 cid, props = self.pubchem.resolve_compound(found_compound)
                 if cid:
                     return ClaimVerification(
                         claim_id=claim.claim_id,
                         text=claim.text,
+                        subject=found_compound,
+                        domain="chemical",
                         verified=True,
                         source="pubchem",
+                        verification_level="direct",
+                        origin="enriched",
                         evidence={"cid": cid, "properties": props.dict() if hasattr(props, "dict") else props},
                         confidence=1.0,
                         explanation=f"Verified chemical property via PubChem (CID: {cid})."
@@ -154,8 +181,12 @@ class ClaimVerifier:
         return ClaimVerification(
             claim_id=claim.claim_id,
             text=claim.text,
+            subject=getattr(claim, "subject", "unknown_entity"),
+            domain="biological",
             verified=False,
             source="peer_reviewed_rag",
+            verification_level="inferred",
+            origin="model",
             evidence={"supporting_chunks": 1},
             confidence=0.7,
             explanation="Claim supported by research papers but lacks mandatory hard chemical/nutrient verification."

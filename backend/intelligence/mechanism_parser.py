@@ -1,44 +1,52 @@
 """
 Deterministic Mechanism Parser for Scientific Intelligence.
 Extracts structured claims from text using regex and keyword matching.
+v1.2: Integrated with unified Ontology.
 """
 import re
 import logging
 from typing import List, Dict, Any, Set
 
+from backend.sensory.sensory_registry import ONTOLOGY
+
 logger = logging.getLogger(__name__)
 
 class MechanismParser:
     """
-    Parses scientific text to extract structured mechanism claims.
-    Reliable > Smart.
+    Parses scientific text to identify compounds, receptors, processes, and states.
     """
     
-    # --- KNOWLEDGE BASE (hardcoded for reliability) ---
+    # --- DYNAMIC KNOWLEDGE BASE ---
     
-    # --- KNOWLEDGE BASE ---
-    # We import from registry to ensure 1:1 parity with the rest of the system
-    from backend.sensory.sensory_registry import MOLECULE_TO_RECEPTORS, RECEPTOR_TO_PERCEPTION
-
-    COMPOUNDS = set(MOLECULE_TO_RECEPTORS.keys()) | {
+    COMPOUNDS = set(ONTOLOGY["compounds"].keys()) | {
         "caffeine", "theobromine", "glutamate", "sodium", "sucrose", 
         "ethanol", "menthol", "piperine", "gingerol", "shogaol", "acetic acid",
         "lactic acid", "citric acid", "malic acid", "tannin", "polyphenol",
-        "gluten", "gliadin", "glutenin", "starch", "amylose", "amylopectin",
-        "carbon_dioxide", "nitrogen", "water", "lipid", "fatty_acid", "amino_acid",
-        "capsaicin", "salt", "sugar", "yeast" 
+        "fat", "lipid", "msg", "salt", "sugar"
     }
 
-    RECEPTORS = set(RECEPTOR_TO_PERCEPTION.keys()) | {
-        "trpv1", "trpa1", "trpm8", "tas2r", "tas1r2", "tas1r3", "enact", "g-protein",
-        "gpcr", "ion channel", "neuron", "nociceptor", "olfactory_receptor"
-    }
+    # Extract all receptor names from ontology
+    RECEPTORS = set()
+    for comp in ONTOLOGY["compounds"].values():
+        for r in comp.get("receptors", []):
+            RECEPTORS.add(r["name"])
+    
+    # Standard receptor families
+    RECEPTORS |= {"trpa1", "trpv1", "trpm8", "tas2r", "tas1r2", "tas1r3", "enac", "otop1"}
 
     PROCESSES = {
         "binds", "activates", "inhibits", "blocks", "triggers", "stimulates",
         "released", "denaturation", "fermentation", "maillard", 
         "caramelization", "oxidation", "hydrolysis", "emulsification", "gelatinization",
-        "expansion", "rise", "brown"
+        "expansion", "rise", "brown", "roasting", "extraction", "partitioning", "volatilization"
+    }
+
+    PHYSICAL_STATES = {
+        "lipid", "fat", "phase", "diffusion", "transport", "release", "solubility", "viscosity", "kinetics"
+    }
+
+    STRUCTURES = {
+        "emulsion", "matrix", "network", "foam", "suspension", "micelle", "bubble", "structural"
     }
 
     PERCEPTIONS = {
@@ -53,6 +61,8 @@ class MechanismParser:
         self.receptor_patterns = self._compile_patterns(self.RECEPTORS)
         self.process_patterns = self._compile_patterns(self.PROCESSES)
         self.perception_patterns = self._compile_patterns(self.PERCEPTIONS)
+        self.physical_patterns = self._compile_patterns(self.PHYSICAL_STATES)
+        self.structure_patterns = self._compile_patterns(self.STRUCTURES)
 
     def _compile_patterns(self, terms: Set[str]) -> List[Any]:
         """Compile regex patterns for terms."""
@@ -74,25 +84,16 @@ class MechanismParser:
         found_receptors = self._find_matches(text_lower, self.receptor_patterns, self.RECEPTORS)
         found_processes = self._find_matches(text_lower, self.process_patterns, self.PROCESSES)
         found_perceptions = self._find_matches(text_lower, self.perception_patterns, self.PERCEPTIONS)
+        found_physical = self._find_matches(text_lower, self.physical_patterns, self.PHYSICAL_STATES)
+        found_structures = self._find_matches(text_lower, self.structure_patterns, self.STRUCTURES)
 
         # 2. Heuristic Construction
-        # If we found relevant entities, construct a claim.
-        # Ideally, we'd link specific compounds to specific receptors, but for now, 
-        # we aggregate found entities into a single "narrative claim" if they co-occur.
-        
-        if found_compounds or found_receptors or found_processes:
-            # Create a claim for each Compound -> Process -> Perception/Receptor grouping?
-            # Or just one big claim for the paragraph?
-            # User requirement: "Compound: capsaicin, Target: TRPV1, Effect: heat"
-            
-            # Simple aggregation strategy:
-            # For each compound found, create a claim linking it to found receptors/perceptions.
-            
+        if found_compounds or found_receptors or found_processes or found_physical or found_structures:
             if found_compounds:
                 for compound in found_compounds:
                     claim = {
                         "claim_id": f"parsed_{compound}_{len(claims)}",
-                        "text": text[:200] + "...", # Snippet
+                        "text": text[:300] + "...",
                         "compound": compound,
                         "receptor": found_receptors[0] if found_receptors else "unknown",
                         "mechanism": {
@@ -100,48 +101,46 @@ class MechanismParser:
                             "steps": [{"type": "compound", "description": compound}] 
                                      + ([{"type": "receptor", "description": r} for r in found_receptors])
                                      + ([{"type": "process", "description": p} for p in found_processes])
+                                     + ([{"type": "physical", "description": ph} for ph in found_physical])
+                                     + ([{"type": "structure", "description": s} for s in found_structures])
                         },
                         "perception_outputs": found_perceptions,
-                        "evidence_level": "unverified",
+                        "physical_states": found_physical,
+                        "structures": found_structures,
+                        "evidence_level": "heuristic",
                         "source": "mechanism_parser"
                     }
                     claims.append(claim)
             
-            elif found_receptors or found_processes:
-                 # No compound, but mechanism discussion
+            elif found_receptors or found_processes or found_physical or found_structures:
                  claim = {
                         "claim_id": f"parsed_general_{len(claims)}",
-                        "text": text[:200] + "...",
+                        "text": text[:300] + "...",
                         "compound": "general",
                         "receptor": found_receptors[0] if found_receptors else "unknown",
                         "mechanism": {
                             "label": "general mechanism",
                             "steps": ([{"type": "receptor", "description": r} for r in found_receptors])
                                      + ([{"type": "process", "description": p} for p in found_processes])
+                                     + ([{"type": "physical", "description": ph} for ph in found_physical])
+                                     + ([{"type": "structure", "description": s} for s in found_structures])
                         },
                         "perception_outputs": found_perceptions,
-                        "evidence_level": "unverified",
+                        "physical_states": found_physical,
+                        "structures": found_structures,
+                        "evidence_level": "heuristic",
                          "source": "mechanism_parser"
                  }
                  claims.append(claim)
 
-        logger.info(f"[PARSER] Extracted {len(claims)} claims from text.")
         return claims
 
     def _find_matches(self, text: str, patterns: List[Any], original_terms: Set[str]) -> List[str]:
         """Find unique terms in text."""
         matches = set()
-        # Optimization: verify if term is substring first? No, regex is fast enough for small sets.
-        # Actually mapping back to original term might be cleaner.
-        
-        # Using simple iteration over set keywords checking `in` might be faster/simpler than regex for unigram keywords
-        # But regex handles boundaries (\b).
-        
         for term in original_terms:
-            # Quick check
-            if term in text:
-                 # Strict boundary check
-                 if re.search(r'\b' + re.escape(term) + r'\b', text):
+            t_lower = term.lower().replace("_", " ")
+            if t_lower in text:
+                 if re.search(r'\b' + re.escape(t_lower) + r'\b', text):
                      matches.add(term)
-        
         return list(matches)

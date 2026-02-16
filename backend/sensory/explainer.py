@@ -53,7 +53,7 @@ class ExplanationLayer:
                 mode="scientific",
                 content=profile.scientific_explanation,
                 preserved_warnings=profile.warnings,
-                confidence_statement=f"Overall confidence is {profile.confidence.get('overall', 'medium')}."
+                confidence_statement=f"Overall confidence is {profile.confidence.get('overall', 'medium') if isinstance(profile.confidence, dict) else profile.confidence}."
             )
             
         messages = [

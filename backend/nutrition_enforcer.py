@@ -47,6 +47,9 @@ class CompoundResolver:
         start_ts = time.perf_counter()
         result = ResolutionResult()
         
+        if not ingredients:
+            return result
+        
         for name in ingredients:
             try:
                 item_start = time.perf_counter()
@@ -67,8 +70,10 @@ class CompoundResolver:
         result.total_time_ms = int((time.perf_counter() - start_ts) * 1000)
         return result
 
-def calculate_confidence_score(result: ResolutionResult, mode: NutritionEnforcementMode) -> float:
-    """Calculates a confidence score based on resolution success."""
+def calculate_resolution_coverage(result: ResolutionResult, mode: NutritionEnforcementMode) -> float:
+    """Calculates compound resolution coverage (NOT epistemological confidence).
+    Epistemological confidence is computed exclusively by the PolicyEngine.
+    This measures: what fraction of ingredients were resolved in PubChem."""
     total = len(result.resolved) + len(result.unresolved)
     if total == 0: return 1.0
     score = len(result.resolved) / total

@@ -107,8 +107,8 @@ echo -ne "${YELLOW}⏳ Verifying System Health...${NC}"
 TUNNEL_URL="https://chatdps.dpdns.org"
 
 for i in {1..60}; do
-    if curl -s "http://localhost:8000/health" | grep -q "healthy"; then
-        if curl -s "$TUNNEL_URL/health" | grep -q "healthy"; then
+    if curl -s "http://localhost:8000/api/health" | grep -q "healthy"; then
+        if curl -s "$TUNNEL_URL/api/health" | grep -q "healthy"; then
             echo -e "\n${GREEN}✨ Nutri-AI is ONLINE!${NC}"
             echo -e "🌍 Public URL: ${NC}${YELLOW}$TUNNEL_URL${NC}"
             echo -e "⚙️  Local API: ${NC}http://localhost:8000"

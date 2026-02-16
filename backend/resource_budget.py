@@ -11,9 +11,9 @@ class ResourceBudget:
     Enforces strict limits for Low-VRAM environments (<=8GB).
     """
     
-    # Defaults for 8GB VRAM system
+    # Optimized for 16GB RAM / 8GB VRAM (WSL2 Refined)
     MAX_VRAM_PERCENT = 92.0
-    MAX_RAM_PERCENT = 85.0
+    MAX_RAM_PERCENT = 95.0
     
     @classmethod
     def get_status(cls) -> Dict[str, Any]:

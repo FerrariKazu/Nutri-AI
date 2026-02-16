@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Nutri Unified API", description="Integrated 13-Phase Food Synthesis Engine")
 
 # Explicit CORS for production and development
-origins = [
+ALLOWED_ORIGINS = [
     "https://nutri-ai-ochre.vercel.app",
     "https://chatdps.dpdns.org",
     "http://localhost:5173",
@@ -34,7 +34,7 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -75,8 +75,11 @@ def get_current_user(request: Request) -> str:
     """
     user_id = request.headers.get("X-User-Id") or request.query_params.get("x_user_id")
     if not user_id:
+        logger.warning(f"AUTH FAILED: Missing user_id for {request.url.path}")
         raise HTTPException(status_code=401, detail="Missing X-User-Id header or param")
     return user_id
+
+# Components are initialized at startup
 
 @app.get("/api/conversation")
 async def get_conversation(request: Request, session_id: Optional[str] = Query(None)):
@@ -141,7 +144,8 @@ async def chat_stream(
     execution_mode: Optional[str] = None,
     audience_mode: str = "casual",
     optimization_goal: str = "comfort",
-    verbosity: str = "medium"
+    verbosity: str = "medium",
+    run_id: Optional[str] = None
 ):
     """
     GET-based SSE endpoint for EventSource compatibility. Eliminates preflight.
@@ -156,7 +160,7 @@ async def chat_stream(
 
     # Security Gate & Lazy Creation
     if not memory_store.ensure_session(session_id, user_id):
-        logger.warning(f"Access violation: User {user_id} tried to access {session_id}")
+        logger.warning(f"AUTH FAILED - Access violation: user_id={user_id}, session_id={session_id}")
         raise HTTPException(status_code=403, detail="Access denied")
         
     pref_dict = {
@@ -165,7 +169,7 @@ async def chat_stream(
         "verbosity": verbosity
     }
     
-    return await handle_chat_execution(request, message, session_id, pref_dict, execution_mode)
+    return await handle_chat_execution(request, message, session_id, pref_dict, execution_mode, run_id=run_id)
 
 @app.post("/api/chat")
 async def chat_post(request: Request, payload: ChatRequest):
@@ -185,7 +189,8 @@ async def chat_post(request: Request, payload: ChatRequest):
         payload.message, 
         payload.session_id, 
         pref_dict, 
-        payload.execution_mode
+        payload.execution_mode,
+        run_id=None # POST payloads can be extended later if needed
     )
 
 from backend.sse_utils import format_sse_event
@@ -195,7 +200,8 @@ async def handle_chat_execution(
     message: str,
     session_id: str,
     preferences: Dict[str, Any],
-    execution_mode: Optional[str]
+    execution_mode: Optional[str],
+    run_id: Optional[str] = None
 ):
     """Core logic with concurrent heartbeat and deterministic termination."""
     queue = asyncio.Queue()
@@ -215,7 +221,8 @@ async def handle_chat_execution(
                 session_id, 
                 message, 
                 preferences,
-                execution_mode=execution_mode
+                execution_mode=execution_mode,
+                run_id=run_id
             ):
                 # Use orchestrator's sequence if provided, otherwise server seq
                 curr_seq = event_dict.get("seq", seq_id)
@@ -356,7 +363,9 @@ async def handle_chat_execution(
     
     return response
 
-@app.get("/health")
+    return response
+
+@app.get("/api/health")
 async def health_check(request: Request):
     resources = ResourceBudget.get_status()
     # Mask GPU details in non-local environments if necessary, but here we provide it.
@@ -367,6 +376,32 @@ async def health_check(request: Request):
         "resources": resources
     })
     return response
+
+@app.get("/api/debug/intelligence-schema")
+async def debug_intelligence_schema():
+    """
+    Returns the SSOT schema for the Intelligence Panel to assist frontend development.
+    """
+    from backend.contracts.intelligence_schema import (
+        Domain, EvidenceLevel, Origin, ConfidenceScale, MIN_RENDER_REQUIREMENTS, ONTOLOGY_VERSION
+    )
+    return JSONResponse({
+        "version": ONTOLOGY_VERSION,
+        "enums": {
+            "domain": [d.value for d in Domain],
+            "evidence_level": [el.value for el in EvidenceLevel],
+            "origin": [o.value for o in Origin]
+        },
+        "scales": {
+            "confidence": {
+                "min": ConfidenceScale.MIN,
+                "max": ConfidenceScale.MAX,
+                "default_heuristic": ConfidenceScale.DEFAULT_HEURISTIC,
+                "default_ontology": ConfidenceScale.DEFAULT_ONTOLOGY
+            }
+        },
+        "min_render_requirements": MIN_RENDER_REQUIREMENTS
+    })
 
 
 if __name__ == "__main__":

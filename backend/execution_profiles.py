@@ -30,7 +30,9 @@ class ExecutionRouter:
     SENSORY_KEYWORDS = [
         "texture", "taste", "smooth", "crisp", "tender", "chewy",
         "mouthfeel", "crunchy", "soft", "juicy", "rich", "coating",
-        "sensory", "feel", "crispness", "tenderness"
+        "sensory", "feel", "crispness", "tenderness",
+        "bitter", "bitterness", "sweet", "sweetness", "sour", "sourness",
+        "salty", "saltiness", "umami", "aromatic", "fragrant"
     ]
     
     @staticmethod

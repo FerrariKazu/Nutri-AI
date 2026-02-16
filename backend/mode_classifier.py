@@ -84,6 +84,19 @@ logger = logging.getLogger(__name__)
 
 # ... (helper functions remain same) ...
 
+def is_biological_context(message: str) -> bool:
+    """
+    Detect explicit biological/sensory mechanism queries.
+    User Mandate: compounds, receptors, taste, smell, perception, mechanism.
+    """
+    msg_lower = message.lower()
+    bio_triggers = [
+        "compound", "receptor", "taste", "smell", "perception", "mechanism",
+        "molecule", "binds to", "activate", "pathway", "signal", "neuron",
+        "flavor chemistry", "sensory science", "umami", "kokumi", "trigeminal"
+    ]
+    return any(t in msg_lower for t in bio_triggers)
+
 def classify_response_mode(
     message: str,
     intent=None,
@@ -97,6 +110,18 @@ def classify_response_mode(
     # helper for logging
     def log_decision(decision: str, reason: str):
         logger.info(f"🧠 Mode Transition: {previous_mode.value} -> {decision} | Reason: {reason}")
+
+    # --- CRITICAL: EXPERT SELECTION OVERRIDE (User Mandate) ---
+    # If biological/mechanistic keywords are present, we MUST route to DIAGNOSTIC.
+    # This acts as a 'Flavor Explainer' router.
+    has_bio = is_biological_context(message)
+    has_causal = is_causal_intent(message) # "why is X sweet", "mechanism"
+    
+    if has_bio or has_causal:
+        # Override stickiness if it's currently CONVERSATION (escalation)
+        # We also allow it to maintain DIAGNOSTIC or switch from others.
+        log_decision("diagnostic", "Forced Expert Routing: Biological/Causal keywords detected")
+        return ResponseMode.DIAGNOSTIC
 
     # --- SOFT DECAY CHECKS ---
     # If the message is very short/generic, we might drift back to conversation
@@ -112,6 +137,9 @@ def classify_response_mode(
         if is_topic_shift(message):
             log_decision("conversation", "Topic shift detected")
             return ResponseMode.CONVERSATION
+        if has_bio or has_causal: # Expert override
+            log_decision("diagnostic", "Expert override inside Nutrition mode")
+            return ResponseMode.DIAGNOSTIC
         if is_low_relevance:
              # Decay if user disengages
             log_decision("conversation", "Soft confidence decay (low relevance input)")

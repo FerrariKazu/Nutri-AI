@@ -17,6 +17,14 @@ class Claim:
     type: ClaimType
     subject: Optional[str] = None
     predicate: Optional[str] = None
+    domain: str = "biological"  # chemical | biological | sensory | physical
+    mechanism_type: str = "heuristic"
+    compounds: List[str] = field(default_factory=list)
+    receptors: List[str] = field(default_factory=list)
+    perception_outputs: List[Dict[str, str]] = field(default_factory=list)
+    evidence: List[Dict[str, Any]] = field(default_factory=list)
+    verification_level: str = "theoretical"
+    importance_score: float = 0.0
     metadata: dict = field(default_factory=dict)
 
 class ClaimParser:
@@ -33,8 +41,19 @@ class ClaimParser:
         ]
         self.mechanistic_patterns = [
             r"\b(supports|aids|helps|promotes|prevents|inhibits|regulates|modulates|boosts)\b",
-            r"\b(digestion|metabolism|immune|absorption|synthesis)\b",
+            r"\b(digestion|metabolism|immune|absorption|synthesis|perception|receptors)\b",
         ]
+
+    def extract_claims_from_thought_stream(self, text: str) -> List[Claim]:
+        """
+        [MANDATE] Primary claim generation. 
+        Extracts structured claims during synthesis to preserve causality.
+        """
+        if not text:
+            return []
+        
+        logger.info("[CLAIM_PARSER] Extracting claims from thought stream (Primary Generation)")
+        return self.parse(text)
 
     def parse(self, text: str) -> List[Claim]:
         """
