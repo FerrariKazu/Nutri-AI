@@ -496,6 +496,21 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                             </>
                         )}
 
+                        {/* 🛡️ Knowledge Limitation Declaration (Requirement Upgrade 27.6) */}
+                        <div className="mx-6 mb-6 p-4 rounded bg-neutral-900/50 border border-neutral-800/50">
+                            <div className="flex items-start gap-3">
+                                <Info className="w-3.5 h-3.5 text-neutral-500 mt-0.5" />
+                                <div className="space-y-1">
+                                    <span className="text-[9px] font-black text-neutral-500 uppercase tracking-widest">Knowledge Limitation Declaration</span>
+                                    <p className="text-[10px] text-neutral-600 leading-relaxed italic">
+                                        This execution reflects only indexed registry data and formalized policy rules.
+                                        Absence of evidence is not evidence of absence. All biological mechanisms are
+                                        modeled under standard physiological conditions.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
                         {/* 🦶 Data Provenance Footer (MANDATORY) */}
                         <div className="px-5 py-3 border-t border-neutral-800 bg-neutral-950 flex items-center justify-between">
                             <div className="flex items-center gap-2 opacity-50">
@@ -505,7 +520,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                 </span>
                             </div>
                             <span className="text-[9px] font-mono text-neutral-700">
-                                Schema v{uiTrace?.schema_version || '1.0'}
+                                Trace v{uiTrace?.metrics?.trace_schema_version || '1.3'}
                             </span>
                         </div>
                     </motion.div>
