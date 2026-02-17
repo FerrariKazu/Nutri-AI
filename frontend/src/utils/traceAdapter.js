@@ -79,9 +79,14 @@ const adaptStrict = (rawTrace) => {
     const scientific = rawTrace.scientific_layer || {};
     const policy = rawTrace.policy_layer || {};
 
-    if (!valid || !scientific.claims) {
+    // 🧠 Epistemic Authority Check (Upgrade 27)
+    if (!rawTrace.epistemic_status) {
+        errors.push("Missing mandatory backend-asserted epistemic_status.");
+    }
+
+    if (!valid || !scientific.claims || !rawTrace.epistemic_status) {
         // Log critical failure
-        console.error("Trace Adapter: Trace rejected due to critical schema violation.", errors);
+        console.error("Trace Adapter: Trace rejected due to contract violation.", errors);
 
         return {
             adapter_status: "contract_violation",
@@ -131,8 +136,17 @@ const adaptStrict = (rawTrace) => {
         hasTier2: normalizedClaims.some(c => c.mechanism || (c.mechanism_topology && c.mechanism_topology.nodes && c.mechanism_topology.nodes.length > 0)),
 
         metrics: {
-            // STRICT: Confidence must come from backend
+            // STRICT: Confidence must come from backend (Upgrade 27: Confidence Breakdown)
             confidence: strictVal(rawTrace.confidence_score || rawTrace.final_confidence),
+            confidence_breakdown: rawTrace.confidence_breakdown || {
+                baseline: 0,
+                multipliers: [],
+                policy_adjustment: 0,
+                final: 0
+            },
+            epistemic_status: strictVal(rawTrace.epistemic_status),
+            execution_mode: strictVal(rawTrace.execution_mode),
+
             duration: strictVal(rawTrace.duration_ms),
             pubchemUsed: !!rawTrace.pubchem_used,
             proofHash: strictVal(rawTrace.pubchem_proof_hash),
