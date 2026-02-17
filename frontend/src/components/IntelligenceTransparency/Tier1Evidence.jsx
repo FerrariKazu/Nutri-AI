@@ -145,28 +145,45 @@ const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
             )}
 
             {!hasEvidence && (
-                <div className="space-y-2">
+                <div className="space-y-4">
                     <div className="flex items-center gap-1.5 px-0.5">
-                        <p className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Active Data Indices</p>
+                        <p className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Knowledge Boundaries</p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                        {(expertMode && metrics.sourceContribution && Object.keys(metrics.sourceContribution).length > 0
-                            ? Object.keys(metrics.sourceContribution)
-                            : [sourceText]).filter(Boolean).map((src, i) => (
-                                <div key={i} className="px-2.5 py-1 rounded bg-neutral-800/40 border border-neutral-700/30 flex items-center gap-2.5 cursor-default">
-                                    <span className="text-[10px] text-neutral-400 font-mono tracking-tight">{typeof src === 'object' ? (src.name || JSON.stringify(src)) : src}</span>
-                                    {expertMode && metrics.sourceContribution && (
-                                        <span className="text-[9px] text-green-400 font-bold font-mono">
-                                            {(metrics.sourceContribution[src] || 0)}%
-                                        </span>
-                                    )}
-                                </div>
-                            ))}
 
-                        {(!claim.source && (!metrics.sourceContribution || Object.keys(metrics.sourceContribution).length === 0)) && (
-                            <span className="text-[10px] text-neutral-600 font-mono italic">No source metadata</span>
-                        )}
-                    </div>
+                    {metrics.registrySnapshot?.scope ? (
+                        <div className="p-4 rounded-lg bg-neutral-900/40 border border-dashed border-neutral-800 flex flex-col gap-3">
+                            <div className="flex items-center gap-3">
+                                <AlertCircle className="w-4 h-4 text-neutral-600" />
+                                <p className="text-[11px] text-neutral-400 leading-relaxed italic">
+                                    No direct empirical records found. Claim evaluated against registry scope:
+                                </p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-neutral-800/50">
+                                <div className="flex flex-col">
+                                    <span className="text-[9px] font-black text-neutral-600 uppercase">Compounds indexed</span>
+                                    <span className="text-sm font-mono text-neutral-300">
+                                        {metrics.registrySnapshot.scope.entity_counts?.compounds || '---'}
+                                    </span>
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-[9px] font-black text-neutral-600 uppercase">Biological Processes</span>
+                                    <span className="text-sm font-mono text-neutral-300">
+                                        {metrics.registrySnapshot.scope.entity_counts?.processes || '---'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex flex-wrap gap-2">
+                            {(expertMode && metrics.sourceContribution && Object.keys(metrics.sourceContribution).length > 0
+                                ? Object.keys(metrics.sourceContribution)
+                                : [sourceText]).filter(Boolean).map((src, i) => (
+                                    <div key={i} className="px-2.5 py-1 rounded bg-neutral-800/40 border border-neutral-700/30 flex items-center gap-2.5 cursor-default">
+                                        <span className="text-[10px] text-neutral-400 font-mono tracking-tight">{typeof src === 'object' ? (src.name || JSON.stringify(src)) : src}</span>
+                                    </div>
+                                ))}
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -186,37 +203,6 @@ const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
                             <p className="text-[9px] text-neutral-500 font-mono truncate max-w-[240px]">
                                 {metrics.proofHash || 'Verified via PubChem PUG-REST protocol'}
                             </p>
-                        </div>
-                    </div>
-                </div>
-            )}
-            {/* Phase 10: Confidence Breakdown (Structural Reasoning) */}
-            {breakdown?.rule_firings && breakdown.rule_firings.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-neutral-800/50">
-                    <p className="text-[10px] font-bold text-neutral-500 uppercase mb-2 flex items-center gap-1.5">
-                        <Scale className="w-3 h-3" />
-                        Confidence Breakdown (Policy Logic)
-                    </p>
-                    <div className="space-y-1.5">
-                        {breakdown.rule_firings.map((rf, idx) => (
-                            <div key={idx} className="flex items-center justify-between text-[9px] font-mono">
-                                <div className="flex items-center gap-2">
-                                    <span className={rf.fired ? 'text-neutral-300' : 'text-neutral-500 opacity-50'}>
-                                        {rf.rule_id}
-                                    </span>
-                                    <span className="text-neutral-600">[{rf.category}]</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-neutral-500 italic">in={JSON.stringify(rf.input)}</span>
-                                    <span className={`font-bold ${rf.contribution > 0 ? 'text-green-500' : rf.contribution < 0 ? 'text-red-500' : 'text-neutral-600'}`}>
-                                        {rf.contribution > 0 ? '+' : ''}{rf.contribution.toFixed(2)}
-                                    </span>
-                                </div>
-                            </div>
-                        ))}
-                        <div className="flex items-center justify-between text-[9px] font-mono pt-1 mt-1 border-t border-neutral-800 border-dashed">
-                            <span className="text-neutral-500 italic">Baseline Setup</span>
-                            <span className="text-neutral-400">{breakdown.baseline_used.toFixed(2)}</span>
                         </div>
                     </div>
                 </div>
