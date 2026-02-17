@@ -115,6 +115,27 @@ const ExecutionProfileCard = ({ metrics, epistemicStatus, executionMode }) => {
                 </div>
             </div>
 
+            {/* 🔍 Diagnostic Basis Panel (Requirement Upgrade 27.2) */}
+            <div className="pt-2 border-t border-neutral-800/30">
+                <p className="text-[9px] font-black text-neutral-600 uppercase tracking-widest mb-3">Epistemic Basis Justification</p>
+                <div className="grid grid-cols-4 gap-2">
+                    {[
+                        { label: 'Evidence', key: 'evidence_present', icon: Database },
+                        { label: 'Mechanism', key: 'mechanism_complete', icon: Activity },
+                        { label: 'Registry', key: 'registry_valid', icon: ShieldCheck },
+                        { label: 'Policy', key: 'policy_intervention', icon: Scale },
+                    ].map(feat => (
+                        <div key={feat.key} className={`flex flex-col items-center gap-1.5 p-2 rounded border ${metrics.epistemic_basis?.[feat.key]
+                                ? (feat.key === 'policy_intervention' ? 'bg-amber-500/10 border-amber-500/20 text-amber-500' : 'bg-green-500/10 border-green-500/20 text-green-400')
+                                : 'bg-neutral-900 border-neutral-800/50 text-neutral-700'
+                            }`}>
+                            <feat.icon className="w-3.5 h-3.5" />
+                            <span className="text-[8px] font-black uppercase tracking-tighter">{feat.label}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
             {/* 🔍 Primary Limitation Info */}
             {epistemicStatus === 'insufficient_evidence' && (
                 <div className="bg-red-500/5 border border-red-500/20 rounded p-3 flex items-start gap-3">
