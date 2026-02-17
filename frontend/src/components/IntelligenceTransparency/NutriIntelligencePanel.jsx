@@ -363,133 +363,144 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
 
                                 {/* Main Grid: Fact vs Policy Split View */}
                                 <div className="relative min-h-[600px] flex flex-col lg:flex-row bg-neutral-900/40 border-b border-neutral-800">
-                                    {integrityViolation && (
-                                        <IntegrityBarrier
-                                            type={integrityViolation.type}
-                                            missingFields={integrityViolation.missingFields}
-                                            context={integrityViolation.context}
-                                        />
-                                    )}
-
-                                    {currentClaim ? (
-                                        <>
-                                            {/* LEFT COLUMN: SCIENTIFIC OBSERVATIONS (FACTS) */}
-                                            <div className={`flex-1 p-6 space-y-12 border-r border-neutral-800 ${integrityViolation ? 'blur-sm grayscale pointer-events-none' : ''}`}>
-                                                <div className="space-y-2">
-                                                    <h4 className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.2em] border-b border-neutral-800 pb-2">
-                                                        Scientific Observation Layer
-                                                    </h4>
-                                                </div>
-
-                                                <section>
-                                                    <EvidenceLineageViewer evidenceSet={currentClaim.evidence} />
-                                                </section>
-
-                                                {renderPermissions.canRenderTier2({ claims: [currentClaim] }).allowed && (
-                                                    <section className="pt-10 border-t border-neutral-800/50">
-                                                        <Tier2Mechanism
-                                                            trace={uiTrace}
-                                                            claim={currentClaim}
-                                                            expertMode={isExpertMode}
-                                                        />
-                                                    </section>
-                                                )}
-
-                                                <section className="pt-10 border-t border-neutral-800/50">
-                                                    <IntelligenceGraph claim={currentClaim} />
-                                                </section>
-
-                                                {/* PubChem Hardened Compound View */}
-                                                {uiTrace.metrics.pubchemUsed && (
-                                                    <section className="pt-10 border-t border-neutral-800/50 p-4 rounded-xl bg-green-500/5 border border-green-500/10 shadow-[inner_0_0_20px_rgba(34,197,94,0.05)]">
-                                                        <div className="flex items-center gap-2 mb-4">
-                                                            <ShieldCheck className="w-3.5 h-3.5 text-green-500" />
-                                                            <span className="text-[10px] font-black text-green-400 uppercase tracking-widest">Molecular Identity Enforced</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-3">
-                                                            <Hash className="w-3 h-3 text-neutral-600" />
-                                                            <span className="text-[9px] font-mono text-neutral-500 truncate select-all">{uiTrace.metrics.proofHash}</span>
-                                                        </div>
-                                                    </section>
-                                                )}
-                                            </div>
-
-                                            {/* RIGHT COLUMN: POLICY INTERPRETATION (JUDGMENT) */}
-                                            <div className={`flex-1 p-6 space-y-12 bg-black/20 ${integrityViolation ? 'blur-sm grayscale pointer-events-none' : ''}`}>
-                                                {/* 🧪 Execution Profile (High-Level Synthesis) */}
-                                                <section>
-                                                    <ExecutionProfileCard
-                                                        metrics={metrics}
-                                                        epistemicStatus={epistemicStatus}
-                                                        executionMode={executionMode}
-                                                    />
-                                                </section>
-
-                                                <div className="space-y-2">
-                                                    <h4 className="text-[10px] font-black text-blue-500/60 uppercase tracking-[0.2em] border-b border-neutral-800/50 pb-2 text-right">
-                                                        Policy Interpretation Layer
-                                                    </h4>
-                                                </div>
-
-                                                <section>
-                                                    <PolicyAuthorityCard
-                                                        policy={{
-                                                            policy_id: uiTrace.metrics.policyId,
-                                                            policy_version: uiTrace.metrics.policyVersion,
-                                                            policy_hash: uiTrace.metrics.policyHash,
-                                                            selection_reason: uiTrace.metrics.policySelectionReason,
-                                                            author: currentClaim.confidence?.author || "GOVERNANCE_BOARD",
-                                                            review_board: currentClaim.confidence?.review_board || "SIMULATED_BOARD",
-                                                            approval_date: currentClaim.confidence?.approval_date || "2026-02-16",
-                                                            attestation: currentClaim.confidence?.attestation
-                                                        }}
-                                                    />
-                                                </section>
-
-                                                <section className="pt-10 border-t border-neutral-800/50">
-                                                    <RuleFiringTimeline breakdown={currentClaim.confidence?.breakdown} />
-                                                </section>
-
-                                                <section className="pt-10 border-t border-neutral-800/50">
-                                                    <RegistrySnapshot snapshot={uiTrace.metrics.registrySnapshot} />
-                                                </section>
-
-                                                {renderPermissions.canRenderTier3(uiTrace).allowed && (
-                                                    <section className="pt-10 border-t border-neutral-800/50">
-                                                        <Tier3Causality
-                                                            uiTrace={uiTrace}
-                                                            claimIdx={selectedClaimIdx}
-                                                            expertMode={isExpertMode}
-                                                        />
-                                                    </section>
-                                                )}
-
-                                                {renderPermissions.canRenderTier4(uiTrace).allowed && (
-                                                    <section className="pt-10 border-t border-neutral-800/50">
-                                                        <Tier4Temporal
-                                                            uiTrace={uiTrace}
-                                                            claimIdx={selectedClaimIdx}
-                                                            expertMode={isExpertMode}
-                                                        />
-                                                    </section>
-                                                )}
-
-                                                <section className="pt-10 border-t border-neutral-800/50">
-                                                    <ConfidenceTracker
-                                                        uiTrace={uiTrace}
-                                                        claimIdx={selectedClaimIdx}
-                                                        expertMode={isExpertMode}
-                                                    />
-                                                </section>
-                                            </div>
-                                        </>
-                                    ) : (
+                                    {metrics?.execution_mode === 'non_scientific_discourse' ? (
                                         <div className="w-full py-32 flex flex-col items-center opacity-40">
-                                            <ZapOff className="w-8 h-8 text-neutral-600 mb-4" />
+                                            <MessageSquare className="w-8 h-8 text-neutral-600 mb-4" />
                                             <p className="text-xs font-mono uppercase tracking-widest text-neutral-500">
-                                                Observation Set Null
+                                                General Discourse Mode • Scientific Instrument Standby
                                             </p>
                                         </div>
+                                    ) : (
+                                        <>
+                                            {integrityViolation && (
+                                                <IntegrityBarrier
+                                                    type={integrityViolation.type}
+                                                    missingFields={integrityViolation.missingFields}
+                                                    context={integrityViolation.context}
+                                                />
+                                            )}
+
+                                            {currentClaim ? (
+                                                <>
+                                                    {/* LEFT COLUMN: SCIENTIFIC OBSERVATIONS (FACTS) */}
+                                                    <div className={`flex-1 p-6 space-y-12 border-r border-neutral-800 ${integrityViolation ? 'blur-sm grayscale pointer-events-none' : ''}`}>
+                                                        <div className="space-y-2">
+                                                            <h4 className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.2em] border-b border-neutral-800 pb-2">
+                                                                Scientific Observation Layer
+                                                            </h4>
+                                                        </div>
+
+                                                        <section>
+                                                            <EvidenceLineageViewer evidenceSet={currentClaim.evidence} />
+                                                        </section>
+
+                                                        {renderPermissions.canRenderTier2({ claims: [currentClaim] }).allowed && (
+                                                            <section className="pt-10 border-t border-neutral-800/50">
+                                                                <Tier2Mechanism
+                                                                    trace={uiTrace}
+                                                                    claim={currentClaim}
+                                                                    expertMode={isExpertMode}
+                                                                />
+                                                            </section>
+                                                        )}
+
+                                                        <section className="pt-10 border-t border-neutral-800/50">
+                                                            <IntelligenceGraph claim={currentClaim} />
+                                                        </section>
+
+                                                        {/* PubChem Hardened Compound View */}
+                                                        {uiTrace.metrics.pubchemUsed && (
+                                                            <section className="pt-10 border-t border-neutral-800/50 p-4 rounded-xl bg-green-500/5 border border-green-500/10 shadow-[inner_0_0_20px_rgba(34,197,94,0.05)]">
+                                                                <div className="flex items-center gap-2 mb-4">
+                                                                    <ShieldCheck className="w-3.5 h-3.5 text-green-500" />
+                                                                    <span className="text-[10px] font-black text-green-400 uppercase tracking-widest">Molecular Identity Enforced</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-3">
+                                                                    <Hash className="w-3 h-3 text-neutral-600" />
+                                                                    <span className="text-[9px] font-mono text-neutral-500 truncate select-all">{uiTrace.metrics.proofHash}</span>
+                                                                </div>
+                                                            </section>
+                                                        )}
+                                                    </div>
+
+                                                    {/* RIGHT COLUMN: POLICY INTERPRETATION (JUDGMENT) */}
+                                                    <div className={`flex-1 p-6 space-y-12 bg-black/20 ${integrityViolation ? 'blur-sm grayscale pointer-events-none' : ''}`}>
+                                                        {/* 🧪 Execution Profile (High-Level Synthesis) */}
+                                                        <section>
+                                                            <ExecutionProfileCard
+                                                                metrics={metrics}
+                                                                epistemicStatus={epistemicStatus}
+                                                                executionMode={executionMode}
+                                                            />
+                                                        </section>
+
+                                                        <div className="space-y-2">
+                                                            <h4 className="text-[10px] font-black text-blue-500/60 uppercase tracking-[0.2em] border-b border-neutral-800/50 pb-2 text-right">
+                                                                Policy Interpretation Layer
+                                                            </h4>
+                                                        </div>
+
+                                                        <section>
+                                                            <PolicyAuthorityCard
+                                                                policy={{
+                                                                    policy_id: uiTrace.metrics.policyId,
+                                                                    policy_version: uiTrace.metrics.policyVersion,
+                                                                    policy_hash: uiTrace.metrics.policyHash,
+                                                                    selection_reason: uiTrace.metrics.policySelectionReason,
+                                                                    author: currentClaim.confidence?.author || "GOVERNANCE_BOARD",
+                                                                    review_board: currentClaim.confidence?.review_board || "SIMULATED_BOARD",
+                                                                    approval_date: currentClaim.confidence?.approval_date || "2026-02-16",
+                                                                    attestation: currentClaim.confidence?.attestation
+                                                                }}
+                                                            />
+                                                        </section>
+
+                                                        <section className="pt-10 border-t border-neutral-800/50">
+                                                            <RuleFiringTimeline breakdown={currentClaim.confidence?.breakdown} />
+                                                        </section>
+
+                                                        <section className="pt-10 border-t border-neutral-800/50">
+                                                            <RegistrySnapshot snapshot={uiTrace.metrics.registrySnapshot} />
+                                                        </section>
+
+                                                        {renderPermissions.canRenderTier3(uiTrace).allowed && (
+                                                            <section className="pt-10 border-t border-neutral-800/50">
+                                                                <Tier3Causality
+                                                                    uiTrace={uiTrace}
+                                                                    claimIdx={selectedClaimIdx}
+                                                                    expertMode={isExpertMode}
+                                                                />
+                                                            </section>
+                                                        )}
+
+                                                        {renderPermissions.canRenderTier4(uiTrace).allowed && (
+                                                            <section className="pt-10 border-t border-neutral-800/50">
+                                                                <Tier4Temporal
+                                                                    uiTrace={uiTrace}
+                                                                    claimIdx={selectedClaimIdx}
+                                                                    expertMode={isExpertMode}
+                                                                />
+                                                            </section>
+                                                        )}
+
+                                                        <section className="pt-10 border-t border-neutral-800/50">
+                                                            <ConfidenceTracker
+                                                                uiTrace={uiTrace}
+                                                                claimIdx={selectedClaimIdx}
+                                                                expertMode={isExpertMode}
+                                                            />
+                                                        </section>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <div className="w-full py-32 flex flex-col items-center opacity-40">
+                                                    <ZapOff className="w-8 h-8 text-neutral-600 mb-4" />
+                                                    <p className="text-xs font-mono uppercase tracking-widest text-neutral-500">
+                                                        Observation Set Null
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             </>
