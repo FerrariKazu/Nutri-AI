@@ -52,10 +52,16 @@ const ConfidenceTracker = React.memo(({ uiTrace, expertMode }) => {
                     breakdown.multipliers.map((m, idx) => (
                         <div key={idx} className="flex items-center justify-between pl-4 border-l border-neutral-800">
                             <div className="flex items-center gap-2">
-                                <TrendingDown className="w-3 h-3 text-red-500/50" />
-                                <span className="text-[10px] text-neutral-500 uppercase">{m.label?.replace('_', ' ')}</span>
+                                {m.value < 0 ? (
+                                    <TrendingDown className="w-3 h-3 text-red-500/50" />
+                                ) : (
+                                    <Plus className="w-3 h-3 text-green-500/50" />
+                                )}
+                                <span className="text-[10px] text-neutral-500 uppercase">{m.label}</span>
                             </div>
-                            <span className="text-[10px] text-red-400/80 font-mono">-{Math.round(m.value * 100)}%</span>
+                            <span className={`text-[10px] font-mono ${m.value < 0 ? 'text-red-400/80' : 'text-green-400/80'}`}>
+                                {m.value > 0 ? '+' : ''}{Math.round(m.value * 100)}%
+                            </span>
                         </div>
                     ))
                 ) : (
