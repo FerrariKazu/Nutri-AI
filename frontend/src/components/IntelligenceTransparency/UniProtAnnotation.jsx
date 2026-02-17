@@ -77,7 +77,7 @@ const UniProtAnnotation = ({ uniprotId }) => {
                             Architecture: Isolated Provider
                         </span>
                         <span className="text-[8px] font-mono text-neutral-500 uppercase">
-                            Fetched {new Date(data.fetchedAt).toLocaleTimeString()}
+                            Retrieved {new Date(data.fetchedAt).toLocaleDateString()} {new Date(data.fetchedAt).toLocaleTimeString()}
                         </span>
                     </footer>
                 </div>
