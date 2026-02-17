@@ -18,6 +18,8 @@ import {
     FileSearch,
     DatabaseZap,
     Activity
+    Activity,
+    Hash
 } from 'lucide-react';
 import Tier1Evidence from './Tier1Evidence';
 import Tier2Mechanism from './Tier2Mechanism';
@@ -31,6 +33,7 @@ import EvidenceLineageViewer from './EvidenceLineageViewer';
 import PolicyAuthorityCard from './PolicyAuthorityCard';
 import RuleFiringTimeline from './RuleFiringTimeline';
 import RegistrySnapshot from './RegistrySnapshot';
+import ExecutionProfileCard from './ExecutionProfileCard';
 import { Tooltip, getConfidenceNarrative } from './UIUtils';
 import { renderPermissions } from '../../contracts/renderPermissions';
 import { adaptClaimForUI } from '../../utils/traceAdapter';
@@ -65,10 +68,16 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
 
     const [isOpen, setIsOpen] = useState(false);
     const [isExpertMode, setIsExpertMode] = useState(expertModeDefault);
-    const [isRawView, setIsRawView] = useState(false);
+    const [showRawJson, setShowRawJson] = useState(false);
     const [selectedClaimIdx, setSelectedClaimIdx] = useState(0);
-    const [copied, setCopied] = useState(false);
+    const [copySuccess, setCopySuccess] = useState(false);
     const [shared, setShared] = useState(false);
+
+    // 🧠 Derivations
+    const claims = useMemo(() => (uiTrace?.claims || []).map(normalizeClaim), [uiTrace, normalizeClaim]);
+    const metrics = uiTrace?.metrics || {};
+    const epistemicStatus = metrics.epistemic_status || 'theoretical';
+    const executionMode = metrics.execution_mode || 'full_trace';
 
     useEffect(() => {
         const savedMode = localStorage.getItem('nutri_expert_mode');
@@ -86,7 +95,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
 
     const toggleRawView = (e) => {
         e.stopPropagation();
-        setIsRawView(!isRawView);
+        setShowRawJson(!showRawJson);
     };
 
     const handleClaimSelect = (idx) => {
@@ -97,12 +106,9 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
     const handleCopy = useCallback(() => {
         const text = JSON.stringify(uiTrace, null, 2);
         navigator.clipboard.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000);
     }, [uiTrace]);
-
-    // [PAINT] Logic
-    const claims = useMemo(() => (uiTrace?.claims || []).map(normalizeClaim), [uiTrace, normalizeClaim]);
 
     // Safety: Ensure selected index is valid
     const currentClaim = claims.length > 0
@@ -167,7 +173,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
         }
 
         const missing = [];
-        const metrics = uiTrace.metrics || {};
+        // const metrics = uiTrace.metrics || {}; // metrics is already derived above
 
         // Gap 1: Policy Hash check
         if (!metrics.policyHash) missing.push("policy_document_hash");
@@ -187,7 +193,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
             };
         }
         return null;
-    }, [uiTrace]);
+    }, [uiTrace, metrics]);
 
     // Schema/Status Checks
     const isStreaming = uiTrace?.status === 'streaming' || uiTrace?.status === 'STREAMING';
@@ -236,14 +242,20 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                     <div className="p-2 rounded-lg bg-accent/10 text-accent group-hover:scale-110 group-hover:bg-accent/20 transition-all duration-500">
                         <Brain className="w-4 h-4" />
                     </div>
-                    <div>
+                    <div className="flex flex-col">
                         <div className="flex items-center gap-2">
-                            <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-neutral-200 group-hover:text-white transition-colors">
-                                Nutri Intelligence Panel v2.1
-                            </h3>
+                            <h2 className="text-xl font-black text-white tracking-tighter uppercase italic">
+                                Nutri Intelligence
+                            </h2>
+                            <div className="px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 flex items-center gap-1.5">
+                                <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                                <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">
+                                    {executionMode.replace('_', ' ')}
+                                </span>
+                            </div>
                         </div>
-                        <p className="text-[10px] text-neutral-500 font-mono mt-0.5">
-                            {uiTrace ? `${claims.length} Claims Resolved` : 'Execution Telemetry Missing'} • {uiTrace?.metrics.duration ? `${Math.round(uiTrace.metrics.duration)}ms` : '---'} Latency
+                        <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-[0.3em] ml-1">
+                            Scientific Audit Terminal • Epistemic Status: <span className="text-blue-400/80">{epistemicStatus.replace('_', ' ')}</span>
                         </p>
                     </div>
                 </div>
@@ -277,7 +289,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                 {/* Raw Toggle */}
                                 <button
                                     onClick={toggleRawView}
-                                    className={`flex items-center gap-1.5 transition-colors group ${isRawView ? 'text-accent' : 'text-neutral-500 hover:text-neutral-300'}`}
+                                    className={`flex items-center gap-1.5 transition-colors group ${showRawJson ? 'text-accent' : 'text-neutral-500 hover:text-neutral-300'}`}
                                 >
                                     <FileJson className="w-3 h-3" />
                                     <span className="font-mono uppercase tracking-tighter">Raw JSON</span>
@@ -295,7 +307,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                         </div>
 
                         {/* Raw View Mode */}
-                        {isRawView ? (
+                        {showRawJson ? (
                             <div className="p-4 bg-neutral-950 font-mono text-[10px] text-green-400 overflow-auto max-h-[500px]">
                                 <div className="mb-4 pb-2 border-b border-neutral-800/50 flex items-center justify-between">
                                     <span className="text-neutral-500 uppercase tracking-widest">Backend Raw Payload</span>
@@ -405,6 +417,15 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
 
                                             {/* RIGHT COLUMN: POLICY INTERPRETATION (JUDGMENT) */}
                                             <div className={`flex-1 p-6 space-y-12 bg-black/20 ${integrityViolation ? 'blur-sm grayscale pointer-events-none' : ''}`}>
+                                                {/* 🧪 Execution Profile (High-Level Synthesis) */}
+                                                <section>
+                                                    <ExecutionProfileCard
+                                                        metrics={metrics}
+                                                        epistemicStatus={epistemicStatus}
+                                                        executionMode={executionMode}
+                                                    />
+                                                </section>
+
                                                 <div className="space-y-2">
                                                     <h4 className="text-[10px] font-black text-blue-500/60 uppercase tracking-[0.2em] border-b border-neutral-800/50 pb-2 text-right">
                                                         Policy Interpretation Layer
