@@ -18,7 +18,7 @@ import { validateTrace } from '../contracts/traceValidator';
  * Otherwise returns undefined (which JSON.stringify drops) or null.
  * Strict: No "fallback".
  */
-const strictVal = (val) => (val !== undefined && val !== null) ? val : null;
+const strictVal = (val) => (val !== undefined) ? val : null;
 
 /**
  * REQUIRED FIELDS CONTRACT
@@ -79,11 +79,20 @@ const adaptStrict = (rawTrace) => {
     const scientific = rawTrace.scientific_layer || {};
     const policy = rawTrace.policy_layer || {};
 
-    if (!valid && !scientific.claims) {
-        // Log critical failure but ATTEMPT to render what we have (Continuity Principle)
-        console.error("Trace Adapter: Trace rejected due to critical schema violation, but proceeding with empty claims.", errors);
-        // Do NOT return null. Proceed to normalization.
-        scientific.claims = []; // Ensure safe array
+    if (!valid || !scientific.claims) {
+        // Log critical failure
+        console.error("Trace Adapter: Trace rejected due to critical schema violation.", errors);
+
+        return {
+            adapter_status: "contract_violation",
+            validation_errors: errors,
+            _raw: rawTrace,
+            claims: [],
+            metrics: {},
+            causality: {},
+            temporal: {},
+            expert: {}
+        };
     }
 
     // TELEMETRY: ADAPTER IN
@@ -99,8 +108,15 @@ const adaptStrict = (rawTrace) => {
 
     // 3. Construct Verified Object
     return {
-        id: strictVal(rawTrace.trace_id),
+        adapter_status: "success",
+        _raw: rawTrace,
+
+        id: strictVal(rawTrace.id),
         sessionId: strictVal(rawTrace.session_id),
+        run_id: strictVal(rawTrace.run_id),
+        pipeline: strictVal(rawTrace.pipeline),
+        trace_variant: strictVal(rawTrace.trace_variant),
+
         status: rawTrace.status || (rawTrace.is_final ? 'complete' : 'streaming'),
         validationStatus,
         warnings,
