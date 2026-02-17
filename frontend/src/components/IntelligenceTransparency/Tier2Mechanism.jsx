@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowDown, Link2, FlaskConical, Activity, Zap, ShieldCheck, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
+import { ArrowDown, Link2, FlaskConical, Activity, Zap, ShieldCheck, ChevronDown, ChevronRight, ExternalLink, DatabaseZap } from 'lucide-react';
 import { TierBadge, Tooltip } from './UIUtils';
 import { renderPermissions } from '../../contracts/renderPermissions';
 
@@ -22,8 +22,10 @@ const Tier2Mechanism = React.memo(({ trace, claim, expertMode }) => {
         steps = mechanism.nodes.map(node => ({
             step_type: node.type || 'interaction',
             entity_name: node.label || node.id,
-            description: `Mechanistic node identified as ${node.type || 'unknown entity'}.`,
-            evidence_source: "Sensory Ontology v2.1"
+            description: node.description || `Mechanistic node identified as ${node.type || 'unknown entity'}.`,
+            evidence_source: node.source || "Sensory Ontology v2.1",
+            verified: node.verified,
+            uniprot_id: node.uniprot_id
         }));
     }
 
@@ -97,6 +99,16 @@ const Tier2Mechanism = React.memo(({ trace, claim, expertMode }) => {
                                         <h5 className="text-[11px] font-bold text-neutral-200 uppercase tracking-tight group-hover/title:text-blue-400 transition-colors">
                                             {step.entity_name}
                                         </h5>
+                                        <div className={`text-[7px] font-black uppercase px-1 py-0.5 rounded border ${step.verified ? 'text-blue-400 border-blue-500/30' : 'text-neutral-500 border-neutral-800'}`}>
+                                            {step.verified ? 'Verified' : 'Theoretical'}
+                                        </div>
+                                        {step.uniprot_id && (
+                                            <Tooltip text={`External Protein Annotation Available (${step.uniprot_id})`}>
+                                                <div className="p-1 rounded bg-purple-500/10 border border-purple-500/20">
+                                                    <DatabaseZap className="w-2.5 h-2.5 text-purple-400" />
+                                                </div>
+                                            </Tooltip>
+                                        )}
                                         {expertMode && (
                                             <span className="text-[8px] font-mono text-neutral-600 px-1 border border-neutral-800 rounded">
                                                 {step.step_type}
