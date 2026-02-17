@@ -157,7 +157,9 @@ const adaptStrict = (rawTrace) => {
             policyVersion: strictVal(policy.policy_version),
             policyHash: strictVal(policy.policy_hash),
             policySelectionReason: strictVal(policy.selection_reason),
-            registrySnapshot: scientific.registry_snapshot
+            registrySnapshot: scientific.registry_snapshot,
+            epistemic_basis: rawTrace.epistemic_basis || {},
+            trace_schema_version: strictVal(rawTrace.trace_schema_version)
         },
 
         causality: {
