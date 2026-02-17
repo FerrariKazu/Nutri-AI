@@ -21,6 +21,7 @@ const ExecutionProfileCard = ({ metrics, epistemicStatus, executionMode }) => {
             case 'insufficient_evidence':
             case 'fallback_execution': return 'text-neutral-400 border-neutral-500/30 bg-neutral-500/5';
             case 'no_registry_snapshot': return 'text-red-400 border-red-500/30 bg-red-500/5';
+            case 'not_applicable': return 'text-neutral-500 border-neutral-700/30 bg-neutral-800/20';
             default: return 'text-red-400 border-red-500/30 bg-red-500/5';
         }
     };
@@ -33,6 +34,7 @@ const ExecutionProfileCard = ({ metrics, epistemicStatus, executionMode }) => {
             case 'theoretical': return <Microscope className="w-4 h-4" />;
             case 'insufficient_evidence': return <AlertTriangle className="w-4 h-4" />;
             case 'no_registry_snapshot': return <AlertTriangle className="w-4 h-4" />;
+            case 'not_applicable': return <Activity className="w-4 h-4 opacity-50" />;
             default: return <Activity className="w-4 h-4" />;
         }
     };
@@ -126,8 +128,8 @@ const ExecutionProfileCard = ({ metrics, epistemicStatus, executionMode }) => {
                         { label: 'Policy', key: 'policy_intervention', icon: Scale },
                     ].map(feat => (
                         <div key={feat.key} className={`flex flex-col items-center gap-1.5 p-2 rounded border ${metrics.epistemic_basis?.[feat.key]
-                                ? (feat.key === 'policy_intervention' ? 'bg-amber-500/10 border-amber-500/20 text-amber-500' : 'bg-green-500/10 border-green-500/20 text-green-400')
-                                : 'bg-neutral-900 border-neutral-800/50 text-neutral-700'
+                            ? (feat.key === 'policy_intervention' ? 'bg-amber-500/10 border-amber-500/20 text-amber-500' : 'bg-green-500/10 border-green-500/20 text-green-400')
+                            : 'bg-neutral-900 border-neutral-800/50 text-neutral-700'
                             }`}>
                             <feat.icon className="w-3.5 h-3.5" />
                             <span className="text-[8px] font-black uppercase tracking-tighter">{feat.label}</span>
