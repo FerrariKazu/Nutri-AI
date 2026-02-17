@@ -66,7 +66,9 @@ export const validateTrace = (trace, isDevMode = false) => {
     const warnings = [];
 
     // 5. Warning Checks
-    if (isValid && (!trace.claims || trace.claims.length === 0)) {
+    const isConversational = trace.execution_mode === 'non_scientific_discourse';
+
+    if (isValid && (!trace.claims || trace.claims.length === 0) && !isConversational) {
         warnings.push("No claims found in trace");
     }
 
