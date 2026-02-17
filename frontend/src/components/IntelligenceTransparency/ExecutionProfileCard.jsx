@@ -14,21 +14,25 @@ const ExecutionProfileCard = ({ metrics, epistemicStatus, executionMode }) => {
     // 🧠 Epistemic Color Mapping
     const getStatusColor = (status) => {
         switch (status) {
-            case 'verified': return 'text-blue-400 border-blue-500/30 bg-blue-500/5';
-            case 'partial':
+            case 'empirical_verified':
+            case 'convergent_support': return 'text-blue-400 border-blue-500/30 bg-blue-500/5';
+            case 'mechanistically_supported':
             case 'theoretical': return 'text-amber-400 border-amber-500/30 bg-amber-500/5';
             case 'insufficient_evidence':
             case 'fallback_execution': return 'text-neutral-400 border-neutral-500/30 bg-neutral-500/5';
+            case 'no_registry_snapshot': return 'text-red-400 border-red-500/30 bg-red-500/5';
             default: return 'text-red-400 border-red-500/30 bg-red-500/5';
         }
     };
 
     const getStatusIcon = (status) => {
         switch (status) {
-            case 'verified': return <ShieldCheck className="w-4 h-4" />;
-            case 'partial':
+            case 'empirical_verified':
+            case 'convergent_support': return <ShieldCheck className="w-4 h-4" />;
+            case 'mechanistically_supported':
             case 'theoretical': return <Microscope className="w-4 h-4" />;
             case 'insufficient_evidence': return <AlertTriangle className="w-4 h-4" />;
+            case 'no_registry_snapshot': return <AlertTriangle className="w-4 h-4" />;
             default: return <Activity className="w-4 h-4" />;
         }
     };
@@ -52,7 +56,7 @@ const ExecutionProfileCard = ({ metrics, epistemicStatus, executionMode }) => {
                             Execution Profile
                         </h3>
                         <p className="text-[10px] text-neutral-500 font-mono">
-                            ID: {metrics.id || 'N/A'} • v2.0
+                            ID: {metrics.id?.slice(0, 8) || 'N/A'} • v{metrics.trace_schema_version || '1.3'}
                         </p>
                     </div>
                 </div>
@@ -129,11 +133,15 @@ const ExecutionProfileCard = ({ metrics, epistemicStatus, executionMode }) => {
             {metrics.registrySnapshot?.scope && (
                 <footer className="pt-2 border-t border-neutral-800/50 flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-1.5 opacity-60">
+                        <div className="flex items-center gap-1.5 opacity-60 group relative cursor-help">
                             <Database className="w-3 h-3 text-neutral-500" />
                             <span className="text-[9px] font-mono text-neutral-500 uppercase">
-                                Registry Scope (v{metrics.registrySnapshot.version})
+                                Registry {metrics.registrySnapshot.hash?.slice(0, 8)} (v{metrics.registrySnapshot.version})
                             </span>
+                            <div className="absolute bottom-full left-0 mb-2 invisible group-hover:visible bg-neutral-950 border border-neutral-800 p-2 rounded text-[8px] font-mono text-neutral-400 whitespace-nowrap z-50 shadow-2xl">
+                                Full Registry SHA256:<br />
+                                <span className="text-blue-400">{metrics.registrySnapshot.hash}</span>
+                            </div>
                         </div>
                         <div className="flex items-center gap-4 text-[9px] font-mono text-neutral-600 uppercase">
                             <span>{metrics.registrySnapshot.scope.entity_counts?.compounds} Compounds</span>
