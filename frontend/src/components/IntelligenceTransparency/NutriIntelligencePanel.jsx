@@ -17,7 +17,6 @@ import {
     ZapOff,
     FileSearch,
     DatabaseZap,
-    Activity
     Activity,
     Hash
 } from 'lucide-react';
