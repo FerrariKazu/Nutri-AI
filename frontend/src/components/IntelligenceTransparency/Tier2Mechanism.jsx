@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowDown, Link2, FlaskConical, Activity, Zap, ShieldCheck, ChevronDown, ChevronRight, ExternalLink, DatabaseZap } from 'lucide-react';
 import { TierBadge, Tooltip } from './UIUtils';
 import { renderPermissions } from '../../contracts/renderPermissions';
+import UniProtAnnotation from './UniProtAnnotation';
 
 /**
  * Tier2Mechanism
@@ -128,14 +129,19 @@ const Tier2Mechanism = React.memo(({ trace, claim, expertMode }) => {
                                 {isExpanded && (
                                     <div className="mt-3 p-3 rounded bg-neutral-950/40 border border-neutral-800/50 animate-fade-in">
                                         {step.evidence_source ? (
-                                            <div className="flex items-center gap-2 pt-1">
+                                            <div className="flex items-center gap-2 pt-1 pb-2 border-b border-neutral-800/30 mb-2">
                                                 <ExternalLink className="w-2.5 h-2.5 text-blue-500/40" />
                                                 <span className="text-[9px] font-mono text-blue-400/60 underline cursor-pointer hover:text-blue-400 transition-colors">
-                                                    Source: {step.evidence_source}
+                                                    Authoritative Source: {step.evidence_source}
                                                 </span>
                                             </div>
                                         ) : (
                                             <p className="text-[9px] text-neutral-600 italic">No specific source metadata for this step.</p>
+                                        )}
+
+                                        {/* 🧬 Isolated UniProt Annotation */}
+                                        {step.uniprot_id && (
+                                            <UniProtAnnotation uniprotId={step.uniprot_id} />
                                         )}
                                     </div>
                                 )}
