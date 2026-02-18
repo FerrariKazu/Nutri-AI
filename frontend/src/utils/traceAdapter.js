@@ -127,7 +127,20 @@ export const adaptExecutionTrace = (rawTrace) => {
     try {
         return adaptStrict(rawTrace);
     } catch (e) {
-        console.error("Trace Adapter Crashed:", e);
+        console.error("Trace Adapter caught error:", e);
+
+        // If it's a contract violation (from throw), return a structured error
+        if (e.message?.includes('CONTRACT_VIOLATION')) {
+            return {
+                adapter_status: "contract_violation",
+                validation_errors: [e.message],
+                _raw: rawTrace,
+                claims: [],
+                run_id: rawTrace.run_id || 'UNKNOWN'
+            };
+        }
+
+        // Generic fallback for unexpected crashes
         return null;
     }
 };
