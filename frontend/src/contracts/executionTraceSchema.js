@@ -1,7 +1,7 @@
 /**
  * executionTraceSchema.js
  * 
- * THE CONTRACT
+ * THE CONTRACT (v1.3)
  * Defines the exact shape of the backend AgentExecutionTrace.
  * 
  * @typedef {Object} Claim
@@ -16,41 +16,44 @@
  * @property {string} verification_level
  * @property {number} importance_score
  * @property {string|null} notes
+ * @property {Object} mechanistic_anchors
  * 
  * @typedef {Object} ExecutionTrace
- * @property {string} trace_id
+ * @property {string} id
  * @property {string} session_id
- * @property {number} schema_version
- * @property {boolean} trace_required
- * @property {string} validation_status
- * @property {'INIT'|'STREAMING'|'ENRICHING'|'VERIFIED'|'COMPLETE'|'ERROR'} status
- * @property {Object} integrity
- * @property {boolean} integrity.complete
- * @property {string[]} integrity.missing_segments
- * @property {Claim[]} claims
- * @property {Object} coverage_metrics
- * @property {number|null} confidence_score
- * @property {number|null} final_confidence
- * @property {number|null} moa_coverage
- * @property {boolean} pubchem_used
- * @property {string|null} pubchem_proof_hash
- * @property {number|null} duration_ms
- * @property {Object} tier3_risk_flags
- * @property {number} tier3_risk_flags_count
- * @property {number} tier3_applicability_match
- * @property {string[]} tier3_missing_context_fields
- * @property {Object} tier4_decision_changes
- * @property {number} tier4_session_age
- * @property {string[]} tier4_belief_revisions
- * @property {number} tier4_uncertainty_resolved_count
- * @property {boolean} tier4_saturation_triggered
- * @property {Object[]} invocations
+ * @property {string} run_id
+ * @property {string} pipeline
+ * @property {number} trace_schema_version
+ * @property {string} execution_mode
+ * @property {string} epistemic_status
+ * @property {Object} epistemic_basis
+ * @property {string} domain_type
+ * @property {string} visibility_level
+ * @property {number} domain_confidence
+ * @property {number|null} epistemic_integrity_score
+ * @property {string|null} downgrade_reason
+ * @property {Object} confidence_breakdown
+ * @property {Object} registry_snapshot
+ * @property {Object} scientific_layer
+ * @property {Object} policy_layer
+ * @property {Object} causality_layer
+ * @property {Object|null} contextual_layer
+ * @property {Object|null} surface_validation
+ * @property {Object|null} contract_validation
+ * @property {number} duration_ms
+ * @property {string} status
  */
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 1.3;
 
 export const VALID_STATUSES = ['INIT', 'STREAMING', 'ENRICHING', 'VERIFIED', 'COMPLETE', 'ERROR'];
 
-export const VALID_DECISIONS = ['ALLOW', 'WITHHOLD', 'REQUIRE_MORE_CONTEXT'];
-
-export const VALID_CHANGE_TYPES = ['STABLE', 'UPGRADE', 'DOWNGRADE', 'NEW_DECISION', 'NEW'];
+export const EPISTEMIC_COLORS = {
+    'empirical_verified': '#22c55e', // Green
+    'mechanistically_supported': '#10b981', // Emerald
+    'convergent_support': '#3b82f6', // Blue
+    'theoretical': '#f59e0b', // Amber
+    'insufficient_evidence': '#ef4444', // Red
+    'not_applicable': '#94a3b8', // Muted
+    'fallback_execution': '#6366f1' // Indigo
+};
