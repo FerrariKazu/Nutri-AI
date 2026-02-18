@@ -37,6 +37,7 @@
  * @property {Object} scientific_layer
  * @property {Object} policy_layer
  * @property {Object} causality_layer
+ * @property {Object} temporal_layer
  * @property {Object|null} contextual_layer
  * @property {Object|null} surface_validation
  * @property {Object|null} contract_validation
