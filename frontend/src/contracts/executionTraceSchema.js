@@ -45,7 +45,7 @@
  * @property {string} status
  */
 
-export const SCHEMA_VERSION = 1.31;
+export const SCHEMA_VERSION = "1.3.1";
 
 export const VALID_STATUSES = ['INIT', 'STREAMING', 'ENRICHING', 'VERIFIED', 'COMPLETE', 'ERROR'];
 
