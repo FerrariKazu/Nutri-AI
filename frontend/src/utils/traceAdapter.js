@@ -113,7 +113,8 @@ const adaptStrict = (rawTrace) => {
         contextual: rawTrace.contextual_layer || null,
         surface_validation: rawTrace.surface_validation || null,
         contract_validation: rawTrace.contract_validation || null,
-        system_audit: rawTrace.system_audit || {}
+        system_audit: rawTrace.system_audit || {},
+        trace_metrics: rawTrace.trace_metrics || {}
     };
 };
 
