@@ -48,6 +48,7 @@ import { EPISTEMIC_COLORS } from '../../contracts/executionTraceSchema';
  */
 const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false }) => {
     const claims = useMemo(() => (uiTrace?.claims || []), [uiTrace]);
+    const metrics = uiTrace?.metrics || {};
 
     // 🧠 Direct Binding (No inference)
     const executionMode = uiTrace?.execution_mode || 'full_trace';
@@ -286,7 +287,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
 
                                 {/* Main Grid: Fact vs Policy Split View */}
                                 <div className="relative min-h-[600px] flex flex-col lg:flex-row bg-neutral-900/40 border-b border-neutral-800">
-                                    {metrics?.execution_mode === 'non_scientific_discourse' ? (
+                                    {isStandby ? (
                                         <div className="w-full py-32 flex flex-col items-center opacity-40">
                                             <MessageSquare className="w-8 h-8 text-neutral-600 mb-4" />
                                             <p className="text-xs font-mono uppercase tracking-widest text-neutral-500">
