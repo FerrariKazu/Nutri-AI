@@ -38,7 +38,7 @@ const IntegrityBarrier = ({ type, missingFields, context }) => {
                     <div className="space-y-1">
                         {missingFields?.map((field, i) => (
                             <div key={i} className="text-[10px] font-mono py-1 px-2 rounded bg-red-500/10 text-red-300 border border-red-500/20 inline-block m-0.5">
-                                missing: {field}
+                                {field}
                             </div>
                         ))}
                     </div>
