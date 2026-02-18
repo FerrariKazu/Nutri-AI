@@ -48,6 +48,7 @@ const adaptStrict = (rawTrace) => {
     const scientific = rawTrace.scientific_layer || {};
     const policy = rawTrace.policy_layer || {};
     const causality = rawTrace.causality_layer || {};
+    const temporal = rawTrace.temporal_layer || {};
 
     // 2. Map Claims (1:1 VERBATIM)
     const normalizedClaims = (scientific.claims || []).map(adaptClaimForUI);
@@ -99,6 +100,14 @@ const adaptStrict = (rawTrace) => {
             applicability: strictVal(causality.tier3_applicability_match),
             riskCount: strictVal(causality.tier3_risk_flags_count),
             distribution: causality.tier3_recommendation_distribution
+        },
+
+        temporal: {
+            turn: strictVal(temporal.session_age),
+            revisions: temporal.belief_revisions || [],
+            resolvedUncertainties: strictVal(temporal.uncertainty_resolved_count),
+            saturationTriggered: !!temporal.saturation_triggered,
+            anchoring: temporal.session_age > 1 ? `Turn ${temporal.session_age}` : null
         },
 
         contextual: rawTrace.contextual_layer || null,
