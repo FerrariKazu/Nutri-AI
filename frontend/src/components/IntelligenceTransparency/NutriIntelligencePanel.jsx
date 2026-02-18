@@ -36,47 +36,29 @@ import ExecutionProfileCard from './ExecutionProfileCard';
 import { Tooltip, getConfidenceNarrative } from './UIUtils';
 import { renderPermissions } from '../../contracts/renderPermissions';
 import { adaptClaimForUI } from '../../utils/traceAdapter';
+import { EPISTEMIC_COLORS } from '../../contracts/executionTraceSchema';
 
 /**
  * NutriIntelligencePanel
  * 
- * STRICT MODE CONTAINER:
- * - Data Provenance Footer (Mandatory).
- * - Raw Trace JSON View (Expert).
- * - Stream State Awareness (Streaming vs Complete).
- * - Schema Mismatch Handling.
+ * STRICT MODE CONTAINER (v1.3):
+ * - Direct Binding to Backend Epistemic Authority.
+ * - Scientific Instrument Standby Mode.
+ * - Deterministic Arithmetic Path.
  */
 const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false }) => {
-    // [TRACE_AUDIT] Step 7: UI render check
-    useEffect(() => {
-        if (uiTrace) {
-            const claimsLen = uiTrace.claims ? uiTrace.claims.length : 0;
-            console.log(`%c [TRACE_AUDIT] TRACE RENDER: ${claimsLen} claims available to UI`, "background: #1e3a8a; color: white; padding: 2px 4px; border-radius: 4px;");
-        }
-    }, [uiTrace]);
+    const claims = useMemo(() => (uiTrace?.claims || []), [uiTrace]);
 
-    // 🧩 STEP 3 — Centralized UI Adapter
-    const normalizeClaim = useCallback((c) => {
-        const adapted = adaptClaimForUI(c);
-
-        // TELEMETRY: NORMALIZATION STEP
-        console.log("🧪 [POINT 6: NORMALIZATION] CLAIM ADAPTED FOR UI", { raw: c, adapted });
-
-        return adapted;
-    }, []);
+    // 🧠 Direct Binding (No inference)
+    const executionMode = uiTrace?.execution_mode || 'full_trace';
+    const epistemicStatus = uiTrace?.epistemic_status || 'theoretical';
+    const isStandby = executionMode === 'non_scientific_discourse' || uiTrace?.domain_type === 'contextual';
 
     const [isOpen, setIsOpen] = useState(false);
     const [isExpertMode, setIsExpertMode] = useState(expertModeDefault);
     const [showRawJson, setShowRawJson] = useState(false);
     const [selectedClaimIdx, setSelectedClaimIdx] = useState(0);
     const [copySuccess, setCopySuccess] = useState(false);
-    const [shared, setShared] = useState(false);
-
-    // 🧠 Derivations
-    const claims = useMemo(() => (uiTrace?.claims || []).map(normalizeClaim), [uiTrace, normalizeClaim]);
-    const metrics = uiTrace?.metrics || {};
-    const epistemicStatus = metrics.epistemic_status || 'theoretical';
-    const executionMode = metrics.execution_mode || 'full_trace';
 
     useEffect(() => {
         const savedMode = localStorage.getItem('nutri_expert_mode');
@@ -101,9 +83,8 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
         setSelectedClaimIdx(idx);
     };
 
-    // 🚀 Strict Copy: Raw JSON only
     const handleCopy = useCallback(() => {
-        const text = JSON.stringify(uiTrace, null, 2);
+        const text = JSON.stringify(uiTrace?._raw || uiTrace, null, 2);
         navigator.clipboard.writeText(text);
         setCopySuccess(true);
         setTimeout(() => setCopySuccess(false), 2000);
@@ -114,94 +95,37 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
         ? (claims[selectedClaimIdx] || claims[0])
         : null;
 
-    // Mandate Check
-    const isMandateFailure = useMemo(() => {
-        return uiTrace?.trace_required && uiTrace.claims?.length === 0;
-    }, [uiTrace]);
-
-    useEffect(() => {
-        if (claims.length > 0) {
-            // TELEMETRY: VIEW MODEL READY
-            console.log("🧪 [POINT 7: VIEW MODEL] CLAIMS READY FOR PAINT", claims);
-            console.log(`%c [PAINT] Rendering ${claims.length} claims `, "background: #065f46; color: white; padding: 2px 4px; border-radius: 4px;", claims);
-
-            // ASSERTION: STRICT RENDER
-            claims.forEach((c, i) => {
-                const failReasons = [];
-                if (c.statement && (c.importance_score === undefined || c.importance_score === null)) failReasons.push("importance_score");
-                if (c.statement && (c.verification_level === undefined || c.verification_level === null)) failReasons.push("verification_level");
-                if (c.statement && (c.confidence === undefined || c.confidence === null)) failReasons.push("confidence");
-
-                if (failReasons.length > 0) {
-                    console.error(
-                        `%c [STRICT_RENDER_FAIL] Claim ${i} is missing: ${failReasons.join(', ')} `,
-                        "background: #ef4444; color: white; font-weight: bold; border-radius: 4px;",
-                        {
-                            adaptedClaim: c,
-                            rawUiTrace: uiTrace,
-                            rawClaimInTrace: uiTrace?.claims?.[i]
-                        }
-                    );
-                }
-            });
-        }
-    }, [claims, uiTrace]);
-
+    // Epistemic Color
+    const statusColor = useMemo(() => EPISTEMIC_COLORS[epistemicStatus] || '#94a3b8', [epistemicStatus]);
 
     // Integrity Message - Premium Narrative
     const integrityMessage = useMemo(() => {
         if (!uiTrace) return "No execution trace recorded";
+        if (isStandby) return "Scientific Instrument Standby";
         if (uiTrace.status === 'INIT') return "Initializing Scientific Workspace...";
-        if (uiTrace.status === 'STREAMING' || uiTrace.status === 'streaming') return "Reasoning Stream Active...";
-        if (uiTrace.status === 'ENRICHING') return "Enriching Knowledge Topology...";
-        if (uiTrace.status === 'VERIFIED' || uiTrace.status === 'COMPLETE' || uiTrace.status === 'complete') return "Institutional Audit Terminal";
+        if (uiTrace.status === 'streaming') return "Reasoning Stream Active...";
+        if (uiTrace.status === 'VERIFIED' || uiTrace.status === 'complete') return "Institutional Audit Terminal";
         return "Deterministic System Telemetry";
-    }, [uiTrace]);
+    }, [uiTrace, isStandby]);
 
     // 🛡️ [INSTITUTIONAL_HARDENING] Integrity Checks
     const integrityViolation = useMemo(() => {
-        if (!uiTrace) return null;
-        if (['STREAMING', 'INIT', 'streaming'].includes(uiTrace.status)) return null;
-
-        if (uiTrace.adapter_status && uiTrace.adapter_status !== "success") {
+        if (!uiTrace || isStandby) return null;
+        if (uiTrace.adapter_status === "contract_violation") {
             return {
-                type: "ADAPTER_FAILURE",
+                type: "TRACE CONTRACT VIOLATION",
                 missingFields: uiTrace.validation_errors || [],
-                context: `adapter_status: ${uiTrace.adapter_status} | run_id: ${uiTrace.run_id || 'NULL'}`
-            };
-        }
-
-        const missing = [];
-        // const metrics = uiTrace.metrics || {}; // metrics is already derived above
-
-        // Gap 1: Policy Hash check
-        if (!metrics.policyHash) missing.push("policy_document_hash");
-        if (!metrics.policySelectionReason) missing.push("policy_selection_reason");
-
-        // Gap 2: Registry Snapshot check
-        const snapshot = metrics.registrySnapshot || {};
-        if (!snapshot.registry_hash) missing.push("registry_hash");
-        if (!snapshot.ontology_version) missing.push("ontology_version");
-        if (!snapshot.locked) missing.push("version_lock_barrier");
-
-        if (missing.length > 0) {
-            return {
-                type: "CONTRACT_VIOLATION",
-                missingFields: missing,
-                context: `run_id: ${uiTrace.run_id || 'NULL'} | trace_seq: ${uiTrace.trace_seq || '0'}`
+                context: `run_id: ${uiTrace.run_id || 'NULL'}`
             };
         }
         return null;
-    }, [uiTrace, metrics]);
-
-    // Schema/Status Checks
-    const isStreaming = uiTrace?.status === 'streaming' || uiTrace?.status === 'STREAMING';
+    }, [uiTrace, isStandby]);
 
     return (
         <div className="mt-6 border border-neutral-800 rounded-xl overflow-hidden bg-neutral-900/20 backdrop-blur-sm animate-fade-in shadow-2xl text-card-foreground">
             {/* 🛡️ Status & Integrity Banner */}
-            <div className={`px-4 py-1.5 border-b border-neutral-800/50 flex items-center gap-2 overflow-hidden ${isStreaming ? 'bg-blue-500/5' : 'bg-neutral-900/40'}`}>
-                {isStreaming ? (
+            <div className={`px-4 py-1.5 border-b border-neutral-800/50 flex items-center gap-2 overflow-hidden ${uiTrace?.status === 'streaming' ? 'bg-blue-500/5' : 'bg-neutral-900/40'}`}>
+                {uiTrace?.status === 'streaming' ? (
                     <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
                 ) : integrityViolation ? (
                     <AlertTriangle className="w-3 h-3 text-red-500 animate-pulse" />
@@ -209,20 +133,19 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                     <ShieldCheck className={`w-3 h-3 ${!uiTrace ? 'text-neutral-700' : 'text-neutral-500'}`} />
                 )}
 
-                <p className={`text-[10px] font-mono uppercase tracking-tight truncate flex-1 ${integrityViolation ? 'text-red-500 font-bold' : 'text-neutral-400'}`}>
-                    {integrityViolation ? 'CRITICAL_INTEGRITY_VIOLATION' : integrityMessage}
+                <p className={`text-[10px] font-mono upper tracking-tight truncate flex-1 ${integrityViolation ? 'text-red-500 font-bold' : 'text-neutral-400'}`}>
+                    {integrityViolation ? 'TRACE_CONTRACT_VIOLATION' : integrityMessage}
                 </p>
 
                 {uiTrace && (
                     <div className="flex items-center gap-3">
-                        {/* Mandatory Audit ID display */}
                         <div className="hidden md:flex items-center gap-2 pr-2 border-r border-neutral-800/50">
                             <span className="text-[7px] font-mono text-neutral-600 uppercase">Run: {uiTrace.run_id?.split('-')[0] || 'NUL'}</span>
-                            <span className="text-[7px] font-mono text-neutral-600 uppercase">Status: {uiTrace.adapter_status || 'ERR'}</span>
+                            <span className="text-[7px] font-mono text-neutral-600 uppercase">Ver: {uiTrace.trace_schema_version || '1.3'}</span>
                         </div>
-                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold font-mono border ${['STREAMING', 'ENRICHING', 'INIT'].includes(uiTrace.status)
+                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold font-mono border ${['streaming'].includes(uiTrace.status)
                             ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
-                            : uiTrace.status === 'COMPLETE' || uiTrace.status === 'VERIFIED'
+                            : uiTrace.status === 'complete' || uiTrace.status === 'VERIFIED'
                                 ? 'text-green-400 border-green-500/20 bg-green-500/10'
                                 : 'text-neutral-500 border-neutral-700/50 bg-neutral-800'
                             }`}>
@@ -249,12 +172,12 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                             <div className="px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 flex items-center gap-1.5">
                                 <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
                                 <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">
-                                    {executionMode.replace('_', ' ')}
+                                    {executionMode.replace(/_/g, ' ')}
                                 </span>
                             </div>
                         </div>
                         <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-[0.3em] ml-1">
-                            Scientific Audit Terminal • Epistemic Status: <span className="text-blue-400/80">{epistemicStatus.replace('_', ' ')}</span>
+                            Scientific Audit Terminal • Epistemic Status: <span style={{ color: statusColor }}>{epistemicStatus.replace(/_/g, ' ')}</span>
                         </p>
                     </div>
                 </div>
