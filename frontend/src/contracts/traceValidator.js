@@ -26,8 +26,8 @@ export const validateTrace = (trace, isDevMode = false) => {
         if (isDevMode) console.error(`${LOG_PREFIX} ${msg}`);
     }
 
-    // 2. Mandatory v1.3 Fields
-    const mandatory = ['execution_mode', 'epistemic_status', 'id', 'run_id'];
+    // 2. Mandatory v1.3.1 Fields
+    const mandatory = ['execution_mode', 'epistemic_status', 'id', 'run_id', 'trace_metrics', 'trace_schema_version'];
     mandatory.forEach(field => {
         if (trace[field] === undefined || trace[field] === null) {
             errors.push(`Missing mandatory field: ${field}`);
