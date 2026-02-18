@@ -43,7 +43,24 @@ export const validateTrace = (trace, isDevMode = false) => {
             errors.push('Scientific trace missing claims array');
         }
 
-        // 4. Substance Enforcement Guard (SSOT Trust Mode)
+        // 4a. Scientific Explanation Mode (v2.0) — First-class validation
+        if (trace.execution_mode === 'scientific_explanation') {
+            const substanceState = trace.trace_metrics?.substance_state;
+            if (!substanceState || substanceState !== 'substantive') {
+                errors.push('TRACE_SUBSTANCE_GENERATION_FAILURE: scientific_explanation must be substantive');
+            }
+            const anchorCount = trace.trace_metrics?.anchor_count || 0;
+            const bioClaimCount = trace.trace_metrics?.biological_claim_count || 0;
+            if (anchorCount === 0) {
+                errors.push('TRACE_SUBSTANCE_GENERATION_FAILURE: anchor_count must be > 0');
+            }
+            if (bioClaimCount === 0) {
+                errors.push('TRACE_SUBSTANCE_GENERATION_FAILURE: biological_claim_count must be > 0');
+            }
+            // DO NOT show "General Discourse Mode" or "Scientific Instrument Standby"
+        }
+
+        // 4b. Substance Enforcement Guard (SSOT Trust Mode) — Full Trace only
         const substanceState = trace.trace_metrics?.substance_state;
         if (trace.execution_mode === 'full_trace' && substanceState !== 'substantive') {
             const errorMsg = 'TRACE_SUBSTANCE_CONTRACT_VIOLATION: FULL_TRACE must be substantive.';
