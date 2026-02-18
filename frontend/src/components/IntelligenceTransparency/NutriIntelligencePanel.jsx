@@ -234,9 +234,9 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                             <div className="p-4 bg-neutral-950 font-mono text-[10px] text-green-400 overflow-auto max-h-[500px]">
                                 <div className="mb-4 pb-2 border-b border-neutral-800/50 flex items-center justify-between">
                                     <span className="text-neutral-500 uppercase tracking-widest">Backend Raw Payload</span>
-                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20">Variant: {uiTrace._raw?.trace_variant || 'legacy'}</span>
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20">Variant: {uiTrace?._raw?.trace_variant || 'legacy'}</span>
                                 </div>
-                                <pre>{JSON.stringify(uiTrace._raw || uiTrace, null, 2)}</pre>
+                                <pre>{JSON.stringify(uiTrace?._raw || uiTrace, null, 2)}</pre>
                             </div>
                         ) : !uiTrace ? (
                             <div className="p-16 flex flex-col items-center text-center opacity-40">
@@ -454,7 +454,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                 </span>
                             </div>
                             <span className="text-[9px] font-mono text-neutral-700">
-                                Trace v{uiTrace?.metrics?.trace_schema_version || '1.3'}
+                                Trace v{uiTrace?.trace_schema_version || uiTrace?.metrics?.trace_schema_version || '1.3'}
                             </span>
                         </div>
                     </motion.div>
