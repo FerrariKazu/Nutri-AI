@@ -46,7 +46,9 @@ export const validateTrace = (trace, isDevMode = false) => {
         // 4. Substance Enforcement Guard (SSOT Trust Mode)
         const substanceState = trace.trace_metrics?.substance_state;
         if (trace.execution_mode === 'full_trace' && substanceState !== 'substantive') {
-            errors.push('TRACE_SUBSTANCE_CONTRACT_VIOLATION: FULL_TRACE must be substantive.');
+            const errorMsg = 'TRACE_SUBSTANCE_CONTRACT_VIOLATION: FULL_TRACE must be substantive.';
+            if (isDevMode) console.error(`${LOG_PREFIX} ${errorMsg}`);
+            throw new Error(errorMsg);
         }
     }
 
