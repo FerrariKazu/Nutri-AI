@@ -11,7 +11,7 @@ import { DatabaseZap, Lock, Unlock, Hash, Info, AlertTriangle } from 'lucide-rea
  */
 const RegistrySnapshot = ({ snapshot }) => {
     const isLocked = snapshot?.locked;
-    const hasData = snapshot?.registry_version && snapshot?.registry_hash;
+    const hasData = (snapshot?.version || snapshot?.registry_version) && (snapshot?.registry_hash || snapshot?.hash);
 
     if (!snapshot || !hasData) {
         return (
@@ -25,21 +25,30 @@ const RegistrySnapshot = ({ snapshot }) => {
         );
     }
 
+    const version = snapshot.version || snapshot.registry_version;
+    const hash = snapshot.registry_hash || snapshot.hash;
+
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between px-1">
                 <p className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Knowledge State (Snapshot)</p>
-                {isLocked ? (
-                    <div className="flex items-center gap-1 text-[8px] font-mono text-green-500 uppercase">
-                        <Lock className="w-2.5 h-2.5" />
-                        <span>Sealed</span>
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-neutral-800 border border-neutral-700">
+                        <span className="text-[8px] font-mono text-neutral-500 uppercase tracking-tighter">Scope:</span>
+                        <span className="text-[8px] font-mono text-neutral-300 uppercase">{snapshot.scope || 'Global'}</span>
                     </div>
-                ) : (
-                    <div className="flex items-center gap-1 text-[8px] font-mono text-amber-500 uppercase">
-                        <Unlock className="w-2.5 h-2.5" />
-                        <span>Not Sealed</span>
-                    </div>
-                )}
+                    {isLocked ? (
+                        <div className="flex items-center gap-1 text-[8px] font-mono text-green-500 uppercase">
+                            <Lock className="w-2.5 h-2.5" />
+                            <span>Sealed</span>
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-1 text-[8px] font-mono text-amber-500 uppercase">
+                            <Unlock className="w-2.5 h-2.5" />
+                            <span>Not Sealed</span>
+                        </div>
+                    )}
+                </div>
             </div>
 
             <div className="grid grid-cols-1 gap-2 p-3 rounded-xl bg-black/40 border border-neutral-800">
@@ -49,7 +58,7 @@ const RegistrySnapshot = ({ snapshot }) => {
                         <div className="grid grid-cols-2 gap-2">
                             <div className="space-y-0.5">
                                 <span className="text-[7px] font-mono text-neutral-600 uppercase">Registry Version</span>
-                                <p className="text-[10px] font-mono text-neutral-300">v{snapshot.registry_version}</p>
+                                <p className="text-[10px] font-mono text-neutral-300">v{version}</p>
                             </div>
                             <div className="space-y-0.5">
                                 <span className="text-[7px] font-mono text-neutral-600 uppercase">Ontology Version</span>
@@ -63,7 +72,7 @@ const RegistrySnapshot = ({ snapshot }) => {
                                 <span className="text-[7px] font-mono text-neutral-600 uppercase">Deterministic State Hash</span>
                             </div>
                             <p className="text-[8px] font-mono text-blue-400/50 break-all select-all hover:text-blue-400 transition-colors">
-                                {snapshot.registry_hash}
+                                {hash}
                             </p>
                         </div>
                     </div>
