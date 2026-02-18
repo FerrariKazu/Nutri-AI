@@ -41,7 +41,8 @@ const adaptStrict = (rawTrace) => {
             adapter_status: "contract_violation",
             validation_errors: errors,
             _raw: rawTrace,
-            claims: []
+            claims: [],
+            run_id: rawTrace.run_id || 'UNKNOWN'
         };
     }
 
