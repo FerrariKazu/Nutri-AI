@@ -42,6 +42,12 @@ export const validateTrace = (trace, isDevMode = false) => {
         if (!scientific.claims || !Array.isArray(scientific.claims)) {
             errors.push('Scientific trace missing claims array');
         }
+
+        // 4. Substance Enforcement Guard (SSOT Trust Mode)
+        const substanceState = trace.trace_metrics?.substance_state;
+        if (trace.execution_mode === 'full_trace' && substanceState !== 'substantive') {
+            errors.push('TRACE_SUBSTANCE_CONTRACT_VIOLATION: FULL_TRACE must be substantive.');
+        }
     }
 
     const isValid = errors.length === 0;
