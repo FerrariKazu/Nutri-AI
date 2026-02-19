@@ -145,10 +145,10 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                             <span className="text-[7px] font-mono text-neutral-600 uppercase">Ver: {uiTrace.trace_schema_version || '1.3'}</span>
                         </div>
                         <span className={`px - 2 py - 0.5 rounded - full text - [8px] font - bold font - mono border ${['streaming'].includes(uiTrace.status)
-                                ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
-                                : uiTrace.status === 'complete' || uiTrace.status === 'VERIFIED'
-                                    ? 'text-green-400 border-green-500/20 bg-green-500/10'
-                                    : 'text-neutral-500 border-neutral-700/50 bg-neutral-800'
+                            ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
+                            : uiTrace.status === 'complete' || uiTrace.status === 'VERIFIED'
+                                ? 'text-green-400 border-green-500/20 bg-green-500/10'
+                                : 'text-neutral-500 border-neutral-700/50 bg-neutral-800'
                             } `}>
                             {uiTrace.status ? uiTrace.status.toUpperCase() : 'UNKNOWN'}
                         </span>
@@ -164,7 +164,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                 <div className="flex items-center gap-3 text-left">
                     <div className="p-2 rounded-lg bg-accent/10 text-accent group-hover:scale-110 group-hover:bg-accent/20 transition-all duration-500">
                         {executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer' ? (
-                            <FlaskConical className="w-4 h-4" />
+                            <Flask className="w-4 h-4" />
                         ) : (
                             <Brain className="w-4 h-4" />
                         )}
@@ -175,8 +175,8 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                 Nutri Intelligence
                             </h2>
                             <div className={`px - 2 py - 0.5 rounded border flex items - center gap - 1.5 ${executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer'
-                                    ? 'bg-purple-500/10 border-purple-500/20'
-                                    : 'bg-blue-500/10 border-blue-500/20'
+                                ? 'bg-purple-500/10 border-purple-500/20'
+                                : 'bg-blue-500/10 border-blue-500/20'
                                 } `}>
                                 <div className={`w - 1.5 h - 1.5 rounded - full animate - pulse ${executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer' ? 'bg-purple-400' : 'bg-blue-400'
                                     } `} />
@@ -265,8 +265,8 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                 key={claim.id || idx}
                                                 onClick={() => handleClaimSelect(idx)}
                                                 className={`shrink - 0 px - 3 py - 1.5 rounded - lg text - [10px] font - bold transition - all duration - 300 flex items - center gap - 2 ${selectedClaimIdx === idx
-                                                        ? 'bg-neutral-200 text-neutral-950 shadow-lg scale-105'
-                                                        : 'text-neutral-500 hover:text-neutral-300 bg-neutral-800/40'
+                                                    ? 'bg-neutral-200 text-neutral-950 shadow-lg scale-105'
+                                                    : 'text-neutral-500 hover:text-neutral-300 bg-neutral-800/40'
                                                     } `}
                                             >
                                                 CLAIM {idx + 1}
