@@ -1,5 +1,5 @@
 import React from 'react';
-import { FlaskConical, Zap, Activity, Eye, ChevronRight, TrendingUp, TrendingDown, Clock, HelpCircle } from 'lucide-react';
+import { Flask, Zap, Activity, Eye, ChevronRight, TrendingUp, TrendingDown, Clock, HelpCircle } from 'lucide-react';
 
 /**
  * PerceptionMapper v1.2
@@ -34,7 +34,7 @@ const PerceptionMapper = ({ claim }) => {
                 {/* Compounds / Stimuli */}
                 <div className="flex-1 flex flex-col items-center gap-1">
                     <div className="p-1.5 rounded-full bg-neutral-900 border border-purple-500/30">
-                        <FlaskConical className="w-3 h-3 text-purple-400" />
+                        <Flask className="w-3 h-3 text-purple-400" />
                     </div>
                     <div className="flex flex-col items-center">
                         {compounds.length > 0 ? compounds.map((c, i) => (
