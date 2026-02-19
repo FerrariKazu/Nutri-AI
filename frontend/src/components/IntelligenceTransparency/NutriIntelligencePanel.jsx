@@ -164,9 +164,9 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                 <div className="flex items-center gap-3 text-left">
                     <div className="p-2 rounded-lg bg-accent/10 text-accent group-hover:scale-110 group-hover:bg-accent/20 transition-all duration-500">
                         {executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer' ? (
-                            <Flask className="w-4 h-4" />
+                            <Beaker className="w-4 h-4" />
                         ) : (
-                            <Brain className="w-4 h-4" />
+                            <Beaker className="w-4 h-4" />
                         )}
                     </div>
                     <div className="flex flex-col">
