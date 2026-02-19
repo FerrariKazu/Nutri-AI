@@ -50,7 +50,7 @@ const Tier2Mechanism = React.memo(({ trace, claim, expertMode }) => {
     }
 
     const stepIcons = {
-        'compound': FlaskConical,
+        'compound': Flask,
         'interaction': Zap,
         'physiology': Activity,
         'outcome': ShieldCheck
