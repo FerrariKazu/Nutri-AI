@@ -1,4 +1,3 @@
-```
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -117,7 +116,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
             return {
                 type: "TRACE CONTRACT VIOLATION",
                 missingFields: uiTrace.validation_errors || [],
-                context: `run_id: ${ uiTrace.run_id || 'NULL' } `
+                context: `run_id: ${uiTrace.run_id || 'NULL'} `
             };
         }
         return null;
@@ -126,16 +125,16 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
     return (
         <div className="mt-6 border border-neutral-800 rounded-xl overflow-hidden bg-neutral-900/20 backdrop-blur-sm animate-fade-in shadow-2xl text-card-foreground">
             {/* 🛡️ Status & Integrity Banner */}
-            <div className={`px - 4 py - 1.5 border - b border - neutral - 800 / 50 flex items - center gap - 2 overflow - hidden ${ uiTrace?.status === 'streaming' ? 'bg-blue-500/5' : 'bg-neutral-900/40' } `}>
+            <div className={`px - 4 py - 1.5 border - b border - neutral - 800 / 50 flex items - center gap - 2 overflow - hidden ${uiTrace?.status === 'streaming' ? 'bg-blue-500/5' : 'bg-neutral-900/40'} `}>
                 {uiTrace?.status === 'streaming' ? (
                     <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
                 ) : integrityViolation ? (
                     <AlertTriangle className="w-3 h-3 text-red-500 animate-pulse" />
                 ) : (
-                    <ShieldCheck className={`w - 3 h - 3 ${ !uiTrace ? 'text-neutral-700' : 'text-neutral-500' } `} />
+                    <ShieldCheck className={`w - 3 h - 3 ${!uiTrace ? 'text-neutral-700' : 'text-neutral-500'} `} />
                 )}
 
-                <p className={`text - [10px] font - mono upper tracking - tight truncate flex - 1 ${ integrityViolation ? 'text-red-500 font-bold' : 'text-neutral-400' } `}>
+                <p className={`text - [10px] font - mono upper tracking - tight truncate flex - 1 ${integrityViolation ? 'text-red-500 font-bold' : 'text-neutral-400'} `}>
                     {integrityViolation ? 'TRACE_CONTRACT_VIOLATION' : integrityMessage}
                 </p>
 
@@ -145,13 +144,12 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                             <span className="text-[7px] font-mono text-neutral-600 uppercase">Run: {uiTrace.run_id?.split('-')[0] || 'NUL'}</span>
                             <span className="text-[7px] font-mono text-neutral-600 uppercase">Ver: {uiTrace.trace_schema_version || '1.3'}</span>
                         </div>
-                        <span className={`px - 2 py - 0.5 rounded - full text - [8px] font - bold font - mono border ${
-    ['streaming'].includes(uiTrace.status)
-    ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
-    : uiTrace.status === 'complete' || uiTrace.status === 'VERIFIED'
-        ? 'text-green-400 border-green-500/20 bg-green-500/10'
-        : 'text-neutral-500 border-neutral-700/50 bg-neutral-800'
-} `}>
+                        <span className={`px - 2 py - 0.5 rounded - full text - [8px] font - bold font - mono border ${['streaming'].includes(uiTrace.status)
+                                ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
+                                : uiTrace.status === 'complete' || uiTrace.status === 'VERIFIED'
+                                    ? 'text-green-400 border-green-500/20 bg-green-500/10'
+                                    : 'text-neutral-500 border-neutral-700/50 bg-neutral-800'
+                            } `}>
                             {uiTrace.status ? uiTrace.status.toUpperCase() : 'UNKNOWN'}
                         </span>
                     </div>
@@ -176,17 +174,14 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                             <h2 className="text-xl font-bold text-white tracking-tight uppercase italic">
                                 Nutri Intelligence
                             </h2>
-                            <div className={`px - 2 py - 0.5 rounded border flex items - center gap - 1.5 ${
-    executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer'
-    ? 'bg-purple-500/10 border-purple-500/20'
-    : 'bg-blue-500/10 border-blue-500/20'
-} `}>
-                                <div className={`w - 1.5 h - 1.5 rounded - full animate - pulse ${
-    executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer' ? 'bg-purple-400' : 'bg-blue-400'
-} `} />
-                                <span className={`text - [9px] font - bold uppercase tracking - widest ${
-    executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer' ? 'text-purple-400' : 'text-blue-400'
-} `}>
+                            <div className={`px - 2 py - 0.5 rounded border flex items - center gap - 1.5 ${executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer'
+                                    ? 'bg-purple-500/10 border-purple-500/20'
+                                    : 'bg-blue-500/10 border-blue-500/20'
+                                } `}>
+                                <div className={`w - 1.5 h - 1.5 rounded - full animate - pulse ${executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer' ? 'bg-purple-400' : 'bg-blue-400'
+                                    } `} />
+                                <span className={`text - [9px] font - bold uppercase tracking - widest ${executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer' ? 'text-purple-400' : 'text-blue-400'
+                                    } `}>
                                     {executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer' ? 'SCIENTIFIC EXPLANATION' : executionMode.replace(/_/g, ' ')}
                                 </span>
                             </div>
@@ -200,7 +195,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                     <span className="text-[10px] font-mono text-neutral-600 group-hover:text-neutral-400 transition-colors uppercase">
                         {isOpen ? 'Close' : 'Inspect'}
                     </span>
-                    <div className={`transition - transform duration - 500 ${ isOpen ? 'rotate-180' : '' } `}>
+                    <div className={`transition - transform duration - 500 ${isOpen ? 'rotate-180' : ''} `}>
                         <ChevronDown className="w-4 h-4 text-neutral-600" />
                     </div>
                 </div>
@@ -226,7 +221,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                 {/* Raw Toggle */}
                                 <button
                                     onClick={toggleRawView}
-                                    className={`flex items - center gap - 1.5 transition - colors group ${ showRawJson ? 'text-accent' : 'text-neutral-500 hover:text-neutral-300' } `}
+                                    className={`flex items - center gap - 1.5 transition - colors group ${showRawJson ? 'text-accent' : 'text-neutral-500 hover:text-neutral-300'} `}
                                 >
                                     <FileJson className="w-3 h-3" />
                                     <span className="font-mono uppercase tracking-tighter">Raw JSON</span>
@@ -235,9 +230,9 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                 {/* Expert Toggle */}
                                 <button
                                     onClick={toggleExpertMode}
-                                    className={`flex items - center gap - 1.5 transition - all group ${ isExpertMode ? 'text-accent' : 'text-neutral-500 hover:text-neutral-300' } `}
+                                    className={`flex items - center gap - 1.5 transition - all group ${isExpertMode ? 'text-accent' : 'text-neutral-500 hover:text-neutral-300'} `}
                                 >
-                                    <Settings2 className={`w - 3 h - 3 ${ isExpertMode ? 'rotate-180' : '' } transition - transform`} />
+                                    <Settings2 className={`w - 3 h - 3 ${isExpertMode ? 'rotate-180' : ''} transition - transform`} />
                                     <span className="font-mono uppercase tracking-tighter">Expert</span>
                                 </button>
                             </div>
@@ -269,11 +264,10 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                             <button
                                                 key={claim.id || idx}
                                                 onClick={() => handleClaimSelect(idx)}
-                                                className={`shrink - 0 px - 3 py - 1.5 rounded - lg text - [10px] font - bold transition - all duration - 300 flex items - center gap - 2 ${
-    selectedClaimIdx === idx
-    ? 'bg-neutral-200 text-neutral-950 shadow-lg scale-105'
-    : 'text-neutral-500 hover:text-neutral-300 bg-neutral-800/40'
-} `}
+                                                className={`shrink - 0 px - 3 py - 1.5 rounded - lg text - [10px] font - bold transition - all duration - 300 flex items - center gap - 2 ${selectedClaimIdx === idx
+                                                        ? 'bg-neutral-200 text-neutral-950 shadow-lg scale-105'
+                                                        : 'text-neutral-500 hover:text-neutral-300 bg-neutral-800/40'
+                                                    } `}
                                             >
                                                 CLAIM {idx + 1}
                                                 {claim.origin === 'extracted' && <FileSearch className="w-2.5 h-2.5 opacity-50" />}
@@ -323,7 +317,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                             {currentClaim ? (
                                                 <>
                                                     {/* LEFT COLUMN: SCIENTIFIC OBSERVATIONS (FACTS) */}
-                                                    <div className={`flex - 1 p - 6 space - y - 16 border - r border - neutral - 800 ${ integrityViolation && executionMode !== 'scientific_explanation' ? 'blur-sm grayscale pointer-events-none' : '' } `}>
+                                                    <div className={`flex - 1 p - 6 space - y - 16 border - r border - neutral - 800 ${integrityViolation && executionMode !== 'scientific_explanation' ? 'blur-sm grayscale pointer-events-none' : ''} `}>
                                                         <div className="space-y-2">
                                                             <h4 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest border-b border-neutral-800 pb-2">
                                                                 Scientific Observation Layer
@@ -364,7 +358,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                     </div>
 
                                                     {/* RIGHT COLUMN: POLICY INTERPRETATION (JUDGMENT) */}
-                                                    <div className={`flex - 1 p - 6 space - y - 16 bg - black / 20 ${ integrityViolation && executionMode !== 'scientific_explanation' ? 'blur-sm grayscale pointer-events-none' : '' } `}>
+                                                    <div className={`flex - 1 p - 6 space - y - 16 bg - black / 20 ${integrityViolation && executionMode !== 'scientific_explanation' ? 'blur-sm grayscale pointer-events-none' : ''} `}>
                                                         {/* 🧪 Execution Profile (High-Level Synthesis) */}
                                                         <section>
                                                             <ExecutionProfileCard
