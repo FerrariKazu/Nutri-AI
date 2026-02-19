@@ -340,7 +340,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                         )}
 
                                                         <section className="pt-10 border-t border-neutral-800/50">
-                                                            <IntelligenceGraph claim={currentClaim} />
+                                                            <IntelligenceGraph trace={uiTrace} claim={currentClaim} />
                                                         </section>
 
                                                         {/* PubChem Hardened Compound View */}
