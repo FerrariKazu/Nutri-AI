@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Loader2, ChefHat, Sparkles, Database, Search, FlaskConical, ChevronDown, ChevronRight, BrainCircuit } from 'lucide-react';
+import { Send, Loader2, ChefHat, Sparkles, Database, Search, Flask, ChevronDown, ChevronRight, BrainCircuit } from 'lucide-react';
 import { getWebSocketURL } from '../config';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -36,7 +36,7 @@ const ReasoningAccordion = ({ steps }) => {
                             {steps.map((step, idx) => (
                                 <div key={idx} className="text-sm">
                                     <div className="flex items-center gap-2 mb-1">
-                                        {step.stage === 'chemistry' && <FlaskConical className="w-3 h-3 text-blue-500" />}
+                                        {step.stage === 'chemistry' && <Flask className="w-3 h-3 text-blue-500" />}
                                         {step.stage === 'nutrition' && <Database className="w-3 h-3 text-green-500" />}
                                         {step.stage === 'rag' && <Search className="w-3 h-3 text-orange-500" />}
                                         <span className="text-xs font-bold uppercase opacity-50">
