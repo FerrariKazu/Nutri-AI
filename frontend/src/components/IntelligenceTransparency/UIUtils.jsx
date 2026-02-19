@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, AlertTriangle, Info, CheckCircle2, Flask, HelpCircle } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, Info, CheckCircle2, Beaker, HelpCircle } from 'lucide-react';
 
 /**
  * Shared UI components for the Intelligence Transparency UI.

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowDown, Link2, Flask, Activity, Zap, ShieldCheck, ChevronDown, ChevronRight, ExternalLink, DatabaseZap } from 'lucide-react';
+import { ArrowDown, Link2, Beaker, Activity, Zap, ShieldCheck, ChevronDown, ChevronRight, ExternalLink, DatabaseZap } from 'lucide-react';
 import { TierBadge, Tooltip, formatConfidence } from './UIUtils';
 import { renderPermissions } from '../../contracts/renderPermissions';
 import UniProtAnnotation from './UniProtAnnotation';
@@ -50,7 +50,7 @@ const Tier2Mechanism = React.memo(({ trace, claim, expertMode }) => {
     }
 
     const stepIcons = {
-        'compound': Flask,
+        'compound': Beaker,
         'interaction': Zap,
         'physiology': Activity,
         'outcome': ShieldCheck
