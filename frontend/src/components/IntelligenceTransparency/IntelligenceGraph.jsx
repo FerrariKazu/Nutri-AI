@@ -8,25 +8,125 @@ import { Beaker, Target, Activity, ChevronRight } from 'lucide-react';
  * [MANDATE] Deterministic Molecule -> Receptor -> Perception UI
  * Visualizes the reasoning chain as a directed graph.
  */
-const IntelligenceGraph = ({ claim }) => {
-    // STRICT FIX: Handle nulls explicitly
+const IntelligenceGraph = ({ trace, claim }) => {
+    const isMechanistic = trace?.trace_variant === 'mechanistic';
+    const graph = trace?.graph || {};
+
+    // 🔬 [MECHANISTIC_V2] Dynamic Graph Rendering
+    if (isMechanistic) {
+        if (!graph.nodes || graph.nodes.length < 3) {
+            console.error("[GRAPH_ERROR] Mechanistic trace missing required nodes.", graph);
+            return (
+                <div className="p-6 border border-red-500/20 bg-red-500/5 rounded-xl">
+                    <div className="flex items-center gap-2 mb-2 text-red-400">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span className="text-xs font-bold uppercase">Mechanism Contract Violation</span>
+                    </div>
+                    <p className="text-[10px] text-red-400/80 font-mono">
+                        Trace mandated variant "mechanistic" but graph payload is under-populated.
+                        Source component failed to synthesize 3-tier causal chain.
+                    </p>
+                </div>
+            );
+        }
+
+        // Group nodes by type for structured layout
+        const nodesByType = graph.nodes.reduce((acc, node) => {
+            const type = node.type || 'other';
+            if (!acc[type]) acc[type] = [];
+            acc[type].push(node);
+            return acc;
+        }, {});
+
+        return (
+            <div className="space-y-8">
+                <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
+                    <div className="flex items-center gap-2">
+                        <Activity className="w-3.5 h-3.5 text-accent" />
+                        <h4 className="text-[10px] font-mono font-bold uppercase tracking-widest text-neutral-400">
+                            Dynamic Mechanistic Topology
+                        </h4>
+                    </div>
+                    <span className="text-[8px] font-mono text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/20 bg-purple-500/5">
+                        GENERATIVE_CAUSALITY_v2.0
+                    </span>
+                </div>
+
+                {/* Structured Causal View */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
+                    {/* Layer 1: Molecular/Compounds */}
+                    <div className="space-y-4">
+                        <div className="text-[9px] font-mono text-neutral-600 uppercase tracking-tighter text-center">Molecular Basis</div>
+                        {(nodesByType.compound || nodesByType.molecular || []).map((node, i) => (
+                            <Node
+                                key={node.id}
+                                icon={<Beaker className="w-3 h-3 text-purple-400" />}
+                                label={node.label}
+                                color="purple"
+                            />
+                        ))}
+                    </div>
+
+                    {/* Layer 2: Mechanisms/Processes */}
+                    <div className="space-y-4">
+                        <div className="text-[9px] font-mono text-neutral-600 uppercase tracking-tighter text-center">Causal Mechanism</div>
+                        {(nodesByType.mechanism || nodesByType.process || []).map((node, i) => (
+                            <Node
+                                key={node.id}
+                                icon={<Target className="w-3 h-3 text-orange-400" />}
+                                label={node.label}
+                                color="orange"
+                            />
+                        ))}
+                    </div>
+
+                    {/* Layer 3: Perception/Surface */}
+                    <div className="space-y-4">
+                        <div className="text-[9px] font-mono text-neutral-600 uppercase tracking-tighter text-center">Surface Effect</div>
+                        {(nodesByType.perception || nodesByType.surface || []).map((node, i) => (
+                            <Node
+                                key={node.id}
+                                icon={<Activity className="w-3 h-3 text-blue-400" />}
+                                label={node.label}
+                                color="blue"
+                            />
+                        ))}
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap gap-4 justify-center items-center opacity-40">
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-px bg-neutral-400" />
+                        <span className="text-[8px] font-mono uppercase">Direct Causal Link</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-px bg-neutral-400 border-dashed border-t" />
+                        <span className="text-[8px] font-mono uppercase">Theoretical Influence</span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // ──────────────────────────────
+    // 🏛️ LEGACY TEMPLATE (Fallback)
+    // ──────────────────────────────
     const compounds = claim.compounds || [];
     const receptors = claim.receptors || [];
     const perception_outputs = claim.perception_outputs || [];
 
-    console.log(`[GRAPH_PAINT] Rendering topology for ${claim.id}`);
+    console.log(`[GRAPH_PAINT] Rendering legacy topology for ${claim.id}`);
 
     return (
         <div className="space-y-6">
             <div className="flex items-center gap-2 mb-4">
                 <Activity className="w-3.5 h-3.5 text-accent" />
                 <h4 className="text-[10px] font-mono font-bold uppercase tracking-widest text-neutral-400">
-                    Mechanism Topology
+                    Mechanism Topology (Legacy)
                 </h4>
             </div>
 
             <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative">
-                {/* 1. Compounds Layer */}
                 <div className="flex flex-col gap-3 w-full md:w-1/3">
                     <span className="text-[9px] font-mono text-neutral-600 uppercase tracking-tighter text-center">Compounds</span>
                     {compounds.length > 0 ? compounds.map((c, i) => (
@@ -36,7 +136,6 @@ const IntelligenceGraph = ({ claim }) => {
 
                 <div className="hidden md:block"><Connector /></div>
 
-                {/* 2. Receptors Layer */}
                 <div className="flex flex-col gap-3 w-full md:w-1/3">
                     <span className="text-[9px] font-mono text-neutral-600 uppercase tracking-tighter text-center">Receptors</span>
                     {receptors.length > 0 ? receptors.map((r, i) => (
@@ -46,7 +145,6 @@ const IntelligenceGraph = ({ claim }) => {
 
                 <div className="hidden md:block"><Connector /></div>
 
-                {/* 3. Perception Layer */}
                 <div className="flex flex-col gap-3 w-full md:w-1/3">
                     <span className="text-[9px] font-mono text-neutral-600 uppercase tracking-tighter text-center">Perception</span>
                     {perception_outputs.length > 0 ? perception_outputs.map((p, i) => (
