@@ -9,6 +9,7 @@ import {
     Binary,
     Database
 } from 'lucide-react';
+import { formatMetric, formatConfidence } from './UIUtils';
 
 const ExecutionProfileCard = ({ metrics, epistemicStatus, executionMode }) => {
     // 🧠 Epistemic Color Mapping
