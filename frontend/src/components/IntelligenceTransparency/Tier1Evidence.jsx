@@ -150,7 +150,20 @@ const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
                         <p className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Knowledge Boundaries</p>
                     </div>
 
-                    {metrics.registrySnapshot?.scope ? (
+                    {trace?.trace_variant === 'mechanistic' ? (
+                        <div className="p-4 rounded-lg bg-purple-500/5 border border-purple-500/10 flex flex-col gap-2">
+                            <div className="flex items-center gap-2">
+                                <Activity className="w-3.5 h-3.5 text-purple-400" />
+                                <h4 className="text-[10px] font-mono font-bold uppercase tracking-widest text-purple-400">
+                                    Theoretical Grounding
+                                </h4>
+                            </div>
+                            <p className="text-[11px] text-neutral-400 leading-relaxed italic">
+                                This explanation uses a mechanistic causal chain. Epistemic status: <strong>{trace.epistemic_status?.toUpperCase() || 'THEORETICAL'}</strong>.
+                                Grounding is provided by the internal scientific logic registry rather than direct clinical trial citations.
+                            </p>
+                        </div>
+                    ) : metrics.registrySnapshot?.scope ? (
                         <div className="p-4 rounded-lg bg-neutral-900/40 border border-dashed border-neutral-800 flex flex-col gap-3">
                             <div className="flex items-center gap-3">
                                 <AlertCircle className="w-4 h-4 text-neutral-600" />
