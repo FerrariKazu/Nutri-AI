@@ -316,122 +316,117 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                             )}
 
                                             {currentClaim ? (
-                                                <>
-                                                    {/* LEFT COLUMN: SCIENTIFIC OBSERVATIONS (FACTS) */}
-                                                    <div className={`flex - 1 p - 6 space - y - 16 border - r border - neutral - 800 ${integrityViolation && executionMode !== 'scientific_explanation' ? 'blur-sm grayscale pointer-events-none' : ''} `}>
-                                                        <div className="space-y-2">
-                                                            <h4 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest border-b border-neutral-800 pb-2">
+                                                <div className="flex flex-col w-full">
+                                                    {/* 🔭 [PHASE 6] Scientific Observation Layer (Full Width Top) */}
+                                                    <div className="p-6 border-b border-neutral-800 bg-neutral-900/20">
+                                                        <div className="space-y-2 mb-6">
+                                                            <h4 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest border-b border-neutral-800 pb-2 flex items-center gap-2">
+                                                                <Activity className="w-3 h-3" />
                                                                 Scientific Observation Layer
                                                             </h4>
-                                                        </div>
-
-                                                        <section>
                                                             <EvidenceLineageViewer evidenceSet={currentClaim.evidence} />
-                                                        </section>
+                                                        </div>
+                                                    </div>
 
-                                                        {renderPermissions.canRenderTier2({ claims: [currentClaim] }).allowed && (
+                                                    {/* ⚖️ [PHASE 3] Main Split Grid (Inference vs Graph) */}
+                                                    <div className={`grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-0 min-h-[520px] ${integrityViolation && executionMode !== 'scientific_explanation' ? 'blur-sm grayscale pointer-events-none' : ''}`}>
+
+                                                        {/* LEFT COLUMN: INFERENCE PANEL (380px) */}
+                                                        <div className="p-6 space-y-12 border-r border-neutral-800 bg-black/10">
+                                                            <div className="space-y-2">
+                                                                <h4 className="text-[10px] font-bold text-blue-500/60 uppercase tracking-widest border-b border-neutral-800/50 pb-2">
+                                                                    Inference Chain
+                                                                </h4>
+                                                            </div>
+
+                                                            {/* 🧪 Execution Profile */}
+                                                            <section>
+                                                                <ExecutionProfileCard
+                                                                    metrics={metrics}
+                                                                    epistemicStatus={epistemicStatus}
+                                                                    executionMode={executionMode}
+                                                                />
+                                                            </section>
+
+                                                            {renderPermissions.canRenderTier2({ claims: [currentClaim] }).allowed && (
+                                                                <section>
+                                                                    <Tier2Mechanism
+                                                                        trace={uiTrace}
+                                                                        claim={currentClaim}
+                                                                        expertMode={isExpertMode}
+                                                                    />
+                                                                </section>
+                                                            )}
+
                                                             <section className="pt-10 border-t border-neutral-800/50">
-                                                                <Tier2Mechanism
-                                                                    trace={uiTrace}
-                                                                    claim={currentClaim}
+                                                                <ConfidenceTracker
+                                                                    uiTrace={uiTrace}
+                                                                    claimIdx={selectedClaimIdx}
                                                                     expertMode={isExpertMode}
                                                                 />
                                                             </section>
-                                                        )}
 
-                                                        <section className="pt-10 border-t border-neutral-800/50">
-                                                            <IntelligenceGraph trace={uiTrace} claim={currentClaim} />
-                                                        </section>
-
-                                                        {/* PubChem Hardened Compound View */}
-                                                        {uiTrace.metrics.pubchemUsed && (
-                                                            <section className="pt-10 border-t border-neutral-800/50 p-4 rounded-xl bg-green-500/5 border border-green-500/10 shadow-[inner_0_0_20px_rgba(34,197,94,0.05)]">
-                                                                <div className="flex items-center gap-2 mb-4">
-                                                                    <ShieldCheck className="w-3.5 h-3.5 text-green-500" />
-                                                                    <span className="text-[10px] font-bold text-green-400 uppercase tracking-widest">Molecular Identity Enforced</span>
-                                                                </div>
-                                                                <div className="flex items-center gap-3">
-                                                                    <Hash className="w-3 h-3 text-neutral-600" />
-                                                                    <span className="text-[9px] font-mono text-neutral-500 truncate select-all">{uiTrace.metrics.proofHash}</span>
-                                                                </div>
+                                                            {/* Policy Mapping */}
+                                                            <section className="pt-10 border-t border-neutral-800/50">
+                                                                <h5 className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest mb-4">Governance & Authority</h5>
+                                                                <PolicyAuthorityCard
+                                                                    policy={{
+                                                                        policy_id: uiTrace.metrics.policyId,
+                                                                        policy_version: uiTrace.metrics.policyVersion,
+                                                                        policy_hash: uiTrace.metrics.policyHash,
+                                                                        selection_reason: uiTrace.metrics.policySelectionReason,
+                                                                        author: currentClaim.confidence?.author || "GOVERNANCE_BOARD",
+                                                                        review_board: currentClaim.confidence?.review_board || "SIMULATED_BOARD",
+                                                                        approval_date: currentClaim.confidence?.approval_date || "2026-02-16",
+                                                                        attestation: currentClaim.confidence?.attestation
+                                                                    }}
+                                                                    initiallyExpanded={false}
+                                                                />
                                                             </section>
-                                                        )}
-                                                    </div>
 
-                                                    {/* RIGHT COLUMN: POLICY INTERPRETATION (JUDGMENT) */}
-                                                    <div className={`flex - 1 p - 6 space - y - 16 bg - black / 20 ${integrityViolation && executionMode !== 'scientific_explanation' ? 'blur-sm grayscale pointer-events-none' : ''} `}>
-                                                        {/* 🧪 Execution Profile (High-Level Synthesis) */}
-                                                        <section>
-                                                            <ExecutionProfileCard
-                                                                metrics={metrics}
-                                                                epistemicStatus={epistemicStatus}
-                                                                executionMode={executionMode}
-                                                            />
-                                                        </section>
+                                                            {renderPermissions.canRenderTier3(uiTrace).allowed && (
+                                                                <section className="pt-10 border-t border-neutral-800/50">
+                                                                    <Tier3Causality
+                                                                        uiTrace={uiTrace}
+                                                                        claimIdx={selectedClaimIdx}
+                                                                        expertMode={isExpertMode}
+                                                                    />
+                                                                </section>
+                                                            )}
 
-                                                        <div className="space-y-2">
-                                                            <h4 className="text-[10px] font-bold text-blue-500/60 uppercase tracking-widest border-b border-neutral-800/50 pb-2 text-right">
-                                                                Policy Interpretation Layer
-                                                            </h4>
+                                                            {renderPermissions.canRenderTier4(uiTrace).allowed && (
+                                                                <section className="pt-10 border-t border-neutral-800/50">
+                                                                    <Tier4Temporal
+                                                                        uiTrace={uiTrace}
+                                                                        claimIdx={selectedClaimIdx}
+                                                                        expertMode={isExpertMode}
+                                                                    />
+                                                                </section>
+                                                            )}
                                                         </div>
 
-                                                        {/* Policy Authority - Collapsed by default for Scientific Mode */}
-                                                        <section>
-                                                            <PolicyAuthorityCard
-                                                                policy={{
-                                                                    policy_id: uiTrace.metrics.policyId,
-                                                                    policy_version: uiTrace.metrics.policyVersion,
-                                                                    policy_hash: uiTrace.metrics.policyHash,
-                                                                    selection_reason: uiTrace.metrics.policySelectionReason,
-                                                                    author: currentClaim.confidence?.author || "GOVERNANCE_BOARD",
-                                                                    review_board: currentClaim.confidence?.review_board || "SIMULATED_BOARD",
-                                                                    approval_date: currentClaim.confidence?.approval_date || "2026-02-16",
-                                                                    attestation: currentClaim.confidence?.attestation
-                                                                }}
-                                                                initiallyExpanded={executionMode !== 'scientific_explanation'}
-                                                            />
-                                                        </section>
+                                                        {/* RIGHT COLUMN: GRAPH PANEL (Flexible) */}
+                                                        <div className="p-8 flex flex-col h-full bg-neutral-900/10">
+                                                            <div className="flex-1">
+                                                                <IntelligenceGraph trace={uiTrace} claim={currentClaim} />
+                                                            </div>
 
-                                                        <section className="pt-10 border-t border-neutral-800/50">
-                                                            <RuleFiringTimeline breakdown={currentClaim.confidence?.breakdown} />
-                                                        </section>
-
-                                                        {/* Registry Snapshot - Hidden for Scientific Mode if not relevant */}
-                                                        {executionMode !== 'scientific_explanation' && (
-                                                            <section className="pt-10 border-t border-neutral-800/50">
-                                                                <RegistrySnapshot snapshot={uiTrace.metrics.registrySnapshot} />
-                                                            </section>
-                                                        )}
-
-                                                        {renderPermissions.canRenderTier3(uiTrace).allowed && (
-                                                            <section className="pt-10 border-t border-neutral-800/50">
-                                                                <Tier3Causality
-                                                                    uiTrace={uiTrace}
-                                                                    claimIdx={selectedClaimIdx}
-                                                                    expertMode={isExpertMode}
-                                                                />
-                                                            </section>
-                                                        )}
-
-                                                        {renderPermissions.canRenderTier4(uiTrace).allowed && (
-                                                            <section className="pt-10 border-t border-neutral-800/50">
-                                                                <Tier4Temporal
-                                                                    uiTrace={uiTrace}
-                                                                    claimIdx={selectedClaimIdx}
-                                                                    expertMode={isExpertMode}
-                                                                />
-                                                            </section>
-                                                        )}
-
-                                                        <section className="pt-10 border-t border-neutral-800/50">
-                                                            <ConfidenceTracker
-                                                                uiTrace={uiTrace}
-                                                                claimIdx={selectedClaimIdx}
-                                                                expertMode={isExpertMode}
-                                                            />
-                                                        </section>
+                                                            {/* PubChem Hardened View (Bottom of Graph) */}
+                                                            {uiTrace.metrics.pubchemUsed && (
+                                                                <section className="mt-12 p-4 rounded-xl bg-green-500/5 border border-green-500/10 shadow-[inner_0_0_20px_rgba(34,197,94,0.05)]">
+                                                                    <div className="flex items-center gap-2 mb-3">
+                                                                        <ShieldCheck className="w-3.5 h-3.5 text-green-500" />
+                                                                        <span className="text-[10px] font-bold text-green-400 uppercase tracking-widest">Molecular Identity Enforced</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-3">
+                                                                        <Hash className="w-3 h-3 text-neutral-600" />
+                                                                        <span className="text-[9px] font-mono text-neutral-500 truncate select-all">{uiTrace.metrics.proofHash}</span>
+                                                                    </div>
+                                                                </section>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </>
+                                                </div>
                                             ) : (
                                                 <div className="w-full py-32 flex flex-col items-center opacity-40">
                                                     <ZapOff className="w-8 h-8 text-neutral-600 mb-4" />
