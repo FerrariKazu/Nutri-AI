@@ -158,7 +158,7 @@ const Tier2Mechanism = React.memo(({ trace, claim, expertMode }) => {
             </div>
 
             {/* Path Confidence (Expert Mode) - Strictly Explicit */}
-            {expertMode && (
+            {expertMode && mechanism.weakest_link_confidence > 0 && (
                 <div className="mt-4 pt-4 border-t border-neutral-800/50 flex items-center justify-between bg-neutral-950/10 p-2 rounded">
                     <div className="flex items-center gap-2">
                         <span className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Weakest Link Confidence</span>
