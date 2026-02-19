@@ -158,5 +158,3 @@ const EmptyNode = () => null;
 const Connector = () => null;
 
 export default IntelligenceGraph;
-
-export default IntelligenceGraph;
