@@ -21,7 +21,7 @@ const IntegrityBarrier = ({ type, missingFields, context }) => {
                 </div>
 
                 <div className="space-y-2">
-                    <h2 className="text-xl font-black text-red-500 uppercase tracking-tighter">
+                    <h2 className="text-xl font-bold text-red-500 uppercase tracking-tight">
                         Integrity Violation Detected
                     </h2>
                     <p className="text-[10px] font-mono text-red-400/60 uppercase tracking-widest">
@@ -32,7 +32,7 @@ const IntegrityBarrier = ({ type, missingFields, context }) => {
                 <div className="p-4 rounded-lg bg-red-500/5 border border-red-500/10 space-y-3">
                     <div className="flex items-center gap-2 justify-center text-red-400">
                         <ShieldAlert className="w-4 h-4" />
-                        <span className="text-xs font-bold font-mono">CRITICAL_SCHEMA_GAP</span>
+                        <span className="text-xs font-bold font-mono">CRITICAL SCHEMA GAP</span>
                     </div>
 
                     <div className="space-y-1">
@@ -44,18 +44,18 @@ const IntegrityBarrier = ({ type, missingFields, context }) => {
                     </div>
                 </div>
 
-                <div className="text-[9px] font-mono text-neutral-500 leading-relaxed text-left max-w-[280px] mx-auto italic">
+                <div className="text-[9px] font-medium text-neutral-500 leading-relaxed text-left max-w-[280px] mx-auto italic">
                     Rendering aborted to prevent misleading partial judgments. This trace contains unverified or corrupted epistemological mappings.
                     {context && (
-                        <div className="mt-2 p-2 rounded bg-neutral-900 border border-neutral-800 text-neutral-400 not-italic">
-                            Ctx: {context}
+                        <div className="mt-2 p-2 rounded bg-neutral-900 border border-neutral-800 text-neutral-400 not-italic font-mono text-[9px]">
+                            Context: {context}
                         </div>
                     )}
                 </div>
 
                 <div className="pt-4 flex items-center gap-2 justify-center opacity-30 hover:opacity-100 transition-opacity">
                     <FileWarning className="w-3 h-3 text-neutral-600" />
-                    <span className="text-[8px] font-mono text-neutral-600 uppercase tracking-tighter">
+                    <span className="text-[8px] font-mono text-neutral-600 uppercase tracking-widest">
                         Institution-Grade Audit Guard active
                     </span>
                 </div>

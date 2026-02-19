@@ -30,7 +30,7 @@ const IntelligenceGraph = ({ claim }) => {
                 <div className="flex flex-col gap-3 w-full md:w-1/3">
                     <span className="text-[9px] font-mono text-neutral-600 uppercase tracking-tighter text-center">Compounds</span>
                     {compounds.length > 0 ? compounds.map((c, i) => (
-                        <Node key={i} icon={<FlaskConical className="w-3 h-3 text-blue-400" />} label={c} color="blue" />
+                        <Node key={i} icon={<FlaskConical className="w-3 h-3 text-green-400" />} label={c} color="green" />
                     )) : <EmptyNode label="Unspecified" />}
                 </div>
 
@@ -40,7 +40,7 @@ const IntelligenceGraph = ({ claim }) => {
                 <div className="flex flex-col gap-3 w-full md:w-1/3">
                     <span className="text-[9px] font-mono text-neutral-600 uppercase tracking-tighter text-center">Receptors</span>
                     {receptors.length > 0 ? receptors.map((r, i) => (
-                        <Node key={i} icon={<Target className="w-3 h-3 text-purple-400" />} label={r} color="purple" />
+                        <Node key={i} icon={<Target className="w-3 h-3 text-blue-400" />} label={r} color="blue" />
                     )) : <EmptyNode label="Theoretical" />}
                 </div>
 
@@ -70,14 +70,14 @@ const IntelligenceGraph = ({ claim }) => {
 
 const Node = ({ icon, label, color, subtitle }) => {
     const colors = {
+        green: "bg-green-500/10 border-green-500/20 text-green-200",
         blue: "bg-blue-500/10 border-blue-500/20 text-blue-200",
-        purple: "bg-purple-500/10 border-purple-500/20 text-purple-200",
         amber: "bg-amber-500/10 border-amber-500/20 text-amber-100"
     };
 
     return (
         <motion.div
-            whileHover={{ scale: 1.02, y: -2 }}
+            whileHover={{ scale: 1.01, y: -1 }}
             className={`flex flex-col p-3 rounded-lg border shadow-sm ${colors[color]} backdrop-blur-md relative group`}
         >
             <div className="flex items-center gap-3">
@@ -85,12 +85,10 @@ const Node = ({ icon, label, color, subtitle }) => {
                     {icon}
                 </div>
                 <div className="flex flex-col">
-                    <span className="text-[11px] font-bold font-mono tracking-tight uppercase">{label}</span>
-                    {subtitle && <span className="text-[8px] font-mono opacity-50 uppercase tracking-tighter">via {subtitle}</span>}
+                    <span className="text-[11px] font-semibold font-mono tracking-tight uppercase">{label}</span>
+                    {subtitle && <span className="text-[8px] font-mono opacity-60 uppercase tracking-tight">via {subtitle}</span>}
                 </div>
             </div>
-            {/* Glow effect on hover */}
-            <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg" />
         </motion.div>
     );
 };

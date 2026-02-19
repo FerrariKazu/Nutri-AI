@@ -62,7 +62,7 @@ const Tier4Temporal = React.memo(({ uiTrace, claimIdx, expertMode }) => {
                     <h5 className="text-[10px] font-bold uppercase tracking-widest opacity-80">
                         Decision State
                     </h5>
-                    <p className="text-[12px] font-mono font-bold mt-1">
+                    <p className="text-[12px] font-mono font-bold mt-1 tracking-tight">
                         {changeType}
                     </p>
                 </div>
@@ -96,9 +96,10 @@ const Tier4Temporal = React.memo(({ uiTrace, claimIdx, expertMode }) => {
             )}
 
             {temporal.saturationTriggered && (
-                <div className="mt-2 p-2 rounded bg-amber-500/5 border border-amber-500/10 text-center">
-                    <p className="text-[9px] text-amber-500/70 font-mono">
-                        SATURATION_TRIGGERED: TRUE
+                <div className="mt-2 p-2 rounded bg-amber-500/5 border border-amber-500/10 text-center flex items-center justify-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                    <p className="text-[9px] text-amber-500/90 font-mono uppercase tracking-widest">
+                        Context Saturation Reached
                     </p>
                 </div>
             )}

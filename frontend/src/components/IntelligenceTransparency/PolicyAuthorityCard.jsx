@@ -22,14 +22,16 @@ const PolicyAuthorityCard = ({ policy }) => {
                 <div className="flex items-start justify-between mb-4">
                     <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                            <h3 className="text-xs font-black text-neutral-200 uppercase tracking-tight">
+                            <h3 className="text-xs font-bold text-neutral-200 uppercase tracking-tight">
                                 {policy.policy_id}
                             </h3>
                             <span className="text-[8px] font-mono bg-neutral-800 text-neutral-400 px-1.5 py-0.5 rounded border border-neutral-700">
                                 v{policy.policy_version}
                             </span>
                         </div>
-                        <p className="text-[9px] font-mono text-neutral-500 uppercase">Reason: {policy.selection_reason || 'UNDEFINED'}</p>
+                        <p className="text-[9px] text-neutral-500 leading-snug max-w-[250px]">
+                            <span className="font-semibold uppercase tracking-wider text-neutral-600">Reason:</span> {policy.selection_reason || 'Policy selected based on domain relevance.'}
+                        </p>
                     </div>
                     <ShieldCheck className="w-5 h-5 text-blue-500/50" />
                 </div>
@@ -38,31 +40,31 @@ const PolicyAuthorityCard = ({ policy }) => {
                     <div className="space-y-1">
                         <div className="flex items-center gap-1.5 text-neutral-500">
                             <User className="w-3 h-3" />
-                            <span className="uppercase text-[8px] font-bold">Author</span>
+                            <span className="uppercase text-[8px] font-semibold tracking-wider">Author</span>
                         </div>
-                        <p className="text-neutral-300 font-mono tracking-tighter">{policy.author || 'NULL'}</p>
+                        <p className="text-neutral-300 font-mono tracking-tight">{policy.author || 'NULL'}</p>
                     </div>
 
                     <div className="space-y-1">
                         <div className="flex items-center gap-1.5 text-neutral-500">
                             <Landmark className="w-3 h-3" />
-                            <span className="uppercase text-[8px] font-bold">Review Board</span>
+                            <span className="uppercase text-[8px] font-semibold tracking-wider">Review Board</span>
                         </div>
-                        <p className="text-neutral-300 font-mono tracking-tighter">{policy.review_board || 'NULL'}</p>
+                        <p className="text-neutral-300 font-mono tracking-tight">{policy.review_board || 'NULL'}</p>
                     </div>
 
                     <div className="space-y-1">
                         <div className="flex items-center gap-1.5 text-neutral-500">
                             <Calendar className="w-3 h-3" />
-                            <span className="uppercase text-[8px] font-bold">Approval Date</span>
+                            <span className="uppercase text-[8px] font-semibold tracking-wider">Approval Date</span>
                         </div>
-                        <p className="text-neutral-300 font-mono tracking-tighter">{policy.approval_date || 'NULL'}</p>
+                        <p className="text-neutral-300 font-mono tracking-tight">{policy.approval_date || 'NULL'}</p>
                     </div>
 
                     <div className="space-y-1">
                         <div className="flex items-center gap-1.5 text-neutral-500">
                             <Hash className="w-3 h-3" />
-                            <span className="uppercase text-[8px] font-bold">Document Hash</span>
+                            <span className="uppercase text-[8px] font-semibold tracking-wider">Document Hash</span>
                         </div>
                         <p className="text-blue-400/60 font-mono text-[8px] truncate max-w-[120px]" title={policy.policy_hash}>
                             {policy.policy_hash || 'NON_DETERMINISTIC'}

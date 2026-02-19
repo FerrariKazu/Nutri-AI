@@ -40,10 +40,19 @@ const Tier3Causality = React.memo(({ uiTrace, claimIdx, expertMode }) => {
             <div className="space-y-4">
                 <div className="flex items-center gap-2">
                     {causality.applicability !== null ? (
-                        <ConfidenceMeter
-                            value={causality.applicability}
-                            label="Context Applicability Match"
-                        />
+                        <div className="w-full">
+                            <ConfidenceMeter
+                                value={causality.applicability}
+                                label="Context Applicability Match"
+                            />
+                            {/* PARTIAL COVERAGE WARNING (Phase 5) */}
+                            {causality.applicability < 0.5 && (
+                                <div className="mt-2 text-[10px] text-amber-500 font-medium italic flex items-center gap-1.5 opacity-80">
+                                    <ShieldAlert className="w-3 h-3" />
+                                    <span>Signal attenuation due to partial context overlap.</span>
+                                </div>
+                            )}
+                        </div>
                     ) : (
                         <span className="text-[10px] text-neutral-600 font-mono">Applicability: NULL</span>
                     )}
@@ -57,7 +66,7 @@ const Tier3Causality = React.memo(({ uiTrace, claimIdx, expertMode }) => {
                                 <p className="text-[10px] font-bold text-amber-500 uppercase tracking-tight">Context Gap</p>
                             </div>
                             <p className="text-[11px] text-neutral-400 mt-1 leading-snug">
-                                Missing parameters: <span className="font-bold text-amber-400/80">{missingFields.join(', ')}</span>
+                                Missing parameters: <span className="font-semibold text-amber-400/80">{missingFields.join(', ')}</span>
                             </p>
                         </div>
                     </div>
@@ -68,7 +77,7 @@ const Tier3Causality = React.memo(({ uiTrace, claimIdx, expertMode }) => {
             <div className="pt-6 border-t border-neutral-800/50 space-y-4">
                 {causality.riskCount !== null && (
                     <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-neutral-500 font-mono uppercase">Risk Flags</span>
+                        <span className="text-[10px] text-neutral-500 font-medium uppercase tracking-wide">Risk Flags</span>
                         <span className="text-[11px] font-mono font-bold text-neutral-300">{causality.riskCount}</span>
                     </div>
                 )}
@@ -91,7 +100,7 @@ const Tier3Causality = React.memo(({ uiTrace, claimIdx, expertMode }) => {
             {/* Final Decision Gate - RAW ENUM */}
             <div className="pt-4 border-t border-neutral-800/50">
                 <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono text-neutral-500 uppercase">Decision</span>
+                    <span className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide">Decision</span>
                     <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${decision === 'ALLOW' ? 'text-green-400 border-green-900 bg-green-900/20' :
                         decision === 'WITHHOLD' ? 'text-red-400 border-red-900 bg-red-900/20' :
                             'text-amber-400 border-amber-900 bg-amber-900/20'

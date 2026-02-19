@@ -97,10 +97,10 @@ const Tier2Mechanism = React.memo(({ trace, claim, expertMode }) => {
                                     className="w-full text-left flex items-center justify-between group/title"
                                 >
                                     <div className="flex items-center gap-2">
-                                        <h5 className="text-[11px] font-bold text-neutral-200 uppercase tracking-tight group-hover/title:text-blue-400 transition-colors">
+                                        <h5 className="text-[11px] font-semibold text-neutral-200 tracking-tight group-hover/title:text-blue-400 transition-colors">
                                             {step.entity_name}
                                         </h5>
-                                        <div className={`text-[7px] font-black uppercase px-1 py-0.5 rounded border ${step.verified ? 'text-blue-400 border-blue-500/30' : 'text-neutral-500 border-neutral-800'}`}>
+                                        <div className={`text-[9px] px-1.5 py-0.5 rounded border ${step.verified ? 'text-blue-400 border-blue-500/30' : 'text-neutral-500 border-neutral-800'}`}>
                                             {step.verified ? 'Verified' : 'Theoretical'}
                                         </div>
                                         {step.uniprot_id && (
@@ -121,7 +121,7 @@ const Tier2Mechanism = React.memo(({ trace, claim, expertMode }) => {
                                     </div>
                                 </button>
 
-                                <p className="text-[11px] text-neutral-500 leading-snug pr-4">
+                                <p className="text-[11px] text-neutral-400 leading-relaxed pr-4">
                                     {step.description}
                                 </p>
 
@@ -132,11 +132,11 @@ const Tier2Mechanism = React.memo(({ trace, claim, expertMode }) => {
                                             <div className="flex items-center gap-2 pt-1 pb-2 border-b border-neutral-800/30 mb-2">
                                                 <ExternalLink className="w-2.5 h-2.5 text-blue-500/40" />
                                                 <span className="text-[9px] font-mono text-blue-400/60 underline cursor-pointer hover:text-blue-400 transition-colors">
-                                                    Authoritative Source: {step.evidence_source}
+                                                    Source: {step.evidence_source}
                                                 </span>
                                             </div>
                                         ) : (
-                                            <p className="text-[9px] text-neutral-600 italic">No specific source metadata for this step.</p>
+                                            <p className="text-[9px] text-neutral-600 italic">No specific source metadata available.</p>
                                         )}
 
                                         {/* 🧬 Isolated UniProt Annotation */}
@@ -158,13 +158,13 @@ const Tier2Mechanism = React.memo(({ trace, claim, expertMode }) => {
             </div>
 
             {/* Path Confidence (Expert Mode) - Strictly Explicit */}
-            {expertMode && mechanism.weakest_link_confidence !== null && (
+            {expertMode && (
                 <div className="mt-4 pt-4 border-t border-neutral-800/50 flex items-center justify-between bg-neutral-950/10 p-2 rounded">
                     <div className="flex items-center gap-2">
                         <span className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Weakest Link Confidence</span>
                     </div>
                     <span className={`text-[11px] font-bold font-mono ${mechanism.weakest_link_confidence < 0.4 ? 'text-amber-500' : 'text-blue-400'}`}>
-                        {Math.round(mechanism.weakest_link_confidence * 100)}%
+                        {formatConfidence(mechanism.weakest_link_confidence)}
                     </span>
                 </div>
             )}

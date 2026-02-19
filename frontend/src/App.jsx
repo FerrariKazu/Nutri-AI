@@ -212,9 +212,13 @@ function App() {
         cleanupStream('IDLE');
 
         const newRunId = crypto.randomUUID();
-        const pipeline = "flavor_explainer"; // Default pipeline
+        // CHANGED: Dynamic Pipeline Latching (v2.0)
+        // We do not hardcode 'flavor_explainer' anymore because the backend determines 
+        // the pipeline (flavor vs mechanistic) at runtime.
+        let detectedPipeline = null;
+
         setActiveRunId(newRunId);
-        setActivePipeline(pipeline);
+        setActivePipeline(null); // Will be set by first trace
 
         setStreamStatus('STREAMING');
         setTurnCount(prev => prev + 1);
@@ -423,9 +427,17 @@ function App() {
                     console.warn(`[RUN_GUARD] REJECTED: run=${incomingRunId} (expected ${newRunId})`);
                     return;
                 }
-                if (incomingPipeline && incomingPipeline !== pipeline) {
-                    console.warn(`[PIPELINE_GUARD] REJECTED: pipeline=${incomingPipeline} (expected ${pipeline})`);
-                    return;
+
+                // Dynamic Logic: Latch onto the first pipeline we see for this run
+                if (incomingPipeline) {
+                    if (!detectedPipeline) {
+                        detectedPipeline = incomingPipeline;
+                        setActivePipeline(incomingPipeline);
+                        console.log(`[PIPELINE_GUARD] LATCHED onto pipeline: ${incomingPipeline}`);
+                    } else if (incomingPipeline !== detectedPipeline) {
+                        console.warn(`[PIPELINE_GUARD] REJECTED: pipeline=${incomingPipeline} (locked to ${detectedPipeline})`);
+                        return;
+                    }
                 }
 
                 resetFailsafe();

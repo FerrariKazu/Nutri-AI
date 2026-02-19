@@ -163,21 +163,30 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
             >
                 <div className="flex items-center gap-3 text-left">
                     <div className="p-2 rounded-lg bg-accent/10 text-accent group-hover:scale-110 group-hover:bg-accent/20 transition-all duration-500">
-                        <Brain className="w-4 h-4" />
+                        {executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer' ? (
+                            <FlaskConical className="w-4 h-4" />
+                        ) : (
+                            <Brain className="w-4 h-4" />
+                        )}
                     </div>
                     <div className="flex flex-col">
                         <div className="flex items-center gap-2">
-                            <h2 className="text-xl font-black text-white tracking-tighter uppercase italic">
+                            <h2 className="text-xl font-bold text-white tracking-tight uppercase italic">
                                 Nutri Intelligence
                             </h2>
-                            <div className="px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 flex items-center gap-1.5">
-                                <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-                                <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">
-                                    {executionMode.replace(/_/g, ' ')}
+                            <div className={`px-2 py-0.5 rounded border flex items-center gap-1.5 ${executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer'
+                                    ? 'bg-purple-500/10 border-purple-500/20'
+                                    : 'bg-blue-500/10 border-blue-500/20'
+                                }`}>
+                                <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer' ? 'bg-purple-400' : 'bg-blue-400'
+                                    }`} />
+                                <span className={`text-[9px] font-bold uppercase tracking-widest ${executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer' ? 'text-purple-400' : 'text-blue-400'
+                                    }`}>
+                                    {executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer' ? 'SCIENTIFIC EXPLANATION' : executionMode.replace(/_/g, ' ')}
                                 </span>
                             </div>
                         </div>
-                        <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-[0.3em] ml-1">
+                        <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest ml-1">
                             Scientific Audit Terminal • Epistemic Status: <span style={{ color: statusColor }}>{epistemicStatus.replace(/_/g, ' ')}</span>
                         </p>
                     </div>
@@ -296,7 +305,8 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                         </div>
                                     ) : (
                                         <>
-                                            {integrityViolation && (
+                                            {/* Integrity Barrier - Filtered for Scientific Mode */}
+                                            {integrityViolation && executionMode !== 'scientific_explanation' && (
                                                 <IntegrityBarrier
                                                     type={integrityViolation.type}
                                                     missingFields={integrityViolation.missingFields}
@@ -307,9 +317,9 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                             {currentClaim ? (
                                                 <>
                                                     {/* LEFT COLUMN: SCIENTIFIC OBSERVATIONS (FACTS) */}
-                                                    <div className={`flex-1 p-6 space-y-12 border-r border-neutral-800 ${integrityViolation ? 'blur-sm grayscale pointer-events-none' : ''}`}>
+                                                    <div className={`flex-1 p-6 space-y-16 border-r border-neutral-800 ${integrityViolation && executionMode !== 'scientific_explanation' ? 'blur-sm grayscale pointer-events-none' : ''}`}>
                                                         <div className="space-y-2">
-                                                            <h4 className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.2em] border-b border-neutral-800 pb-2">
+                                                            <h4 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest border-b border-neutral-800 pb-2">
                                                                 Scientific Observation Layer
                                                             </h4>
                                                         </div>
@@ -337,7 +347,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                             <section className="pt-10 border-t border-neutral-800/50 p-4 rounded-xl bg-green-500/5 border border-green-500/10 shadow-[inner_0_0_20px_rgba(34,197,94,0.05)]">
                                                                 <div className="flex items-center gap-2 mb-4">
                                                                     <ShieldCheck className="w-3.5 h-3.5 text-green-500" />
-                                                                    <span className="text-[10px] font-black text-green-400 uppercase tracking-widest">Molecular Identity Enforced</span>
+                                                                    <span className="text-[10px] font-bold text-green-400 uppercase tracking-widest">Molecular Identity Enforced</span>
                                                                 </div>
                                                                 <div className="flex items-center gap-3">
                                                                     <Hash className="w-3 h-3 text-neutral-600" />
@@ -348,7 +358,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                     </div>
 
                                                     {/* RIGHT COLUMN: POLICY INTERPRETATION (JUDGMENT) */}
-                                                    <div className={`flex-1 p-6 space-y-12 bg-black/20 ${integrityViolation ? 'blur-sm grayscale pointer-events-none' : ''}`}>
+                                                    <div className={`flex-1 p-6 space-y-16 bg-black/20 ${integrityViolation && executionMode !== 'scientific_explanation' ? 'blur-sm grayscale pointer-events-none' : ''}`}>
                                                         {/* 🧪 Execution Profile (High-Level Synthesis) */}
                                                         <section>
                                                             <ExecutionProfileCard
@@ -359,11 +369,12 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                         </section>
 
                                                         <div className="space-y-2">
-                                                            <h4 className="text-[10px] font-black text-blue-500/60 uppercase tracking-[0.2em] border-b border-neutral-800/50 pb-2 text-right">
+                                                            <h4 className="text-[10px] font-bold text-blue-500/60 uppercase tracking-widest border-b border-neutral-800/50 pb-2 text-right">
                                                                 Policy Interpretation Layer
                                                             </h4>
                                                         </div>
 
+                                                        {/* Policy Authority - Collapsed by default for Scientific Mode */}
                                                         <section>
                                                             <PolicyAuthorityCard
                                                                 policy={{
@@ -376,6 +387,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                                     approval_date: currentClaim.confidence?.approval_date || "2026-02-16",
                                                                     attestation: currentClaim.confidence?.attestation
                                                                 }}
+                                                                initiallyExpanded={executionMode !== 'scientific_explanation'}
                                                             />
                                                         </section>
 
@@ -383,9 +395,12 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                             <RuleFiringTimeline breakdown={currentClaim.confidence?.breakdown} />
                                                         </section>
 
-                                                        <section className="pt-10 border-t border-neutral-800/50">
-                                                            <RegistrySnapshot snapshot={uiTrace.metrics.registrySnapshot} />
-                                                        </section>
+                                                        {/* Registry Snapshot - Hidden for Scientific Mode if not relevant */}
+                                                        {executionMode !== 'scientific_explanation' && (
+                                                            <section className="pt-10 border-t border-neutral-800/50">
+                                                                <RegistrySnapshot snapshot={uiTrace.metrics.registrySnapshot} />
+                                                            </section>
+                                                        )}
 
                                                         {renderPermissions.canRenderTier3(uiTrace).allowed && (
                                                             <section className="pt-10 border-t border-neutral-800/50">
@@ -431,11 +446,11 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                         )}
 
                         {/* 🛡️ Knowledge Limitation Declaration (Requirement Upgrade 27.6) */}
-                        <div className="mx-6 mb-6 p-4 rounded bg-neutral-900/50 border border-neutral-800/50">
+                        <div className="mx-6 mb-6 p-4 rounded bg-neutral-900/50 border border-neutral-800/50 opacity-80 hover:opacity-100 transition-opacity">
                             <div className="flex items-start gap-3">
                                 <Info className="w-3.5 h-3.5 text-neutral-500 mt-0.5" />
                                 <div className="space-y-1">
-                                    <span className="text-[9px] font-black text-neutral-500 uppercase tracking-widest">Knowledge Limitation Declaration</span>
+                                    <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest">Knowledge Limitation</span>
                                     <p className="text-[10px] text-neutral-600 leading-relaxed italic">
                                         This execution reflects only indexed registry data and formalized policy rules.
                                         Absence of evidence is not evidence of absence. All biological mechanisms are
