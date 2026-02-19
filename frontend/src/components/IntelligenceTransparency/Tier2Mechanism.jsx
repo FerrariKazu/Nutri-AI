@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowDown, Link2, FlaskConical, Activity, Zap, ShieldCheck, ChevronDown, ChevronRight, ExternalLink, DatabaseZap } from 'lucide-react';
+import { ArrowDown, Link2, Flask, Activity, Zap, ShieldCheck, ChevronDown, ChevronRight, ExternalLink, DatabaseZap } from 'lucide-react';
 import { TierBadge, Tooltip, formatConfidence } from './UIUtils';
 import { renderPermissions } from '../../contracts/renderPermissions';
 import UniProtAnnotation from './UniProtAnnotation';
