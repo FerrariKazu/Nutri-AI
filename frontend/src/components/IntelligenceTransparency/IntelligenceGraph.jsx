@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { FlaskConical, Target, Activity, ChevronRight } from 'lucide-react';
+import { Flask, Target, Activity, ChevronRight } from 'lucide-react';
 
 /**
  * IntelligenceGraph
@@ -30,7 +30,7 @@ const IntelligenceGraph = ({ claim }) => {
                 <div className="flex flex-col gap-3 w-full md:w-1/3">
                     <span className="text-[9px] font-mono text-neutral-600 uppercase tracking-tighter text-center">Compounds</span>
                     {compounds.length > 0 ? compounds.map((c, i) => (
-                        <Node key={i} icon={<FlaskConical className="w-3 h-3 text-green-400" />} label={c} color="green" />
+                        <Node key={i} icon={<Flask className="w-3 h-3 text-green-400" />} label={c} color="green" />
                     )) : <EmptyNode label="Unspecified" />}
                 </div>
 
