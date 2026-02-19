@@ -1,4 +1,3 @@
-```
 import React from 'react';
 import { Database, Flask, AlertCircle, Hash, Users, Microscope, Scale, History, ExternalLink, ShieldCheck } from 'lucide-react';
 import { TierBadge, Tooltip } from './UIUtils';
@@ -45,11 +44,10 @@ const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
                 </div>
                 {hasConfidence ? (
                     <div className="flex flex-col items-end gap-1">
-                        <span className={`text - [9px] font - mono px - 2 py - 0.5 rounded border ${
-    confidenceVal > 80 ? 'text-green-400 bg-green-500/10 border-green-500/20' :
-    confidenceVal > 50 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
-        'text-neutral-500 bg-neutral-900 border-neutral-800'
-} `}>
+                        <span className={`text - [9px] font - mono px - 2 py - 0.5 rounded border ${confidenceVal > 80 ? 'text-green-400 bg-green-500/10 border-green-500/20' :
+                                confidenceVal > 50 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
+                                    'text-neutral-500 bg-neutral-900 border-neutral-800'
+                            } `}>
                             CONFIDENCE: {confidenceVal}%
                         </span>
                         {policyId && (
@@ -94,11 +92,10 @@ const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
                             <div key={i} className="p-3 rounded-lg bg-neutral-900/50 border border-neutral-800 flex flex-col gap-2">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                        <div className={`p - 1 rounded ${
-    record.study_type === 'meta-analysis' ? 'bg-purple-500/10 text-purple-400' :
-    record.study_type === 'rct' ? 'bg-blue-500/10 text-blue-400' :
-        'bg-neutral-800 text-neutral-400'
-} `}>
+                                        <div className={`p - 1 rounded ${record.study_type === 'meta-analysis' ? 'bg-purple-500/10 text-purple-400' :
+                                                record.study_type === 'rct' ? 'bg-blue-500/10 text-blue-400' :
+                                                    'bg-neutral-800 text-neutral-400'
+                                            } `}>
                                             {record.study_type === 'meta-analysis' || record.study_type === 'systematic-review' ? <Scale className="w-3 h-3" /> :
                                                 record.study_type === 'rct' || record.study_type === 'observational' ? <Users className="w-3 h-3" /> :
                                                     <Microscope className="w-3 h-3" />}
@@ -108,12 +105,11 @@ const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
                                             <p className="text-[9px] text-neutral-500 font-mono">{record.source_identifier}</p>
                                         </div>
                                     </div>
-                                    <div className={`text - [8px] font - mono px - 1.5 py - 0.5 rounded border ${
-    record.evidence_grade === 'strongest' ? 'text-purple-400 border-purple-500/30' :
-    record.evidence_grade === 'strong' ? 'text-blue-400 border-blue-500/30' :
-        record.evidence_grade === 'weak' ? 'text-amber-500/60 border-amber-500/20' :
-            'text-neutral-500 border-neutral-800'
-} `}>
+                                    <div className={`text - [8px] font - mono px - 1.5 py - 0.5 rounded border ${record.evidence_grade === 'strongest' ? 'text-purple-400 border-purple-500/30' :
+                                            record.evidence_grade === 'strong' ? 'text-blue-400 border-blue-500/30' :
+                                                record.evidence_grade === 'weak' ? 'text-amber-500/60 border-amber-500/20' :
+                                                    'text-neutral-500 border-neutral-800'
+                                        } `}>
                                         {record.evidence_grade.toUpperCase()}
                                     </div>
                                 </div>
@@ -128,11 +124,10 @@ const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
                                         <span>{record.publication_year || 'N/A'}</span>
                                     </div>
                                     <div className="flex items-center gap-1">
-                                        <div className={`w - 1.5 h - 1.5 rounded - full ${
-    record.effect_direction === 'positive' ? 'bg-green-500' :
-    record.effect_direction === 'negative' ? 'bg-red-500' :
-        'bg-neutral-500'
-} `} />
+                                        <div className={`w - 1.5 h - 1.5 rounded - full ${record.effect_direction === 'positive' ? 'bg-green-500' :
+                                                record.effect_direction === 'negative' ? 'bg-red-500' :
+                                                    'bg-neutral-500'
+                                            } `} />
                                         <span className="capitalize text-neutral-500">{record.effect_direction} Effect</span>
                                     </div>
                                 </div>
@@ -195,7 +190,7 @@ const Tier1Evidence = React.memo(({ trace, claim, metrics, expertMode }) => {
             {/* PubChem Proof Section */}
             {metrics.pubchemUsed && (
                 <div className="mt-4 p-3 rounded-lg bg-green-500/5 border border-green-500/10 flex items-start gap-4 shadow-inner">
-                    <FlaskConical className="w-4 h-4 text-green-400 shrink-0 mt-0.5" />
+                    <Flask className="w-4 h-4 text-green-400 shrink-0 mt-0.5" />
                     <div className="flex-1">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
