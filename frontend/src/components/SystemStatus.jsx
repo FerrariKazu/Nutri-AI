@@ -28,14 +28,9 @@ const SystemStatus = ({ sessionId, turnCount, confidence = 'High', warnings = []
                 </div>
             </div>
 
+            </div>
+
             <div className="flex items-center gap-6">
-                {/* Confidence Level */}
-                <div className="flex items-center gap-2">
-                    <Zap className="w-3 h-3 text-accent/70" />
-                    <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400">
-                        Confidence: <span className="text-accent">{confidence}</span>
-                    </span>
-                </div>
 
                 {/* Warnings Indicator */}
                 {warnings.length > 0 && (
@@ -47,7 +42,7 @@ const SystemStatus = ({ sessionId, turnCount, confidence = 'High', warnings = []
                     </div>
                 )}
             </div>
-        </div>
+        </div >
     );
 };
 

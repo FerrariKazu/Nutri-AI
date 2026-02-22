@@ -41,12 +41,21 @@ const ChatHeader = ({ title, lastActive, mode, onOpenSidebar }) => {
                             {title}
                         </h1>
                     )}
+                    <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-neutral-500">
+                        <span className="truncate">
+                            {lastActive ? `Active ${timeAgo(lastActive)}` : 'Ready'}
+                        </span>
+                        {mode && (
+                            <>
+                                <span className="text-neutral-800">•</span>
+                                <span className="text-accent/60 truncate">{mode}</span>
+                            </>
                         )}
+                    </div>
                 </div>
             </div>
+            {/* Optional right-side controls can go here */}
         </div>
-            {/* Optional right-side controls can go here */ }
-        </div >
     );
 };
 
