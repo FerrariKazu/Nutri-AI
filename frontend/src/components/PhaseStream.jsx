@@ -1,19 +1,45 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ChevronDown, ChevronRight, Binary, Fingerprint, ShieldCheck, Hash, Activity, Book, FileText, AlertTriangle, Info } from 'lucide-react';
 import StarterPrompts from './StarterPrompts';
 import NutriIntelligencePanel from './IntelligenceTransparency/NutriIntelligencePanel';
 import { adaptExecutionTrace } from '../utils/traceAdapter';
+import { SUGGESTION_POOL } from '../api/suggestions';
+import { getUserId } from '../utils/memoryManager';
+
+/**
+ * hashString - Simple DJB2 hash for deterministic seeding.
+ */
+function hashString(str) {
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) {
+        hash = (hash * 33) ^ str.charCodeAt(i);
+    }
+    return hash >>> 0;
+}
+
+/**
+ * seededShuffle - Deterministic Fisher-Yates using LCG.
+ */
+function seededShuffle(array, seed) {
+    const shuffled = [...array];
+    let currentSeed = seed;
+
+    const nextRandom = () => {
+        currentSeed = (currentSeed * 1664525 + 1013904223) % 4294967296;
+        return currentSeed / 4294967296;
+    };
+
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(nextRandom() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+}
 
 /**
  * PhaseStream - Collapsible, phase-aware reasoning output.
- * Renders the deterministic lineage of Nutri's internal steps.
- * 
- * HARDENING:
- * - Smart Scroll: Only auto-scrolls if user was already at bottom.
- * - Forced Scroll: On hydration or DONE state.
- * - Starter Prompts: Show only when zero user messages.
  */
 const PhaseStream = ({ messages, streamStatus, onPromptSelect }) => {
     const scrollRef = useRef(null);
