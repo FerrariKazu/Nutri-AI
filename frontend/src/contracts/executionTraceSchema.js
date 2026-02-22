@@ -30,33 +30,42 @@
  * @property {number} post_value
  * @property {boolean} fired
  * 
+ * @typedef {Object} GovernanceLayer
+ * @property {string} policy_id
+ * @property {string} ontology_version
+ * @property {string} enrichment_version
+ * @property {string} registry_lookup_status
+ * @property {boolean} ontology_consistency
+ * @property {string[]} unique_ontologies
+ * @property {boolean} policy_signature_present
+ * 
+ * @typedef {Object} BaselineEvidenceSummary
+ * @property {number} total_claims
+ * @property {number} total_evidence_entries
+ * @property {string} highest_study_type
+ * @property {boolean} empirical_support_present
+ * 
  * @typedef {Object} ExecutionTrace
- * @property {number} trace_schema_version
+ * @property {string} trace_schema_version
  * @property {Object} confidence
  * @property {Object} scientific_layer
  * @property {Object} execution_profile
  * @property {string} id
+ * @property {string} trace_id
  * @property {string} session_id
  * @property {string} run_id
  * @property {string} pipeline
- * @property {Object} epistemic_basis
- * @property {string} domain_type
- * @property {string} visibility_level
- * @property {number} domain_confidence
- * @property {number|null} epistemic_integrity_score
- * @property {string|null} downgrade_reason
- * @property {Object} registry_snapshot
- * @property {Object} policy_layer
- * @property {Object} causality_layer
+ * @property {string} decision
+ * @property {string} epistemic_status
+ * @property {string} execution_mode
+ * @property {Object} governance
+ * @property {Object} baseline_evidence_summary
  * @property {Object} temporal_layer
- * @property {Object|null} contextual_layer
- * @property {Object|null} surface_validation
- * @property {Object|null} contract_validation
- * @property {number} duration_ms
- * @property {string} status
+ * @property {Object} graph
+ * @property {Object} system_audit
  */
 
-export const SCHEMA_VERSION = "1.2.7";
+export const SCHEMA_VERSION = "1.2.8";
 
 export const VALID_STATUSES = ['INIT', 'STREAMING', 'ENRICHING', 'VERIFIED', 'COMPLETE', 'ERROR'];
 
