@@ -505,7 +505,7 @@ function App() {
 
     return (
         <ErrorBoundary>
-            <div className="h-screen w-screen bg-neutral-950 text-neutral-100 font-sans overflow-x-hidden selection:bg-accent/30 relative">
+            <div className="app-root h-screen w-screen bg-neutral-950 text-neutral-100 font-sans flex flex-col overflow-hidden selection:bg-accent/30 relative">
 
                 {/* 1. Sidebar (Persistent on Desktop, Drawer on Mobile) */}
                 <Sidebar
@@ -566,9 +566,19 @@ function App() {
                         )}
                     </div>
 
+                    {/* Chat Layout Wrapper */}
+                    <div className="chat-wrapper">
+                        {/* Memory Transparency Signal (In-flow banner) */}
+                        <div className="shrink-0 flex flex-col items-center justify-center gap-1 py-3 z-10 w-full">
+                            <div className="bg-neutral-900/80 border border-neutral-800 px-3 py-1 rounded-full text-[9px] font-mono uppercase tracking-widest text-neutral-500 animate-fade-in">
+                                Nutri remembers this conversation
+                            </div>
+                            <div className="text-[8px] font-mono text-neutral-700 opacity-50">
+                                Build: {import.meta.env.VITE_GIT_SHA}
+                            </div>
+                        </div>
 
-                    {/* Scrollable Conversation Stream */}
-                    <div className="flex-1 relative">
+                        {/* Scrollable Conversation Stream */}
                         <PhaseStream
                             messages={messages}
                             streamStatus={streamStatus}
@@ -576,24 +586,14 @@ function App() {
                                 if (inputValueSetter) inputValueSetter(text);
                             }}
                         />
-                    </div>
 
-                    {/* Reasoning Console - Bottom */}
-                    <ReasoningConsole
-                        onSend={handleSend}
-                        isLoading={streamStatus === 'STREAMING' || streamStatus === 'HYDRATING'}
-                        isMemoryActive={memoryScope === 'session' || turnCount > 0}
-                        setInputValue={(setter) => { inputValueSetter = setter; }}
-                    />
-
-                    {/* Memory Transparency Signal */}
-                    <div className="absolute bottom-24 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 pointer-events-none z-10">
-                        <div className="bg-neutral-900/80 border border-neutral-800 px-3 py-1 rounded-full text-[9px] font-mono uppercase tracking-widest text-neutral-500 animate-fade-in">
-                            Nutri remembers this conversation
-                        </div>
-                        <div className="text-[8px] font-mono text-neutral-700 opacity-50">
-                            Build: {import.meta.env.VITE_GIT_SHA}
-                        </div>
+                        {/* Reasoning Console - Bottom */}
+                        <ReasoningConsole
+                            onSend={handleSend}
+                            isLoading={streamStatus === 'STREAMING' || streamStatus === 'HYDRATING'}
+                            isMemoryActive={memoryScope === 'session' || turnCount > 0}
+                            setInputValue={(setter) => { inputValueSetter = setter; }}
+                        />
                     </div>
                 </div>
 
