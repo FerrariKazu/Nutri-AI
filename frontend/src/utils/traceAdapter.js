@@ -86,10 +86,34 @@ const adaptStrict = (rawTrace) => {
     }
 
     // 2. Map Claims (1:1 VERBATIM)
-    const normalizedClaims = (scientific.claims || []).map(adaptClaimForUI);
+    const normalizedClaims = (scientific.claims || []).map(claim => {
+        const adapted = adaptClaimForUI(claim);
+        if (adapted?.mechanism?.nodes) {
+            adapted.mechanism.nodes.forEach(node => {
+                node.label = node.label || node.id;
+            });
+        }
+        return adapted;
+    });
 
     // 3. Confidence Fallback (Presentation Logic Only)
     const confidenceFallback = computeConfidenceFallback(rawTrace, normalizedClaims);
+
+    // ── NORMALIZE TOP-LEVEL GRAPH NODES ──
+    const topLevelGraph = rawTrace.graph || { nodes: [], edges: [] };
+    if (topLevelGraph.nodes) {
+        topLevelGraph.nodes.forEach(node => {
+            node.label = node.label || node.id;
+        });
+    }
+
+    // ── NORMALIZE CAUSALITY CHAIN NODES ──
+    const causalityChain = causality.chain || [];
+    causalityChain.forEach(node => {
+        if (node.id) {
+            node.label = node.label || node.id;
+        }
+    });
 
     // 4. Registry scope parsing (safe)
     let parsedScope = {};
@@ -171,8 +195,8 @@ const adaptStrict = (rawTrace) => {
             applicability: strictVal(causality.applicability),
             riskCount: strictVal(causality.riskCount),
             riskFlags: causality.riskFlags || {},
-            chain: causality.chain || [],
-            topology: rawTrace.graph || { nodes: [], edges: [] }
+            chain: causalityChain,
+            topology: topLevelGraph
         },
 
         // Tier 4: Temporal Mapping (Real backend values)
@@ -186,7 +210,7 @@ const adaptStrict = (rawTrace) => {
             resolved_deltas: strictVal(temporal.resolved_deltas) || 0
         },
 
-        graph: rawTrace.graph || { nodes: [], edges: [] },
+        graph: topLevelGraph,
 
         // Legacy compatibility shims
         execution_profile: profile,
