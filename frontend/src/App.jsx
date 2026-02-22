@@ -357,6 +357,11 @@ function App() {
                 setStreamStatus('IDLE');
                 setMemoryScope('session');
 
+                // Refetch conversation list to pick up backend-generated title
+                getConversationsList().then(list => {
+                    if (list?.length) setConversations(list);
+                }).catch(() => { });
+
                 if (timeoutRef.current) clearTimeout(timeoutRef.current);
                 if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
             },
