@@ -81,7 +81,7 @@ const ReasoningConsole = ({ onSend, isLoading, isMemoryActive, setInputValue: ex
                         disabled={isLoading}
                         placeholder="Describe the dish, constraint, or scientific question..."
                         rows={1}
-                        className={`w-full bg-neutral-900 border border-neutral-800 rounded-lg pl-10 md:pl-12 pr-14 md:pr-12 py-3 md:py-3.5 min-h-[48px] text-sm md:text-base font-sans focus:outline-none focus:border-neutral-600 transition-all placeholder:text-neutral-600 resize-none leading-relaxed ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`w-full bg-neutral-900 border border-neutral-800 rounded-lg pl-10 md:pl-12 pr-14 md:pr-12 py-3 md:py-3.5 min-h-[48px] max-h-[200px] overflow-y-auto overflow-x-hidden text-sm md:text-base font-sans focus:outline-none focus:border-neutral-600 transition-all placeholder:text-neutral-600 resize-none leading-relaxed ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                     />
                     <button
                         onClick={handleSend}
