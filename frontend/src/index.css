@@ -87,3 +87,81 @@
         border-radius: 12px;
     }
 }
+
+/* ===== Nutri Branding & Hero ===== */
+
+@keyframes nutriFadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.nutri-hero {
+    text-align: center;
+    padding-top: 8vh;
+    max-width: 900px;
+    margin: 0 auto;
+    position: relative;
+}
+
+/* Subtle Radial Glow Behind Logo */
+.nutri-hero::before {
+    content: "";
+    position: absolute;
+    inset: -100px 0;
+    background: radial-gradient(circle at center, rgba(255, 255, 255, 0.04), transparent 70%);
+    pointer-events: none;
+    z-index: -1;
+}
+
+.nutri-hero-logo {
+    max-width: 220px;
+    width: 40%;
+    min-width: 140px;
+    margin: 0 auto 2rem;
+    display: block;
+    opacity: 0.95;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    animation: nutriFadeUp 0.6s ease 100ms both;
+}
+
+.nutri-hero-logo:hover {
+    opacity: 1;
+    transform: scale(1.02);
+}
+
+.nutri-hero-slogan {
+    animation: nutriFadeUp 0.6s ease 300ms both;
+}
+
+.nutri-hero-cards {
+    animation: nutriFadeUp 0.6s ease 500ms both;
+}
+
+.nutri-header-logo {
+    height: 32px;
+    margin-right: 12px;
+    opacity: 0.85;
+    transition: opacity 0.2s ease;
+}
+
+.nutri-header-logo:hover {
+    opacity: 1;
+}
+
+@media (max-width: 480px) {
+    .nutri-hero {
+        padding-top: 4vh;
+    }
+
+    .nutri-hero-logo {
+        width: 60%;
+        min-width: 120px;
+    }
+}
