@@ -8,6 +8,7 @@
         height: 100vh;
         height: 100dvh;
         background-color: #0e0f11;
+        overflow: hidden;
     }
 
     body {
@@ -19,6 +20,7 @@
         overscroll-behavior-y: none;
         touch-action: pan-y;
         -webkit-overflow-scrolling: touch;
+        overflow: hidden;
     }
 
     /* Fine Procedural Noise Texture (Tactile Material Feel) */
@@ -35,6 +37,22 @@
 
     #root {
         @apply h-full;
+        height: 100%;
+    }
+
+    /* ===== Layout Containers ===== */
+    .chat-wrapper {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .messages-container {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
     }
 
     /* Utility: Hide scrollbar but keep functionality */
