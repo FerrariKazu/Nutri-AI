@@ -437,7 +437,6 @@ export function streamPrompt(
             debugLog('STREAM', '🟢 Response OK, starting reader...');
 
             // Get reader from response body
-            const reader = response.body.getReader();
             const decoder = new TextDecoder();
 
             let fullResponse = '';
