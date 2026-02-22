@@ -505,7 +505,7 @@ function App() {
 
     return (
         <ErrorBoundary>
-            <div className="h-screen w-screen bg-neutral-950 text-neutral-100 font-sans overflow-hidden selection:bg-accent/30 relative">
+            <div className="h-screen w-screen bg-neutral-950 text-neutral-100 font-sans overflow-x-hidden selection:bg-accent/30 relative">
 
                 {/* 1. Sidebar (Persistent on Desktop, Drawer on Mobile) */}
                 <Sidebar
@@ -568,7 +568,7 @@ function App() {
 
 
                     {/* Scrollable Conversation Stream */}
-                    <div className="flex-1 overflow-hidden relative">
+                    <div className="flex-1 relative">
                         <PhaseStream
                             messages={messages}
                             streamStatus={streamStatus}
