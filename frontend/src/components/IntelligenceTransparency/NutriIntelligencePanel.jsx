@@ -105,7 +105,7 @@ const BaselineEvidenceCard = ({ data }) => {
  * - Glassmorphism card aesthetic.
  */
 const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false }) => {
-    // 🛡️ API GOVERNANCE: Version Enforcement (v1.2.8)
+    // 🛡️ API GOVERNANCE: Version Enforcement (v1.2.8) - UI: v1.2.9
     const currentVersion = uiTrace?.trace_schema_version;
     const isVersionMismatch = currentVersion && currentVersion !== "1.2.8";
 
@@ -202,7 +202,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
         : null;
 
     return (
-        <div className="mt-6 border border-neutral-800/60 rounded-xl overflow-hidden bg-gradient-to-b from-neutral-900/40 to-neutral-950/60 backdrop-blur-md animate-fade-in shadow-2xl text-card-foreground">
+        <div className="mt-6 border border-neutral-800/60 rounded-xl overflow-hidden bg-gradient-to-b from-neutral-900/40 to-neutral-950/60 backdrop-blur-md animate-fade-in shadow-2xl text-card-foreground intelligence-glass">
             {/* 🛡️ Status & Integrity Banner */}
             <div className={`px-4 py-1.5 border-b border-neutral-800/50 flex items-center gap-2 overflow-hidden ${traceStatus === 'streaming' || traceStatus === 'STREAMING' ? 'bg-blue-500/5' : 'bg-neutral-900/40'}`}>
                 {traceStatus === 'streaming' || traceStatus === 'STREAMING' ? (
@@ -221,13 +221,14 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                     <div className="flex items-center gap-3">
                         <div className="hidden md:flex items-center gap-2 pr-2 border-r border-neutral-800/50">
                             <span className="text-[7px] font-mono text-neutral-600 uppercase">Run: {uiTrace.run_id?.split('-')[0] || 'NUL'}</span>
-                            <span className="text-[7px] font-mono text-neutral-600 uppercase">Ver: {uiTrace.trace_schema_version || '1.2.8'}</span>
+                            <span className="text-[7px] font-mono text-neutral-600 uppercase">Ont: {uiTrace.governance?.ontology_version || '1.2.8'}</span>
+                            <span className="text-[7px] font-mono text-neutral-600 uppercase">Enr: {uiTrace.governance?.enrichment_version || '1.2.8'}</span>
                         </div>
                         <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold font-mono border ${traceStatus === 'streaming' || traceStatus === 'STREAMING'
-                                ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
-                                : isComplete
-                                    ? 'text-green-400 border-green-500/20 bg-green-500/10'
-                                    : 'text-neutral-500 border-neutral-700/50 bg-neutral-800'
+                            ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
+                            : isComplete
+                                ? 'text-green-400 border-green-500/20 bg-green-500/10'
+                                : 'text-neutral-500 border-neutral-700/50 bg-neutral-800'
                             }`}>
                             {traceStatus ? traceStatus.toUpperCase() : 'UNKNOWN'}
                         </span>
@@ -254,8 +255,8 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                 Nutri Intelligence
                             </h2>
                             <div className={`px-2 py-0.5 rounded border flex items-center gap-1.5 ${executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer'
-                                    ? 'bg-purple-500/10 border-purple-500/20'
-                                    : 'bg-blue-500/10 border-blue-500/20'
+                                ? 'bg-purple-500/10 border-purple-500/20'
+                                : 'bg-blue-500/10 border-blue-500/20'
                                 }`}>
                                 <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer' ? 'bg-purple-400' : 'bg-blue-400'
                                     }`} />
@@ -340,8 +341,8 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                 key={claim.id || idx}
                                                 onClick={() => handleClaimSelect(idx)}
                                                 className={`shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-300 flex items-center gap-2 ${selectedClaimIdx === idx
-                                                        ? 'bg-neutral-200 text-neutral-950 shadow-lg scale-105'
-                                                        : 'text-neutral-500 hover:text-neutral-300 bg-neutral-800/40'
+                                                    ? 'bg-neutral-200 text-neutral-950 shadow-lg scale-105'
+                                                    : 'text-neutral-500 hover:text-neutral-300 bg-neutral-800/40'
                                                     }`}
                                             >
                                                 CLAIM {idx + 1}
@@ -379,7 +380,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                     </AccordionSection>
 
                                                     {/* ═══ RESPONSIVE TWO-COLUMN LAYOUT ═══ */}
-                                                    <div className={`grid grid-cols-1 lg:grid-cols-2 gap-0 ${integrityViolation && executionMode !== 'scientific_explanation' ? 'blur-sm grayscale pointer-events-none' : ''}`}>
+                                                    <div className={`grid grid-cols-1 lg:grid-cols-2 gap-0 ${integrityViolation && executionMode !== 'scientific_explanation' ? 'blur-sm grayscale pointer-events-none' : ''} space-y-5 lg:space-y-0`}>
 
                                                         {/* ── LEFT COLUMN ── */}
                                                         <div className="border-r-0 lg:border-r border-neutral-800/40">
