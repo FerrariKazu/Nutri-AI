@@ -56,7 +56,7 @@ export const validateTrace = (trace, isDevMode = false) => {
     } else {
         if (typeof trace.confidence.current !== "number") errors.push("Missing or invalid confidence.current (must be number)");
 
-        const strictTiers = ["speculative", "moderate", "strong", "verified", "invalid"];
+        const strictTiers = ["speculative", "moderate", "strong", "verified", "invalid", "theoretical"];
         if (typeof trace.confidence.tier !== "string" || !strictTiers.includes(trace.confidence.tier)) {
             errors.push(`Invalid confidence.tier: ${trace.confidence.tier} - must be exact backend match.`);
         }
