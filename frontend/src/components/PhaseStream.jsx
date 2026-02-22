@@ -68,6 +68,15 @@ const PhaseStream = ({ messages, streamStatus, onPromptSelect }) => {
         }
     }, [messages, streamStatus, isAtBottom]);
 
+    // Daily Rotating Suggestions Logic
+    const dailySuggestions = useMemo(() => {
+        const userId = getUserId() || 'anonymous';
+        const today = new Date().toISOString().slice(0, 10);
+        const seed = hashString(today + userId);
+        const shuffled = seededShuffle(SUGGESTION_POOL, seed);
+        return shuffled.slice(0, 3);
+    }, []); // Recalculates only once per session typically, or if user/day logic is added to dependencies
+
     return (
         <div
             ref={scrollRef}
@@ -91,7 +100,10 @@ const PhaseStream = ({ messages, streamStatus, onPromptSelect }) => {
 
                     {/* Suggestion Cards */}
                     <div className="nutri-hero-cards w-full mt-4 md:mt-8">
-                        <StarterPrompts onSelectPrompt={onPromptSelect} />
+                        <StarterPrompts
+                            prompts={dailySuggestions}
+                            onSelectPrompt={onPromptSelect}
+                        />
                     </div>
                 </div>
             ) : (
