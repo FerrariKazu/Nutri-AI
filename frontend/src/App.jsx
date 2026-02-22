@@ -138,6 +138,13 @@ function App() {
                 setTurnCount(data.messages.filter(m => m.role === 'user').length);
                 setMemoryScope('session');
 
+                // Update title in conversations list from hydrated data
+                if (data.title && data.title !== 'New Conversation') {
+                    setConversations(prev => prev.map(c =>
+                        c.session_id === sid ? { ...c, title: data.title } : c
+                    ));
+                }
+
                 if (data.current_mode) {
                     console.log(`[HYDRATE] Resuming in mode: ${data.current_mode}`);
                 }
