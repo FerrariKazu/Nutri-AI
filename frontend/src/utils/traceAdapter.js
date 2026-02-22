@@ -35,7 +35,7 @@ const adaptStrict = (rawTrace) => {
     // 1. Validate
     const { valid, status: validationStatus, errors, warnings } = validateTrace(rawTrace, import.meta.env.DEV);
 
-    if (!valid || !rawTrace.epistemic_status) {
+    if (!valid) {
         console.error("Trace Adapter: Trace rejected due to contract violation.", errors);
         return {
             adapter_status: "contract_violation",
