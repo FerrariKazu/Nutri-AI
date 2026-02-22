@@ -17,7 +17,9 @@ const ConfidenceTracker = React.memo(({ uiTrace, expertMode }) => {
         final: 0
     };
 
-    const finalPercentage = Math.round(breakdown.final * 100);
+    const isDerived = metrics.ui_confidence_is_derived || false;
+    const displayFinal = isDerived ? metrics.ui_confidence_fallback : breakdown.final;
+    const finalPercentage = Math.round((displayFinal || 0) * 100);
     const baselinePercentage = Math.round(breakdown.baseline * 100);
 
     return (
@@ -94,10 +96,17 @@ const ConfidenceTracker = React.memo(({ uiTrace, expertMode }) => {
                             <Target className="w-4 h-4 text-white" />
                         </div>
                         <div className="flex flex-col">
-                            <span className="text-[9px] text-neutral-500 font-bold uppercase tracking-widest">Final Belief</span>
+                            <span className="text-[9px] text-neutral-500 font-bold uppercase tracking-widest">
+                                {isDerived ? 'Derived Belief' : 'Final Belief'}
+                            </span>
                             <span className="text-xl font-bold text-white font-mono leading-none tracking-tight">
                                 {finalPercentage}%
                             </span>
+                            {isDerived && (
+                                <span className="text-[8px] text-amber-500/60 font-mono uppercase tracking-wide mt-0.5">
+                                    Avg. from claims
+                                </span>
+                            )}
                         </div>
                     </div>
                     {expertMode && (
