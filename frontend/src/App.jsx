@@ -495,7 +495,7 @@ function App() {
                 />
 
                 {/* Main Content Area */}
-                <div className="w-full h-full bg-neutral-900/20 relative">
+                <div className="w-full h-full bg-neutral-900/20 flex flex-col relative">
 
                     {/* Infrastructure Failure Banner */}
                     {backendStatus === 'fail' && (
@@ -516,14 +516,16 @@ function App() {
                     )}
 
                     {/* 2. Chat Header (Fixed Top) */}
-                    <ChatHeader
-                        title={conversations.find(c => c.session_id === sessionId)?.title}
-                        lastActive={conversations.find(c => c.session_id === sessionId)?.last_active}
-                        onOpenSidebar={() => setIsSidebarOpen(true)}
-                    />
+                    <div className="h-16 shrink-0">
+                        <ChatHeader
+                            title={conversations.find(c => c.session_id === sessionId)?.title}
+                            lastActive={conversations.find(c => c.session_id === sessionId)?.last_active}
+                            onOpenSidebar={() => setIsSidebarOpen(true)}
+                        />
+                    </div>
 
                     {/* System Telemetry - Top (Just below header) */}
-                    <div className="mt-16 relative">
+                    <div className="relative shrink-0">
                         <SystemStatus
                             sessionId={sessionId}
                             turnCount={turnCount}
@@ -538,14 +540,16 @@ function App() {
                     </div>
 
 
-                    {/* Reasoning Stream - Scrollable */}
-                    <PhaseStream
-                        messages={messages}
-                        streamStatus={streamStatus}
-                        onPromptSelect={(text) => {
-                            if (inputValueSetter) inputValueSetter(text);
-                        }}
-                    />
+                    {/* Scrollable Conversation Stream */}
+                    <div className="flex-1 overflow-hidden relative">
+                        <PhaseStream
+                            messages={messages}
+                            streamStatus={streamStatus}
+                            onPromptSelect={(text) => {
+                                if (inputValueSetter) inputValueSetter(text);
+                            }}
+                        />
+                    </div>
 
                     {/* Reasoning Console - Bottom */}
                     <ReasoningConsole
