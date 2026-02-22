@@ -52,7 +52,7 @@ const PolicyAuthorityCard = ({ governance, registrySnapshot }) => {
                         </div>
                     </div>
                 ) : (
-                    <div className="p-3 rounded-lg bg-neutral-800/30 border border-neutral-700/40 flex items-center gap-3">
+                    <div className="intelligence-glass p-3 rounded-lg bg-neutral-800/30 border border-neutral-700/40 flex items-center gap-3">
                         <div className="p-1.5 rounded-lg bg-neutral-800/50">
                             <Info className="w-4 h-4 text-neutral-500" />
                         </div>
@@ -79,8 +79,8 @@ const PolicyAuthorityCard = ({ governance, registrySnapshot }) => {
                     <div className="space-y-1">
                         <span className="text-[8px] font-semibold text-neutral-600 uppercase tracking-wider">Registry Status</span>
                         <p className={`font-mono text-[9px] ${governance.registry_lookup_status === 'matched' ? 'text-emerald-400' :
-                                governance.registry_lookup_status === 'error' ? 'text-red-400' :
-                                    'text-neutral-400'
+                            governance.registry_lookup_status === 'error' ? 'text-red-400' :
+                                'text-neutral-400'
                             }`}>
                             {governance.registry_lookup_status || '—'}
                         </p>
