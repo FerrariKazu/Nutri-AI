@@ -119,6 +119,27 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
         );
     }
 
+    const toggleExpertMode = (e) => {
+        e.stopPropagation();
+        const newMode = !isExpertMode;
+        setIsExpertMode(newMode);
+        localStorage.setItem('nutri_expert_mode', newMode);
+    };
+
+    const toggleRawView = (e) => {
+        e.stopPropagation();
+        setShowRawJson(!showRawJson);
+    };
+
+    const handleClaimSelect = (idx) => {
+        setSelectedClaimIdx(idx);
+    };
+
+    // Safety: Ensure selected index is valid
+    const currentClaim = claims.length > 0
+        ? (claims[selectedClaimIdx] || claims[0])
+        : null;
+
     return (
         <div className="mt-6 border border-neutral-800 rounded-xl overflow-hidden bg-neutral-900/20 backdrop-blur-sm animate-fade-in shadow-2xl text-card-foreground">
             {/* 🛡️ Status & Integrity Banner */}
