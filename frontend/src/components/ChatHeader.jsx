@@ -22,7 +22,7 @@ const ChatHeader = ({ title, lastActive, mode, onOpenSidebar }) => {
                 {/* Mobile Hamburger Trigger */}
                 <button
                     onClick={onOpenSidebar}
-                    className="md:hidden p-2 -ml-2 text-neutral-400 hover:text-neutral-200 active:scale-95 transition-transform"
+                    className="p-2 -ml-2 text-neutral-400 hover:text-neutral-200 active:scale-95 transition-transform"
                     aria-label="Open sidebar"
                 >
                     <Menu className="w-5 h-5" />
