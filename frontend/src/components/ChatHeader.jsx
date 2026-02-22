@@ -28,6 +28,13 @@ const ChatHeader = ({ title, lastActive, mode, onOpenSidebar }) => {
                     <Menu className="w-5 h-5" />
                 </button>
 
+                {/* Compact Brand Logo */}
+                <img
+                    src="/nutri-logo.png"
+                    alt="Nutri"
+                    className="nutri-header-logo"
+                />
+
                 <div className="flex flex-col overflow-hidden">
                     <h1 className="text-sm font-medium text-neutral-200 tracking-wide font-serif truncate max-w-[200px] md:max-w-md">
                         {title || 'New Conversation'}
