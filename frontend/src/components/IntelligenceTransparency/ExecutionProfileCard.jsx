@@ -93,7 +93,7 @@ const ExecutionProfileCard = ({ metrics, epistemicStatus, executionMode, baselin
     }, [metrics.moaCoverage]);
 
     return (
-        <div className="bg-black/20 backdrop-blur-sm border border-neutral-800/60 rounded-lg p-5 space-y-6">
+        <div className="intelligence-glass p-3 md:p-5 border border-neutral-800/40 relative overflow-hidden group space-y-6">
             <header className="flex items-center justify-between border-b border-neutral-800 pb-4">
                 <div className="flex items-center gap-3">
                     <div className="p-2 bg-blue-500/10 rounded-lg">
