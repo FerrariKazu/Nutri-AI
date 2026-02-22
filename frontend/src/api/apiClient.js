@@ -4,7 +4,7 @@
  * Handles all networking, streaming, errors, retries
  */
 
-import { getUserId } from '../utils/memoryManager';
+import { getAuthToken, ensureAuth, getUserId } from '../utils/memoryManager';
 
 // ============================================================================ 
 // CONFIGURATION
@@ -254,7 +254,7 @@ export async function sendPrompt(prompt, mode = 'standard', signal = null) {
                     'Content-Type': 'application/json',
                     'ngrok-skip-browser-warning': 'true',
                     'Bypass-Tunnel-Reminder': 'true',
-                    'X-User-Id': getUserId(),
+                    'Authorization': `Bearer ${await ensureAuth(baseURL)}`,
                 },
                 body: JSON.stringify({
                     message: prompt,
@@ -421,7 +421,7 @@ export function streamPrompt(
                 method: 'GET',
                 headers: {
                     'ngrok-skip-browser-warning': 'true',
-                    'X-User-Id': getUserId(),
+                    'Authorization': `Bearer ${await ensureAuth(baseURL)}`,
                 },
                 signal: combinedSignal,
             });
@@ -550,7 +550,7 @@ export async function getConversationsList() {
         const response = await fetch(`${baseURL}/api/conversations`, {
             headers: {
                 'ngrok-skip-browser-warning': 'true',
-                'X-User-Id': getUserId(),
+                'Authorization': `Bearer ${await ensureAuth(baseURL)}`,
             }
         });
 
@@ -573,7 +573,7 @@ export async function createNewSession() {
             method: 'POST',
             headers: {
                 'ngrok-skip-browser-warning': 'true',
-                'X-User-Id': getUserId(),
+                'Authorization': `Bearer ${await ensureAuth(baseURL)}`,
             }
         });
 
@@ -603,7 +603,7 @@ export async function getConversation(sessionId) {
         const response = await fetch(`${baseURL}/api/conversation?session_id=${sessionId}`, {
             headers: {
                 'ngrok-skip-browser-warning': 'true',
-                'X-User-Id': getUserId(),
+                'Authorization': `Bearer ${await ensureAuth(baseURL)}`,
             }
         });
 
@@ -710,7 +710,7 @@ export function streamNutriChat(
                 audience_mode: preferences.audience_mode || 'scientific',
                 optimization_goal: preferences.optimization_goal || 'comfort',
                 verbosity: preferences.verbosity || 'medium',
-                x_user_id: getUserId(),
+                token: await ensureAuth(baseURL),
                 run_id: preferences.run_id || ''
             });
 
