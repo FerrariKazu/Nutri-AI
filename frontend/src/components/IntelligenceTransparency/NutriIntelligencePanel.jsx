@@ -48,9 +48,9 @@ import { EPISTEMIC_COLORS } from '../../contracts/executionTraceSchema';
  * - Deterministic Arithmetic Path.
  */
 const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false }) => {
-    // 🛡️ API GOVERNANCE: Version Enforcement (v1.2.7)
+    // 🛡️ API GOVERNANCE: Version Enforcement (v1.2.8)
     const currentVersion = uiTrace?.trace_schema_version;
-    const isVersionMismatch = currentVersion && currentVersion !== "1.2.7";
+    const isVersionMismatch = currentVersion && currentVersion !== "1.2.8";
 
     const claims = useMemo(() => (uiTrace?.claims || []), [uiTrace]);
     const metrics = uiTrace?.metrics || {};
