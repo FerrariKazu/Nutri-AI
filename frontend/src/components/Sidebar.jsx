@@ -62,7 +62,7 @@ const Sidebar = ({
                 <div className="flex flex-col h-full w-full">
 
                     {/* Top Action: New Chat */}
-                    <div className="p-4 pt-4">
+                    <div className="p-4 pt-0">
                         <button
                             onClick={onNewChat}
                             className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-accent/10 hover:bg-accent/20 border border-accent/20 rounded-xl text-accent text-sm font-medium transition-all active:scale-[0.98]"
