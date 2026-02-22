@@ -47,62 +47,81 @@ const adaptStrict = (rawTrace) => {
     }
 
     const scientific = rawTrace.scientific_layer || {};
-    const policy = rawTrace.policy_layer || {};
-    const causality = rawTrace.causality_layer || {};
+    const causality = rawTrace.causality || {};
     const temporal = rawTrace.temporal_layer || {};
+    const audit = rawTrace.system_audit || {};
+    const profile = rawTrace.execution_profile || {};
 
     // 2. Map Claims (1:1 VERBATIM)
     const normalizedClaims = (scientific.claims || []).map(adaptClaimForUI);
 
-    // 3. Construct Verified Object
+    // 3. Construct Verified Object (Canonical UI Model)
     return {
         adapter_status: "success",
         _raw: rawTrace,
 
-        id: strictVal(rawTrace.execution_profile?.id),
+        // Root Identifiers (Frontend Stability)
+        id: strictVal(rawTrace.id),
+        trace_id: strictVal(rawTrace.trace_id),
         session_id: strictVal(rawTrace.session_id),
         run_id: strictVal(rawTrace.run_id),
-        pipeline: strictVal(rawTrace.pipeline),
+        trace_schema_version: strictVal(rawTrace.trace_schema_version),
 
-        status: strictVal(rawTrace.execution_profile?.status),
+        // Mode & Status Binding
+        status: strictVal(profile.status),
+        mode: strictVal(profile.mode),
+        epistemic_status: strictVal(profile.epistemic_status),
+        decision: strictVal(rawTrace.decision),
+
         validationStatus,
         warnings,
-
-        trace_schema_version: strictVal(rawTrace.trace_schema_version),
-        mode: strictVal(rawTrace.execution_profile?.mode),
-        epistemic_status: strictVal(rawTrace.execution_profile?.epistemic_status),
-        epistemic_basis: rawTrace.epistemic_basis || {},
-
-        domain_type: strictVal(rawTrace.domain_type),
-        visibility_level: strictVal(rawTrace.visibility_level),
-        domain_confidence: strictVal(rawTrace.domain_confidence),
-        epistemic_integrity_score: strictVal(rawTrace.epistemic_integrity_score),
-        downgrade_reason: strictVal(rawTrace.downgrade_reason),
-
         claims: normalizedClaims,
 
+        // Execution Profile View Model
         metrics: {
-            confidence_breakdown: rawTrace.confidence?.breakdown || null,
+            id: strictVal(profile.id || rawTrace.id),
+            trace_schema_version: strictVal(rawTrace.trace_schema_version),
+            evidenceCoverage: strictVal(scientific.evidence_coverage),
+            moaCoverage: strictVal(scientific.moa_coverage),
+            contradictionRatio: strictVal(scientific.contradiction_ratio),
             duration: strictVal(rawTrace.duration_ms),
-            moa_coverage: strictVal(scientific.moa_coverage),
-            evidence_coverage: strictVal(scientific.evidence_coverage),
-            contradiction_ratio: strictVal(scientific.contradiction_ratio),
-            registry_snapshot: scientific.registry_snapshot || {}
+            confidence_breakdown: {
+                ...(rawTrace.confidence?.breakdown || {}),
+                final: rawTrace.confidence?.breakdown?.final_score || rawTrace.confidence?.current || 0
+            },
+            epistemic_basis: rawTrace.epistemic_basis || {},
+            registrySnapshot: {
+                version: scientific.registry_snapshot?.version,
+                hash: scientific.registry_snapshot?.registry_hash,
+                scope: scientific.registry_snapshot?.scope
+                    ? (typeof scientific.registry_snapshot.scope === 'string'
+                        ? JSON.parse(scientific.registry_snapshot.scope)
+                        : scientific.registry_snapshot.scope)
+                    : {}
+            }
         },
 
+        // Policy Authority Binding (Mapped from system_audit)
         policy: {
-            id: strictVal(policy.policy_id),
-            version: strictVal(policy.policy_version),
-            hash: strictVal(policy.policy_hash),
-            reason: strictVal(policy.selection_reason)
+            policy_id: strictVal(audit.policy_id),
+            policy_version: strictVal(audit.policy_version || "1.0"),
+            policy_hash: strictVal(audit.policy_hash),
+            selection_reason: strictVal(audit.selection_reason),
+            author: strictVal(audit.author),
+            review_board: strictVal(audit.review_board),
+            approval_date: strictVal(audit.approval_date),
+            attestation: strictVal(audit.attestation)
         },
 
+        // Tier 3: Causality Mapping
         causality: {
-            applicability: strictVal(causality.tier3_applicability_match),
-            riskCount: strictVal(causality.tier3_risk_flags_count),
-            distribution: causality.tier3_recommendation_distribution
+            applicability: strictVal(causality.applicability),
+            riskCount: strictVal(causality.riskCount),
+            riskFlags: causality.riskFlags || {},
+            chain: causality.chain || []
         },
 
+        // Tier 4: Temporal Mapping
         temporal: {
             turn: strictVal(temporal.session_age),
             revisions: temporal.belief_revisions || [],
@@ -111,10 +130,10 @@ const adaptStrict = (rawTrace) => {
             anchoring: temporal.session_age > 1 ? `Turn ${temporal.session_age}` : null
         },
 
-        contextual: rawTrace.contextual_layer || null,
-        surface_validation: rawTrace.surface_validation || null,
-        contract_validation: rawTrace.contract_validation || null,
-        system_audit: rawTrace.system_audit || {}
+        // Legacy compatibility shims (to be removed once components fully migrate)
+        execution_profile: profile,
+        scientific_layer: scientific,
+        system_audit: audit
     };
 };
 
