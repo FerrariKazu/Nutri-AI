@@ -17,7 +17,7 @@ const timeAgo = (dateString) => {
 
 const ChatHeader = ({ title, lastActive, mode, onOpenSidebar }) => {
     return (
-        <div className="absolute top-0 left-0 right-0 h-16 bg-neutral-950/80 backdrop-blur-md border-b border-neutral-900 z-20 flex items-center justify-between px-4 md:px-6 animate-fade-in">
+        <div className="h-16 bg-neutral-950/80 backdrop-blur-md border-b border-neutral-900 z-20 flex items-center justify-between px-4 md:px-6 animate-fade-in relative">
             <div className="flex items-center gap-3 overflow-hidden">
                 {/* Mobile Hamburger Trigger */}
                 <button
