@@ -35,7 +35,7 @@ import IntelligenceGraph from './IntelligenceGraph';
 import RuleFiringTimeline from './RuleFiringTimeline';
 import RegistrySnapshot from './RegistrySnapshot';
 import CausalityGraph from './CausalityGraph';
-import { formatConfidence } from './UIUtils';
+import { formatConfidence, Tooltip } from './UIUtils';
 import { renderPermissions } from '../../contracts/renderPermissions';
 import { EPISTEMIC_COLORS } from '../../contracts/executionTraceSchema';
 
