@@ -1,7 +1,7 @@
 /**
  * traceAdapter.js
  * 
- * ANTI-CORRUPTION LAYER (ACL) - v1.3 Refactor
+ * ANTI-CORRUPTION LAYER (ACL) - v1.2.8
  * Strictly normalizes backend AgentExecutionTrace.
  * 
  * EPISTEMIC HONESTY PRINCIPLES:
@@ -29,7 +29,31 @@ export const adaptClaimForUI = (claim) => {
 };
 
 /**
- * Adapt V1.3 Schema (Strict)
+ * Compute UI-only confidence fallback from claim averages.
+ * NEVER mutates backend data. Presentation logic only.
+ * 
+ * Triggers ONLY when zero is a structural artifact, not epistemic output:
+ *   confidence.current === 0 AND no rule firings AND claims exist
+ */
+const computeConfidenceFallback = (rawTrace, claims) => {
+    const conf = rawTrace.confidence || {};
+    const ruleFirings = conf.breakdown?.rule_firings || [];
+
+    if (conf.current === 0 && ruleFirings.length === 0 && claims.length > 0) {
+        const claimConfidences = claims
+            .map(c => c.confidence?.current)
+            .filter(v => typeof v === 'number' && !isNaN(v));
+
+        if (claimConfidences.length > 0) {
+            const avg = claimConfidences.reduce((a, b) => a + b, 0) / claimConfidences.length;
+            return { value: avg, isDerived: true };
+        }
+    }
+    return { value: null, isDerived: false };
+};
+
+/**
+ * Adapt V1.2.8 Schema (Strict)
  */
 const adaptStrict = (rawTrace) => {
     // 1. Validate
@@ -48,9 +72,13 @@ const adaptStrict = (rawTrace) => {
 
     const scientific = rawTrace.scientific_layer || {};
     const causality = rawTrace.causality || {};
-    const temporal = rawTrace.temporal_layer || {};
+    const temporal = rawTrace.temporal_layer ?? {};
     const audit = rawTrace.system_audit || {};
     const profile = rawTrace.execution_profile || {};
+
+    // ── DEFENSIVE NULL GUARDS (v1.2.8 Transitional Safety) ──
+    const governance = rawTrace.governance ?? null;
+    const baselineEvidence = rawTrace.baseline_evidence_summary ?? null;
 
     // ── CONTRACT STABILITY ASSERTION (Phase 8) ──
     if (rawTrace.confidence?.breakdown && !Array.isArray(rawTrace.confidence.breakdown.rule_firings)) {
@@ -60,7 +88,22 @@ const adaptStrict = (rawTrace) => {
     // 2. Map Claims (1:1 VERBATIM)
     const normalizedClaims = (scientific.claims || []).map(adaptClaimForUI);
 
-    // 3. Construct Verified Object (Canonical UI Model)
+    // 3. Confidence Fallback (Presentation Logic Only)
+    const confidenceFallback = computeConfidenceFallback(rawTrace, normalizedClaims);
+
+    // 4. Registry scope parsing (safe)
+    let parsedScope = {};
+    try {
+        if (scientific.registry_snapshot?.scope) {
+            parsedScope = typeof scientific.registry_snapshot.scope === 'string'
+                ? JSON.parse(scientific.registry_snapshot.scope)
+                : scientific.registry_snapshot.scope;
+        }
+    } catch (e) {
+        console.warn("Trace Adapter: Failed to parse registry scope", e);
+    }
+
+    // 5. Construct Verified Object (Canonical UI Model)
     return {
         adapter_status: "success",
         _raw: rawTrace,
@@ -94,18 +137,24 @@ const adaptStrict = (rawTrace) => {
                 ...(rawTrace.confidence?.breakdown || {}),
                 final: rawTrace.confidence?.breakdown?.final_score || rawTrace.confidence?.current || 0
             },
+            // UI-only derived confidence (never overwrites backend)
+            ui_confidence_fallback: confidenceFallback.value,
+            ui_confidence_is_derived: confidenceFallback.isDerived,
             epistemic_basis: rawTrace.epistemic_basis || {},
             registrySnapshot: {
                 version: scientific.registry_snapshot?.version,
                 hash: scientific.registry_snapshot?.registry_hash,
-                scope: scientific.registry_snapshot?.scope
-                    ? (typeof scientific.registry_snapshot.scope === 'string'
-                        ? JSON.parse(scientific.registry_snapshot.scope)
-                        : scientific.registry_snapshot.scope)
-                    : {}
+                scope: parsedScope
             }
         },
 
+        // 🛡️ Governance (Direct Backend Passthrough)
+        governance: governance,
+
+        // 📊 Baseline Evidence Summary (Direct Backend Passthrough)
+        baseline_evidence_summary: baselineEvidence,
+
+        // Legacy policy mapping (for backward compat)
         policy: {
             policy_id: strictVal(audit.policy_id),
             policy_version: strictVal(audit.policy_version || "1.0"),
@@ -117,37 +166,29 @@ const adaptStrict = (rawTrace) => {
             attestation: strictVal(audit.attestation)
         },
 
-        // 🛡️ Governance Metadata (UI Normalization Step 2)
-        governance: {
-            authority: strictVal(audit.policy_id) || "UNKNOWN",
-            signed: !!audit.policy_hash,
-            author: strictVal(audit.author) || "SYSTEM_DEFAULT",
-            attestation: strictVal(audit.attestation)
-        },
-
-        // Tier 3: Causality Mapping (UI Normalization Step 1)
+        // Tier 3: Causality Mapping
         causality: {
             applicability: strictVal(causality.applicability),
             riskCount: strictVal(causality.riskCount),
             riskFlags: causality.riskFlags || {},
             chain: causality.chain || [],
-            topology: rawTrace.graph || { nodes: [], edges: [] } // Map backend graph to UI topology
+            topology: rawTrace.graph || { nodes: [], edges: [] }
         },
 
-        // Tier 4: Temporal Mapping (UI Normalization Step 3)
+        // Tier 4: Temporal Mapping (Real backend values)
         temporal: {
             turn: strictVal(temporal.session_age),
-            revisions: temporal.belief_revisions || [],
-            resolvedUncertainties: strictVal(temporal.uncertainty_resolved_count),
+            revisions: typeof temporal.belief_revisions === 'number' ? temporal.belief_revisions : 0,
+            resolvedUncertainties: strictVal(temporal.resolved_deltas),
             saturationTriggered: !!temporal.saturation_triggered,
             anchoring: temporal.session_age > 1 ? `Turn ${temporal.session_age}` : null,
-            decision_state: "resolved", // Default for UI components
-            resolved_deltas: 0 // Default for UI components
+            decision_state: strictVal(temporal.decision_state) || "initial",
+            resolved_deltas: strictVal(temporal.resolved_deltas) || 0
         },
 
         graph: rawTrace.graph || { nodes: [], edges: [] },
 
-        // Legacy compatibility shims (to be removed once components fully migrate)
+        // Legacy compatibility shims
         execution_profile: profile,
         scientific_layer: scientific,
         system_audit: audit
@@ -165,7 +206,6 @@ export const adaptExecutionTrace = (rawTrace) => {
     } catch (e) {
         console.error("Trace Adapter caught error:", e);
 
-        // If it's a contract violation (from throw), return a structured error
         if (e.message?.includes('CONTRACT_VIOLATION')) {
             return {
                 adapter_status: "contract_violation",
@@ -176,7 +216,6 @@ export const adaptExecutionTrace = (rawTrace) => {
             };
         }
 
-        // Generic fallback for unexpected crashes
         return null;
     }
 };
