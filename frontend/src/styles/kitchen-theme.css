@@ -290,23 +290,6 @@ body {
     border-top: 6px solid var(--kitchen-coffee);
 }
 
-/* Scroll bar styling */
-::-webkit-scrollbar {
-    width: 10px;
-}
-
-::-webkit-scrollbar-track {
-    background: var(--kitchen-cream);
-}
-
-::-webkit-scrollbar-thumb {
-    background: var(--kitchen-butter);
-    border-radius: 5px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: var(--kitchen-cinnamon);
-}
 
 /* Button styles */
 .btn-kitchen-primary {
