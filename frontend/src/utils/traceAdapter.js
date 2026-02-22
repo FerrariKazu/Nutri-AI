@@ -54,7 +54,7 @@ const adaptStrict = (rawTrace) => {
 
     // ── CONTRACT STABILITY ASSERTION (Phase 8) ──
     if (rawTrace.confidence?.breakdown && !Array.isArray(rawTrace.confidence.breakdown.rule_firings)) {
-        console.error("TRACE SHAPE VIOLATION: rule_firings must be array (Canonical v1.2.7 Requirement)");
+        console.error("TRACE SHAPE VIOLATION: rule_firings must be array (Canonical v1.2.8 Requirement)");
     }
 
     // 2. Map Claims (1:1 VERBATIM)

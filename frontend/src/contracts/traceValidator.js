@@ -26,7 +26,7 @@ export const validateTrace = (trace, isDevMode = false) => {
         throw new Error(msg);
     }
 
-    // 2. Mandatory v1.2.7 Roots
+    // 2. Mandatory v1.2.8 Roots
     const mandatory = ['trace_schema_version', 'run_id', 'trace_id', 'id'];
     mandatory.forEach(field => {
         if (trace[field] === undefined || trace[field] === null) {
