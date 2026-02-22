@@ -30,14 +30,12 @@
  * @property {number} post_value
  * @property {boolean} fired
  * 
- * @typedef {Object} GovernanceLayer
+ * @typedef {Object} Governance
  * @property {string} policy_id
+ * @property {string} registry_lookup_status
+ * @property {boolean} policy_signature_present
  * @property {string} ontology_version
  * @property {string} enrichment_version
- * @property {string} registry_lookup_status
- * @property {boolean} ontology_consistency
- * @property {string[]} unique_ontologies
- * @property {boolean} policy_signature_present
  * 
  * @typedef {Object} BaselineEvidenceSummary
  * @property {number} total_claims
@@ -58,8 +56,8 @@
  * @property {string} decision
  * @property {string} epistemic_status
  * @property {string} execution_mode
- * @property {Object} governance
- * @property {Object} baseline_evidence_summary
+ * @property {Governance} [governance]
+ * @property {BaselineEvidenceSummary} [baseline_evidence_summary]
  * @property {Object} temporal_layer
  * @property {Object} graph
  * @property {Object} system_audit
