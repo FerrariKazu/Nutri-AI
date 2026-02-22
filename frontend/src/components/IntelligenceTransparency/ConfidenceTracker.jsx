@@ -23,7 +23,7 @@ const ConfidenceTracker = React.memo(({ uiTrace, expertMode }) => {
     const baselinePercentage = Math.round(breakdown.baseline * 100);
 
     return (
-        <div className="space-y-6">
+        <div className="intelligence-glass p-5 space-y-5">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <Target className="w-3 h-3 text-neutral-400 opacity-50" />
