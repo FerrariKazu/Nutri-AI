@@ -198,7 +198,7 @@
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 110;
     display: flex;
-    flex-col;
+    flex-direction: column;
     border-right: 1px solid rgba(255, 255, 255, 0.05);
 }
 

@@ -27,9 +27,21 @@ const Sidebar = ({
     onSelectSession,
     onNewChat
 }) => {
-    // Lock body scroll when mobile sidebar is open
+    // 1. ESC Key Listener (Cleanup-aware)
     useEffect(() => {
-        if (isOpen && window.innerWidth < 768) {
+        if (!isOpen) return;
+
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') setIsOpen(false);
+        };
+
+        window.addEventListener('keydown', handleEscape);
+        return () => window.removeEventListener('keydown', handleEscape);
+    }, [isOpen, setIsOpen]);
+
+    // 2. Body Scroll Lock (Global for all screens when open)
+    useEffect(() => {
+        if (isOpen) {
             document.body.style.overflow = 'hidden';
         } else {
             document.body.style.overflow = '';
@@ -39,87 +51,77 @@ const Sidebar = ({
 
     return (
         <>
-            {/* Mobile Backdrop - Fade In */}
+            {/* Sidebar Overlay (Dim Background) */}
             <div
-                className={`
-                    fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300
-                    ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}
-                `}
+                className={`sidebar-overlay ${isOpen ? 'active' : ''}`}
                 onClick={() => setIsOpen(false)}
             />
 
-            {/* Sidebar Container - Drawer */}
-            <div className={`
-                fixed top-0 left-0 h-full bg-neutral-950 border-r border-neutral-900 z-50
-                w-[280px] shadow-2xl transform transition-transform duration-300 ease-in-out
-                ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-                md:translate-x-0 md:static md:shrink-0 md:w-72 md:shadow-none
-            `}>
-                <div className="flex flex-col h-full">
-                    {/* Header */}
-                    <div className="p-4 border-b border-neutral-900 flex items-center justify-between h-16">
-                        <h2 className="text-sm font-serif text-neutral-400 tracking-wide">YOUR CHATS</h2>
+            {/* Sidebar Container (Fixed Overlay) */}
+            <div className={`sidebar ${isOpen ? 'open' : ''}`}>
+                <div className="flex flex-col h-full w-full">
+
+                    {/* Top Action: New Chat */}
+                    <div className="p-4 pt-6">
                         <button
                             onClick={onNewChat}
-                            className="p-2 hover:bg-neutral-900 rounded-full text-neutral-400 hover:text-accent transition-colors group"
-                            title="New Chat"
+                            className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-accent/10 hover:bg-accent/20 border border-accent/20 rounded-xl text-accent text-sm font-medium transition-all active:scale-[0.98]"
                         >
-                            <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
+                            <Plus className="w-4 h-4" />
+                            <span>New Conversation</span>
                         </button>
                     </div>
 
-                    {/* List */}
-                    <div className="flex-1 overflow-y-auto py-2">
+                    <div className="mx-6 border-b border-white/5 my-2"></div>
+
+                    {/* Section Label */}
+                    <div className="px-6 py-2">
+                        <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-neutral-600">
+                            Recent
+                        </span>
+                    </div>
+
+                    {/* Chat List */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar pb-6">
                         {conversations.length === 0 ? (
-                            <div className="p-8 text-center opacity-30">
+                            <div className="p-12 text-center opacity-20">
                                 <MessageSquare className="w-8 h-8 mx-auto mb-2" />
-                                <p className="text-xs font-mono">NO HISTORY</p>
+                                <p className="text-[10px] font-mono tracking-widest">NO HISTORY</p>
                             </div>
                         ) : (
                             conversations.map((conv) => (
-                                <button
+                                <div
                                     key={conv.session_id}
                                     onClick={() => {
                                         onSelectSession(conv.session_id);
-                                        // Auto-close on mobile only
-                                        if (window.innerWidth < 768) setIsOpen(false);
+                                        setIsOpen(false); // Close on selection
                                     }}
-                                    className={`
-                                        w-full text-left p-4 border-l-2 transition-all hover:bg-neutral-900/50
-                                        flex flex-col gap-1 group
-                                        ${conv.session_id === currentSessionId
-                                            ? 'border-accent bg-neutral-900/30'
-                                            : 'border-transparent opacity-60 hover:opacity-100'}
-                                    `}
+                                    className={`chat-item ${conv.session_id === currentSessionId ? 'active' : ''}`}
                                 >
-                                    <div className="flex justify-between items-baseline">
-                                        <span className={`
-                                            text-sm font-medium truncate max-w-[70%]
-                                            ${conv.session_id === currentSessionId ? 'text-neutral-200' : 'text-neutral-400'}
-                                        `}>
-                                            {conv.title}
-                                        </span>
-                                        <span className="text-[10px] font-mono text-neutral-600 shrink-0">
-                                            {timeAgo(conv.last_active)}
-                                        </span>
+                                    <div className="flex justify-between items-start gap-2">
+                                        <span className="chat-item-title">{conv.title}</span>
+                                        <span className="chat-item-meta">{timeAgo(conv.last_active)}</span>
                                     </div>
-                                    <span className="text-xs text-neutral-500 truncate font-sans">
-                                        {conv.preview}
+                                    <span className="chat-item-preview">
+                                        {conv.preview || 'No messages yet...'}
                                     </span>
-                                </button>
+                                </div>
                             ))
                         )}
                     </div>
 
                     {/* Footer / Branding */}
-                    <div className="p-4 border-t border-neutral-900 text-center bg-neutral-950">
-                        <p className="text-[10px] text-neutral-700 font-mono tracking-widest uppercase">
-                            Nutri-AI v1.3
+                    <div className="p-6 border-t border-white/5 bg-neutral-950/50 backdrop-blur-sm">
+                        <p className="text-[9px] text-neutral-700 font-mono tracking-[0.3em] uppercase text-center opacity-50">
+                            Nutri Operational Layer v1.4
                         </p>
                     </div>
                 </div>
             </div>
-            {/* Removed internal floating trigger - now handled by header */}
+        </>
+    );
+};
+{/* Removed internal floating trigger - now handled by header */ }
         </>
     );
 };
