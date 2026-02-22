@@ -52,6 +52,11 @@ const adaptStrict = (rawTrace) => {
     const audit = rawTrace.system_audit || {};
     const profile = rawTrace.execution_profile || {};
 
+    // ── CONTRACT STABILITY ASSERTION (Phase 8) ──
+    if (rawTrace.confidence?.breakdown && !Array.isArray(rawTrace.confidence.breakdown.rule_firings)) {
+        console.error("TRACE SHAPE VIOLATION: rule_firings must be array (Canonical v1.2.7 Requirement)");
+    }
+
     // 2. Map Claims (1:1 VERBATIM)
     const normalizedClaims = (scientific.claims || []).map(adaptClaimForUI);
 
@@ -101,7 +106,6 @@ const adaptStrict = (rawTrace) => {
             }
         },
 
-        // Policy Authority Binding (Mapped from system_audit)
         policy: {
             policy_id: strictVal(audit.policy_id),
             policy_version: strictVal(audit.policy_version || "1.0"),
@@ -113,22 +117,35 @@ const adaptStrict = (rawTrace) => {
             attestation: strictVal(audit.attestation)
         },
 
-        // Tier 3: Causality Mapping
+        // 🛡️ Governance Metadata (UI Normalization Step 2)
+        governance: {
+            authority: strictVal(audit.policy_id) || "UNKNOWN",
+            signed: !!audit.policy_hash,
+            author: strictVal(audit.author) || "SYSTEM_DEFAULT",
+            attestation: strictVal(audit.attestation)
+        },
+
+        // Tier 3: Causality Mapping (UI Normalization Step 1)
         causality: {
             applicability: strictVal(causality.applicability),
             riskCount: strictVal(causality.riskCount),
             riskFlags: causality.riskFlags || {},
-            chain: causality.chain || []
+            chain: causality.chain || [],
+            topology: rawTrace.graph || { nodes: [], edges: [] } // Map backend graph to UI topology
         },
 
-        // Tier 4: Temporal Mapping
+        // Tier 4: Temporal Mapping (UI Normalization Step 3)
         temporal: {
             turn: strictVal(temporal.session_age),
             revisions: temporal.belief_revisions || [],
             resolvedUncertainties: strictVal(temporal.uncertainty_resolved_count),
             saturationTriggered: !!temporal.saturation_triggered,
-            anchoring: temporal.session_age > 1 ? `Turn ${temporal.session_age}` : null
+            anchoring: temporal.session_age > 1 ? `Turn ${temporal.session_age}` : null,
+            decision_state: "resolved", // Default for UI components
+            resolved_deltas: 0 // Default for UI components
         },
+
+        graph: rawTrace.graph || { nodes: [], edges: [] },
 
         // Legacy compatibility shims (to be removed once components fully migrate)
         execution_profile: profile,
