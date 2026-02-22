@@ -37,23 +37,42 @@
         @apply h-full;
     }
 
-    /* ===== Hide Scrollbars Globally - NUCLEAR OPTION ===== */
-    * {
+    /* Utility: Hide scrollbar but keep functionality */
+    .no-scrollbar {
         scrollbar-width: none !important;
-        /* Firefox */
         -ms-overflow-style: none !important;
-        /* IE/Edge */
     }
 
-    *::-webkit-scrollbar {
+    .no-scrollbar::-webkit-scrollbar {
         display: none !important;
-        /* Chrome/Safari/Webkit */
         width: 0 !important;
         height: 0 !important;
     }
 
+    /* Global Aesthetic Scrollbars (Low contrast, thin) */
     ::-webkit-scrollbar {
-        display: none !important;
+        width: 6px;
+        height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 10px;
+        transition: background 0.2s ease;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.12);
+    }
+
+    /* Firefox */
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.05) transparent;
     }
 }
 
