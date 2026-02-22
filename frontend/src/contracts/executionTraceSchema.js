@@ -18,23 +18,34 @@
  * @property {string|null} notes
  * @property {Object} mechanistic_anchors
  * 
+ * @typedef {Object} RuleFiring
+ * @property {string} rule_id
+ * @property {string} label
+ * @property {string} category
+ * @property {string} source
+ * @property {string} effect_type
+ * @property {any} input
+ * @property {number} contribution
+ * @property {number} pre_value
+ * @property {number} post_value
+ * @property {boolean} fired
+ * 
  * @typedef {Object} ExecutionTrace
+ * @property {number} trace_schema_version
+ * @property {Object} confidence
+ * @property {Object} scientific_layer
+ * @property {Object} execution_profile
  * @property {string} id
  * @property {string} session_id
  * @property {string} run_id
  * @property {string} pipeline
- * @property {number} trace_schema_version
- * @property {string} execution_mode
- * @property {string} epistemic_status
  * @property {Object} epistemic_basis
  * @property {string} domain_type
  * @property {string} visibility_level
  * @property {number} domain_confidence
  * @property {number|null} epistemic_integrity_score
  * @property {string|null} downgrade_reason
- * @property {Object} confidence_breakdown
  * @property {Object} registry_snapshot
- * @property {Object} scientific_layer
  * @property {Object} policy_layer
  * @property {Object} causality_layer
  * @property {Object} temporal_layer
@@ -45,7 +56,7 @@
  * @property {string} status
  */
 
-export const SCHEMA_VERSION = "1.3.1";
+export const SCHEMA_VERSION = "1.2.7";
 
 export const VALID_STATUSES = ['INIT', 'STREAMING', 'ENRICHING', 'VERIFIED', 'COMPLETE', 'ERROR'];
 

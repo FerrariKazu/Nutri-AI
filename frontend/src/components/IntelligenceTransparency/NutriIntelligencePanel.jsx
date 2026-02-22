@@ -48,29 +48,18 @@ import { EPISTEMIC_COLORS } from '../../contracts/executionTraceSchema';
  * - Deterministic Arithmetic Path.
  */
 const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false }) => {
-    // 🛡️ API GOVERNANCE: Version Enforcement (v1.2.6)
+    // 🛡️ API GOVERNANCE: Version Enforcement (v1.2.7)
     const currentVersion = uiTrace?.trace_schema_version;
-    const isVersionMismatch = currentVersion && currentVersion !== "1.2.6";
+    const isVersionMismatch = currentVersion && currentVersion !== "1.2.7";
 
     const claims = useMemo(() => (uiTrace?.claims || []), [uiTrace]);
     const metrics = uiTrace?.metrics || {};
 
     // 🧠 Direct Binding (No inference)
-    const executionMode = uiTrace?.execution_mode || 'full_trace';
+    const isHydrated = uiTrace?.adapter_status === 'success';
+    const executionMode = uiTrace?.mode || 'full_trace';
     const epistemicStatus = uiTrace?.epistemic_status || 'theoretical';
     const isStandby = executionMode === 'non_scientific_discourse' || uiTrace?.domain_type === 'contextual';
-
-    if (isVersionMismatch) {
-        return (
-            <div className="p-4 bg-red-900/20 border border-red-500/50 rounded-xl flex items-center gap-3 text-red-400">
-                <AlertTriangle size={20} />
-                <div className="text-sm">
-                    <span className="font-bold block text-red-300">Trace Contract Error</span>
-                    Unsupported schema version: {currentVersion}. Frontend requires 1.2.6.
-                </div>
-            </div>
-        );
-    }
 
     const [isOpen, setIsOpen] = useState(false);
     const [isExpertMode, setIsExpertMode] = useState(expertModeDefault);
@@ -84,6 +73,18 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
             setIsExpertMode(savedMode === 'true');
         }
     }, []);
+
+    if (isVersionMismatch) {
+        return (
+            <div className="p-4 bg-red-900/20 border border-red-500/50 rounded-xl flex items-center gap-3 text-red-400">
+                <AlertTriangle size={20} />
+                <div className="text-sm">
+                    <span className="font-bold block text-red-300">Trace Contract Error</span>
+                    Unsupported schema version: {currentVersion}. Frontend requires 1.2.7.
+                </div>
+            </div>
+        );
+    }
 
     const toggleExpertMode = (e) => {
         e.stopPropagation();

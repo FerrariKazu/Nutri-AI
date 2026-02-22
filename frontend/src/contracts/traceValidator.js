@@ -19,53 +19,61 @@ export const validateTrace = (trace, isDevMode = false) => {
         return { valid: false, errors: ['Trace is null or undefined'] };
     }
 
-    // 1. Schema Version Gate
-    if (trace.trace_schema_version !== SCHEMA_VERSION && trace.schema_version !== SCHEMA_VERSION) {
+    // 1. Schema Version Gate (Hard Fail)
+    if (trace.trace_schema_version !== SCHEMA_VERSION) {
         const msg = `Schema version mismatch. Expected ${SCHEMA_VERSION}, got ${trace.trace_schema_version || trace.schema_version}`;
-        // Soft warning for now to allow some drift during deployment, but log error
         if (isDevMode) console.error(`${LOG_PREFIX} ${msg}`);
+        throw new Error(msg);
     }
 
-    // 2. Mandatory v1.3.1 Fields
-    const mandatory = ['execution_mode', 'epistemic_status', 'id', 'run_id', 'trace_metrics', 'trace_schema_version'];
+    // 2. Mandatory v1.2.7 Roots
+    const mandatory = ['trace_schema_version', 'run_id', 'trace_id', 'id'];
     mandatory.forEach(field => {
         if (trace[field] === undefined || trace[field] === null) {
-            errors.push(`Missing mandatory field: ${field}`);
+            errors.push(`Missing mandatory root field: ${field}`);
         }
     });
 
+    // 2.5 Deep Structural Assertions
+    if (!trace.execution_profile || typeof trace.execution_profile !== "object") {
+        errors.push("Missing or invalid execution_profile block.");
+    } else {
+        if (typeof trace.execution_profile.id !== "string") errors.push("Missing execution_profile.id");
+        if (typeof trace.execution_profile.mode !== "string") errors.push("Missing execution_profile.mode");
+        if (typeof trace.execution_profile.epistemic_status !== "string") errors.push("Missing execution_profile.epistemic_status");
+
+        const allowedModes = [
+            "scientific_explanation", "conversation", "moderation", "technical",
+            "full_trace", "error", "pending_serialization", "standard", "non_scientific_discourse"
+        ];
+        if (!allowedModes.includes(trace.execution_profile.mode)) {
+            errors.push(`Invalid execution_profile.mode: ${trace.execution_profile.mode}`);
+        }
+    }
+
+    if (!trace.confidence || typeof trace.confidence !== "object") {
+        errors.push("Missing or invalid confidence block.");
+    } else {
+        if (typeof trace.confidence.current !== "number") errors.push("Missing or invalid confidence.current (must be number)");
+
+        const strictTiers = ["speculative", "moderate", "strong", "verified", "invalid"];
+        if (typeof trace.confidence.tier !== "string" || !strictTiers.includes(trace.confidence.tier)) {
+            errors.push(`Invalid confidence.tier: ${trace.confidence.tier} - must be exact backend match.`);
+        }
+
+        if (!trace.confidence.breakdown || typeof trace.confidence.breakdown.final_score !== "number") {
+            errors.push("Missing confidence.breakdown.final_score (must be number)");
+        }
+    }
+
     // 3. Mode-Specific Validation
-    const isConversational = trace.execution_mode === 'non_scientific_discourse' || trace.domain_type === 'contextual';
+    const effectiveMode = trace.execution_profile?.mode || '';
+    const isConversational = effectiveMode === 'conversation' || trace.domain_type === 'contextual';
 
     if (!isConversational) {
         const scientific = trace.scientific_layer || {};
         if (!scientific.claims || !Array.isArray(scientific.claims)) {
             errors.push('Scientific trace missing claims array');
-        }
-
-        // 4a. Scientific Explanation Mode (v2.0) — First-class validation
-        if (trace.execution_mode === 'scientific_explanation') {
-            const substanceState = trace.trace_metrics?.substance_state;
-            if (!substanceState || substanceState !== 'substantive') {
-                errors.push('TRACE_SUBSTANCE_GENERATION_FAILURE: scientific_explanation must be substantive');
-            }
-            const anchorCount = trace.trace_metrics?.anchor_count || 0;
-            const bioClaimCount = trace.trace_metrics?.biological_claim_count || 0;
-            if (anchorCount === 0) {
-                errors.push('TRACE_SUBSTANCE_GENERATION_FAILURE: anchor_count must be > 0');
-            }
-            if (bioClaimCount === 0) {
-                errors.push('TRACE_SUBSTANCE_GENERATION_FAILURE: biological_claim_count must be > 0');
-            }
-            // DO NOT show "General Discourse Mode" or "Scientific Instrument Standby"
-        }
-
-        // 4b. Substance Enforcement Guard (SSOT Trust Mode) — Full Trace only
-        const substanceState = trace.trace_metrics?.substance_state;
-        if (trace.execution_mode === 'full_trace' && substanceState !== 'substantive') {
-            const errorMsg = 'TRACE_SUBSTANCE_CONTRACT_VIOLATION: FULL_TRACE must be substantive.';
-            if (isDevMode) console.error(`${LOG_PREFIX} ${errorMsg}`);
-            throw new Error(errorMsg);
         }
     }
 

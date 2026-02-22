@@ -59,18 +59,18 @@ const adaptStrict = (rawTrace) => {
         adapter_status: "success",
         _raw: rawTrace,
 
-        id: strictVal(rawTrace.id),
+        id: strictVal(rawTrace.execution_profile?.id),
         session_id: strictVal(rawTrace.session_id),
         run_id: strictVal(rawTrace.run_id),
         pipeline: strictVal(rawTrace.pipeline),
 
-        status: strictVal(rawTrace.status),
+        status: strictVal(rawTrace.execution_profile?.status),
         validationStatus,
         warnings,
 
         trace_schema_version: strictVal(rawTrace.trace_schema_version),
-        execution_mode: strictVal(rawTrace.execution_mode),
-        epistemic_status: strictVal(rawTrace.epistemic_status),
+        mode: strictVal(rawTrace.execution_profile?.mode),
+        epistemic_status: strictVal(rawTrace.execution_profile?.epistemic_status),
         epistemic_basis: rawTrace.epistemic_basis || {},
 
         domain_type: strictVal(rawTrace.domain_type),
@@ -82,7 +82,7 @@ const adaptStrict = (rawTrace) => {
         claims: normalizedClaims,
 
         metrics: {
-            confidence_breakdown: rawTrace.confidence_breakdown || null,
+            confidence_breakdown: rawTrace.confidence?.breakdown || null,
             duration: strictVal(rawTrace.duration_ms),
             moa_coverage: strictVal(scientific.moa_coverage),
             evidence_coverage: strictVal(scientific.evidence_coverage),
@@ -114,8 +114,7 @@ const adaptStrict = (rawTrace) => {
         contextual: rawTrace.contextual_layer || null,
         surface_validation: rawTrace.surface_validation || null,
         contract_validation: rawTrace.contract_validation || null,
-        system_audit: rawTrace.system_audit || {},
-        trace_metrics: rawTrace.trace_metrics || {}
+        system_audit: rawTrace.system_audit || {}
     };
 };
 
