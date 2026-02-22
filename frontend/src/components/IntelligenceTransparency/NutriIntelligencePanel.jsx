@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Brain,
@@ -10,7 +10,6 @@ import {
     Settings2,
     ShieldCheck,
     MessageSquare,
-    Share2,
     FileJson,
     Loader2,
     AlertTriangle,
@@ -18,34 +17,92 @@ import {
     FileSearch,
     DatabaseZap,
     Activity,
-    Hash,
-    Beaker
+    Beaker,
+    BarChart3,
+    Clock,
+    Layers
 } from 'lucide-react';
 import Tier1Evidence from './Tier1Evidence';
 import Tier2Mechanism from './Tier2Mechanism';
 import Tier3Causality from './Tier3Causality';
 import Tier4Temporal from './Tier4Temporal';
 import ConfidenceTracker from './ConfidenceTracker';
-import PerceptionMapper from './PerceptionMapper';
-import IntelligenceGraph from './IntelligenceGraph';
 import IntegrityBarrier from './IntegrityBarrier';
 import EvidenceLineageViewer from './EvidenceLineageViewer';
 import PolicyAuthorityCard from './PolicyAuthorityCard';
-import RuleFiringTimeline from './RuleFiringTimeline';
-import RegistrySnapshot from './RegistrySnapshot';
 import ExecutionProfileCard from './ExecutionProfileCard';
-import { Tooltip, getConfidenceNarrative } from './UIUtils';
+import IntelligenceGraph from './IntelligenceGraph';
+import { Tooltip } from './UIUtils';
 import { renderPermissions } from '../../contracts/renderPermissions';
-import { adaptClaimForUI } from '../../utils/traceAdapter';
 import { EPISTEMIC_COLORS } from '../../contracts/executionTraceSchema';
 
 /**
- * NutriIntelligencePanel
+ * Collapsible Accordion Section — mobile-first.
+ */
+const AccordionSection = ({ title, icon: Icon, defaultOpen = false, children, id }) => {
+    const [open, setOpen] = useState(defaultOpen);
+    return (
+        <div className="border-b border-neutral-800/40">
+            <button
+                onClick={() => setOpen(!open)}
+                className="w-full flex items-center justify-between px-4 md:px-6 py-3 hover:bg-neutral-800/20 transition-colors"
+            >
+                <div className="flex items-center gap-2">
+                    {Icon && <Icon className="w-3.5 h-3.5 text-neutral-500" />}
+                    <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">{title}</span>
+                </div>
+                <ChevronDown className={`w-3.5 h-3.5 text-neutral-600 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+            </button>
+            <AnimatePresence initial={false}>
+                {open && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.25 }}
+                        className="overflow-hidden"
+                    >
+                        <div className="px-4 md:px-6 pb-5 pt-1">
+                            {children}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+};
+
+/**
+ * Baseline Evidence Summary Card
+ */
+const BaselineEvidenceCard = ({ data }) => {
+    if (!data) return null;
+    return (
+        <div className="grid grid-cols-2 gap-3">
+            {[
+                { label: 'Total Claims', value: data.total_claims, color: 'text-blue-400' },
+                { label: 'Evidence Entries', value: data.total_evidence_entries, color: 'text-emerald-400' },
+                { label: 'Highest Study', value: data.highest_study_type, color: 'text-amber-400' },
+                { label: 'Empirical Support', value: data.empirical_support_present ? 'Present' : 'Absent', color: data.empirical_support_present ? 'text-emerald-400' : 'text-neutral-500' },
+            ].map(item => (
+                <div key={item.label} className="bg-black/20 rounded-lg p-3 border border-neutral-800/40">
+                    <span className="text-[8px] font-semibold text-neutral-600 uppercase tracking-wider">{item.label}</span>
+                    <p className={`text-sm font-bold font-mono mt-0.5 ${item.color}`}>
+                        {item.value ?? '—'}
+                    </p>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+/**
+ * NutriIntelligencePanel (v1.2.8)
  * 
- * STRICT MODE CONTAINER (v1.3):
+ * STRICT MODE CONTAINER:
  * - Direct Binding to Backend Epistemic Authority.
- * - Scientific Instrument Standby Mode.
- * - Deterministic Arithmetic Path.
+ * - Mobile-first responsive layout.
+ * - Glassmorphism card aesthetic.
  */
 const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false }) => {
     // 🛡️ API GOVERNANCE: Version Enforcement (v1.2.8)
@@ -58,8 +115,15 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
     // 🧠 Direct Binding (No inference)
     const isHydrated = uiTrace?.adapter_status === 'success';
     const executionMode = uiTrace?.mode || 'full_trace';
+    // Use execution_profile.epistemic_status only (dedup §6)
     const epistemicStatus = uiTrace?.epistemic_status || 'theoretical';
     const isStandby = executionMode === 'non_scientific_discourse' || uiTrace?.domain_type === 'contextual';
+
+    // Confidence tier from raw trace
+    const confidenceTier = uiTrace?._raw?.confidence?.tier || 'theoretical';
+    // Trace status
+    const traceStatus = uiTrace?.status;
+    const isComplete = traceStatus === 'COMPLETE' || traceStatus === 'VERIFIED' || traceStatus === 'complete';
 
     const [isOpen, setIsOpen] = useState(false);
     const [isExpertMode, setIsExpertMode] = useState(expertModeDefault);
@@ -84,17 +148,17 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
     // Epistemic Color
     const statusColor = useMemo(() => EPISTEMIC_COLORS[epistemicStatus] || '#94a3b8', [epistemicStatus]);
 
-    // Integrity Message - Premium Narrative
+    // Integrity Message
     const integrityMessage = useMemo(() => {
         if (!uiTrace) return "No execution trace recorded";
         if (isStandby) return "Scientific Instrument Standby";
-        if (uiTrace.status === 'INIT') return "Initializing Scientific Workspace...";
-        if (uiTrace.status === 'streaming') return "Reasoning Stream Active...";
-        if (uiTrace.status === 'VERIFIED' || uiTrace.status === 'complete') return "Institutional Audit Terminal";
+        if (traceStatus === 'INIT') return "Initializing Scientific Workspace...";
+        if (traceStatus === 'streaming' || traceStatus === 'STREAMING') return "Reasoning Stream Active...";
+        if (isComplete) return "Institutional Audit Terminal";
         return "Deterministic System Telemetry";
-    }, [uiTrace, isStandby]);
+    }, [uiTrace, isStandby, traceStatus, isComplete]);
 
-    // 🛡️ [INSTITUTIONAL_HARDENING] Integrity Checks
+    // Integrity Checks
     const integrityViolation = useMemo(() => {
         if (!uiTrace || isStandby) return null;
         if (uiTrace.adapter_status === "contract_violation") {
@@ -131,28 +195,25 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
         setShowRawJson(!showRawJson);
     };
 
-    const handleClaimSelect = (idx) => {
-        setSelectedClaimIdx(idx);
-    };
+    const handleClaimSelect = (idx) => setSelectedClaimIdx(idx);
 
-    // Safety: Ensure selected index is valid
     const currentClaim = claims.length > 0
         ? (claims[selectedClaimIdx] || claims[0])
         : null;
 
     return (
-        <div className="mt-6 border border-neutral-800 rounded-xl overflow-hidden bg-neutral-900/20 backdrop-blur-sm animate-fade-in shadow-2xl text-card-foreground">
+        <div className="mt-6 border border-neutral-800/60 rounded-xl overflow-hidden bg-gradient-to-b from-neutral-900/40 to-neutral-950/60 backdrop-blur-md animate-fade-in shadow-2xl text-card-foreground">
             {/* 🛡️ Status & Integrity Banner */}
-            <div className={`px - 4 py - 1.5 border - b border - neutral - 800 / 50 flex items - center gap - 2 overflow - hidden ${uiTrace?.status === 'streaming' ? 'bg-blue-500/5' : 'bg-neutral-900/40'} `}>
-                {uiTrace?.status === 'streaming' ? (
+            <div className={`px-4 py-1.5 border-b border-neutral-800/50 flex items-center gap-2 overflow-hidden ${traceStatus === 'streaming' || traceStatus === 'STREAMING' ? 'bg-blue-500/5' : 'bg-neutral-900/40'}`}>
+                {traceStatus === 'streaming' || traceStatus === 'STREAMING' ? (
                     <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
                 ) : integrityViolation ? (
                     <AlertTriangle className="w-3 h-3 text-red-500 animate-pulse" />
                 ) : (
-                    <ShieldCheck className={`w - 3 h - 3 ${!uiTrace ? 'text-neutral-700' : 'text-neutral-500'} `} />
+                    <ShieldCheck className={`w-3 h-3 ${!uiTrace ? 'text-neutral-700' : 'text-neutral-500'}`} />
                 )}
 
-                <p className={`text - [10px] font - mono upper tracking - tight truncate flex - 1 ${integrityViolation ? 'text-red-500 font-bold' : 'text-neutral-400'} `}>
+                <p className={`text-[10px] font-mono uppercase tracking-tight truncate flex-1 ${integrityViolation ? 'text-red-500 font-bold' : 'text-neutral-400'}`}>
                     {integrityViolation ? 'TRACE_CONTRACT_VIOLATION' : integrityMessage}
                 </p>
 
@@ -160,15 +221,15 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                     <div className="flex items-center gap-3">
                         <div className="hidden md:flex items-center gap-2 pr-2 border-r border-neutral-800/50">
                             <span className="text-[7px] font-mono text-neutral-600 uppercase">Run: {uiTrace.run_id?.split('-')[0] || 'NUL'}</span>
-                            <span className="text-[7px] font-mono text-neutral-600 uppercase">Ver: {uiTrace.trace_schema_version || '1.3'}</span>
+                            <span className="text-[7px] font-mono text-neutral-600 uppercase">Ver: {uiTrace.trace_schema_version || '1.2.8'}</span>
                         </div>
-                        <span className={`px - 2 py - 0.5 rounded - full text - [8px] font - bold font - mono border ${['streaming'].includes(uiTrace.status)
-                            ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
-                            : uiTrace.status === 'complete' || uiTrace.status === 'VERIFIED'
-                                ? 'text-green-400 border-green-500/20 bg-green-500/10'
-                                : 'text-neutral-500 border-neutral-700/50 bg-neutral-800'
-                            } `}>
-                            {uiTrace.status ? uiTrace.status.toUpperCase() : 'UNKNOWN'}
+                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold font-mono border ${traceStatus === 'streaming' || traceStatus === 'STREAMING'
+                                ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
+                                : isComplete
+                                    ? 'text-green-400 border-green-500/20 bg-green-500/10'
+                                    : 'text-neutral-500 border-neutral-700/50 bg-neutral-800'
+                            }`}>
+                            {traceStatus ? traceStatus.toUpperCase() : 'UNKNOWN'}
                         </span>
                     </div>
                 )}
@@ -177,7 +238,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
             {/* Header / Trigger */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full flex items-center justify-between p-4 hover:bg-neutral-800/30 transition-all duration-300 group"
+                className="w-full flex items-center justify-between p-4 hover:bg-neutral-800/20 transition-all duration-300 group"
             >
                 <div className="flex items-center gap-3 text-left">
                     <div className="p-2 rounded-lg bg-accent/10 text-accent group-hover:scale-110 group-hover:bg-accent/20 transition-all duration-500">
@@ -189,31 +250,31 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                     </div>
                     <div className="flex flex-col">
                         <div className="flex items-center gap-2">
-                            <h2 className="text-xl font-bold text-white tracking-tight uppercase italic">
+                            <h2 className="text-lg md:text-xl font-bold text-white tracking-tight uppercase italic">
                                 Nutri Intelligence
                             </h2>
-                            <div className={`px - 2 py - 0.5 rounded border flex items - center gap - 1.5 ${executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer'
-                                ? 'bg-purple-500/10 border-purple-500/20'
-                                : 'bg-blue-500/10 border-blue-500/20'
-                                } `}>
-                                <div className={`w - 1.5 h - 1.5 rounded - full animate - pulse ${executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer' ? 'bg-purple-400' : 'bg-blue-400'
-                                    } `} />
-                                <span className={`text - [9px] font - bold uppercase tracking - widest ${executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer' ? 'text-purple-400' : 'text-blue-400'
-                                    } `}>
-                                    {executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer' ? 'SCIENTIFIC EXPLANATION' : executionMode.replace(/_/g, ' ')}
+                            <div className={`px-2 py-0.5 rounded border flex items-center gap-1.5 ${executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer'
+                                    ? 'bg-purple-500/10 border-purple-500/20'
+                                    : 'bg-blue-500/10 border-blue-500/20'
+                                }`}>
+                                <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer' ? 'bg-purple-400' : 'bg-blue-400'
+                                    }`} />
+                                <span className={`text-[8px] md:text-[9px] font-bold uppercase tracking-widest ${executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer' ? 'text-purple-400' : 'text-blue-400'
+                                    }`}>
+                                    {executionMode === 'scientific_explanation' || executionMode === 'mechanistic_explainer' ? 'SCIENTIFIC' : executionMode.replace(/_/g, ' ')}
                                 </span>
                             </div>
                         </div>
-                        <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest ml-1">
-                            Scientific Audit Terminal • Epistemic Status: <span style={{ color: statusColor }}>{epistemicStatus.replace(/_/g, ' ')}</span>
+                        <p className="text-[9px] md:text-[10px] text-neutral-500 font-bold uppercase tracking-widest ml-1">
+                            Audit Terminal • <span style={{ color: statusColor }}>{epistemicStatus.replace(/_/g, ' ')}</span>
                         </p>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-mono text-neutral-600 group-hover:text-neutral-400 transition-colors uppercase">
+                    <span className="text-[10px] font-mono text-neutral-600 group-hover:text-neutral-400 transition-colors uppercase hidden md:inline">
                         {isOpen ? 'Close' : 'Inspect'}
                     </span>
-                    <div className={`transition - transform duration - 500 ${isOpen ? 'rotate-180' : ''} `}>
+                    <div className={`transition-transform duration-500 ${isOpen ? 'rotate-180' : ''}`}>
                         <ChevronDown className="w-4 h-4 text-neutral-600" />
                     </div>
                 </div>
@@ -234,23 +295,19 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                 <Info className="w-3.5 h-3.5 text-neutral-600" />
                                 <span>System Execution Telemetry</span>
                             </div>
-
                             <div className="flex items-center gap-4">
-                                {/* Raw Toggle */}
                                 <button
                                     onClick={toggleRawView}
-                                    className={`flex items - center gap - 1.5 transition - colors group ${showRawJson ? 'text-accent' : 'text-neutral-500 hover:text-neutral-300'} `}
+                                    className={`flex items-center gap-1.5 transition-colors group ${showRawJson ? 'text-accent' : 'text-neutral-500 hover:text-neutral-300'}`}
                                 >
                                     <FileJson className="w-3 h-3" />
                                     <span className="font-mono uppercase tracking-tighter">Raw JSON</span>
                                 </button>
-
-                                {/* Expert Toggle */}
                                 <button
                                     onClick={toggleExpertMode}
-                                    className={`flex items - center gap - 1.5 transition - all group ${isExpertMode ? 'text-accent' : 'text-neutral-500 hover:text-neutral-300'} `}
+                                    className={`flex items-center gap-1.5 transition-all group ${isExpertMode ? 'text-accent' : 'text-neutral-500 hover:text-neutral-300'}`}
                                 >
-                                    <Settings2 className={`w - 3 h - 3 ${isExpertMode ? 'rotate-180' : ''} transition - transform`} />
+                                    <Settings2 className={`w-3 h-3 ${isExpertMode ? 'rotate-180' : ''} transition-transform`} />
                                     <span className="font-mono uppercase tracking-tighter">Expert</span>
                                 </button>
                             </div>
@@ -282,10 +339,10 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                             <button
                                                 key={claim.id || idx}
                                                 onClick={() => handleClaimSelect(idx)}
-                                                className={`shrink - 0 px - 3 py - 1.5 rounded - lg text - [10px] font - bold transition - all duration - 300 flex items - center gap - 2 ${selectedClaimIdx === idx
-                                                    ? 'bg-neutral-200 text-neutral-950 shadow-lg scale-105'
-                                                    : 'text-neutral-500 hover:text-neutral-300 bg-neutral-800/40'
-                                                    } `}
+                                                className={`shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-300 flex items-center gap-2 ${selectedClaimIdx === idx
+                                                        ? 'bg-neutral-200 text-neutral-950 shadow-lg scale-105'
+                                                        : 'text-neutral-500 hover:text-neutral-300 bg-neutral-800/40'
+                                                    }`}
                                             >
                                                 CLAIM {idx + 1}
                                                 {claim.origin === 'extracted' && <FileSearch className="w-2.5 h-2.5 opacity-50" />}
@@ -295,25 +352,8 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                     </div>
                                 )}
 
-                                {/* Coverage & Saturation Metric (New) */}
-                                {uiTrace.coverage_metrics?.mechanisms?.length > 0 && (
-                                    <div className="px-5 py-2.5 bg-accent/5 border-b border-neutral-800/50 flex items-center gap-4">
-                                        <div className="flex items-center gap-2 shrink-0">
-                                            <Cpu className="w-3 h-3 text-accent" />
-                                            <span className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">Mechanisms Covered:</span>
-                                        </div>
-                                        <div className="flex gap-2 overflow-x-auto scrollbar-none">
-                                            {uiTrace.coverage_metrics.mechanisms.map((m, i) => (
-                                                <span key={i} className="text-[9px] font-mono text-accent/80 bg-accent/10 px-2 py-0.5 rounded border border-accent/20">
-                                                    {m.toUpperCase()}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Main Grid: Fact vs Policy Split View */}
-                                <div className="relative min-h-[600px] flex flex-col lg:flex-row bg-neutral-900/40 border-b border-neutral-800">
+                                {/* Main Content */}
+                                <div className="bg-neutral-900/30">
                                     {isStandby ? (
                                         <div className="w-full py-32 flex flex-col items-center opacity-40">
                                             <MessageSquare className="w-8 h-8 text-neutral-600 mb-4" />
@@ -323,7 +363,6 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                         </div>
                                     ) : (
                                         <>
-                                            {/* Integrity Barrier - Filtered for Scientific Mode */}
                                             {integrityViolation && executionMode !== 'scientific_explanation' && (
                                                 <IntegrityBarrier
                                                     type={integrityViolation.type}
@@ -333,117 +372,104 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                             )}
 
                                             {currentClaim ? (
-                                                <div className="flex flex-col w-full">
-                                                    {/* 🔭 [PHASE 6] Scientific Observation Layer (Full Width Top) */}
-                                                    <div className="p-6 border-b border-neutral-800 bg-neutral-900/20">
-                                                        <div className="space-y-2 mb-6">
-                                                            <h4 className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest border-b border-neutral-800 pb-2 flex items-center gap-2">
-                                                                <Activity className="w-3 h-3" />
-                                                                Scientific Observation Layer
-                                                            </h4>
-                                                            <EvidenceLineageViewer evidenceSet={currentClaim.evidence} />
-                                                        </div>
-                                                    </div>
+                                                <>
+                                                    {/* Scientific Observation Layer (Full Width) */}
+                                                    <AccordionSection title="Scientific Observation" icon={Activity} defaultOpen={false}>
+                                                        <EvidenceLineageViewer evidenceSet={currentClaim.evidence} />
+                                                    </AccordionSection>
 
-                                                    {/* ⚖️ [PHASE 3] Main Split Grid (Inference vs Graph) */}
-                                                    <div className={`grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-0 min-h-[520px] ${integrityViolation && executionMode !== 'scientific_explanation' ? 'blur-sm grayscale pointer-events-none' : ''}`}>
+                                                    {/* ═══ RESPONSIVE TWO-COLUMN LAYOUT ═══ */}
+                                                    <div className={`grid grid-cols-1 lg:grid-cols-2 gap-0 ${integrityViolation && executionMode !== 'scientific_explanation' ? 'blur-sm grayscale pointer-events-none' : ''}`}>
 
-                                                        {/* LEFT COLUMN: INFERENCE PANEL (380px) */}
-                                                        <div className="p-6 space-y-12 border-r border-neutral-800 bg-black/10">
-                                                            <div className="space-y-2">
-                                                                <h4 className="text-[10px] font-bold text-blue-500/60 uppercase tracking-widest border-b border-neutral-800/50 pb-2">
-                                                                    Inference Chain
-                                                                </h4>
-                                                            </div>
-
-                                                            {/* 🧪 Execution Profile */}
-                                                            <section>
+                                                        {/* ── LEFT COLUMN ── */}
+                                                        <div className="border-r-0 lg:border-r border-neutral-800/40">
+                                                            {/* Execution Profile — default open */}
+                                                            <AccordionSection title="Execution Profile" icon={Cpu} defaultOpen={true}>
                                                                 <ExecutionProfileCard
                                                                     metrics={metrics}
                                                                     epistemicStatus={epistemicStatus}
                                                                     executionMode={executionMode}
+                                                                    baselineEvidence={uiTrace.baseline_evidence_summary}
+                                                                    confidenceTier={confidenceTier}
                                                                 />
-                                                            </section>
+                                                            </AccordionSection>
 
-                                                            {renderPermissions.canRenderTier2({ claims: [currentClaim] }).allowed && (
-                                                                <section>
-                                                                    <Tier2Mechanism
-                                                                        trace={uiTrace}
-                                                                        claim={currentClaim}
-                                                                        expertMode={isExpertMode}
-                                                                    />
-                                                                </section>
-                                                            )}
-
-                                                            <section className="pt-10 border-t border-neutral-800/50">
+                                                            {/* Confidence Discipline */}
+                                                            <AccordionSection title="Confidence Discipline" icon={BarChart3} defaultOpen={false}>
                                                                 <ConfidenceTracker
                                                                     uiTrace={uiTrace}
                                                                     claimIdx={selectedClaimIdx}
                                                                     expertMode={isExpertMode}
                                                                 />
-                                                            </section>
+                                                            </AccordionSection>
 
-                                                            {/* Policy Mapping */}
-                                                            <section className="pt-10 border-t border-neutral-800/50">
-                                                                <h5 className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest mb-4">Governance & Authority</h5>
+                                                            {/* Governance */}
+                                                            <AccordionSection title="Governance & Authority" icon={ShieldCheck} defaultOpen={false}>
                                                                 <PolicyAuthorityCard
-                                                                    policy={{
-                                                                        policy_id: uiTrace.metrics.policyId,
-                                                                        policy_version: uiTrace.metrics.policyVersion,
-                                                                        policy_hash: uiTrace.metrics.policyHash,
-                                                                        selection_reason: uiTrace.metrics.policySelectionReason,
-                                                                        author: currentClaim.confidence?.author || "GOVERNANCE_BOARD",
-                                                                        review_board: currentClaim.confidence?.review_board || "SIMULATED_BOARD",
-                                                                        approval_date: currentClaim.confidence?.approval_date || "2026-02-16",
-                                                                        attestation: currentClaim.confidence?.attestation
-                                                                    }}
-                                                                    initiallyExpanded={false}
+                                                                    governance={uiTrace.governance}
+                                                                    registrySnapshot={metrics.registrySnapshot}
                                                                 />
-                                                            </section>
+                                                            </AccordionSection>
 
-                                                            {renderPermissions.canRenderTier3(uiTrace).allowed && (
-                                                                <section className="pt-10 border-t border-neutral-800/50">
-                                                                    <Tier3Causality
-                                                                        uiTrace={uiTrace}
-                                                                        claimIdx={selectedClaimIdx}
-                                                                        expertMode={isExpertMode}
-                                                                    />
-                                                                </section>
-                                                            )}
-
+                                                            {/* Temporal Layer */}
                                                             {renderPermissions.canRenderTier4(uiTrace).allowed && (
-                                                                <section className="pt-10 border-t border-neutral-800/50">
+                                                                <AccordionSection title="Temporal Consistency" icon={Clock} defaultOpen={false}>
                                                                     <Tier4Temporal
                                                                         uiTrace={uiTrace}
                                                                         claimIdx={selectedClaimIdx}
                                                                         expertMode={isExpertMode}
                                                                     />
-                                                                </section>
+                                                                </AccordionSection>
                                                             )}
                                                         </div>
 
-                                                        {/* RIGHT COLUMN: GRAPH PANEL (Flexible) */}
-                                                        <div className="p-8 flex flex-col h-full bg-neutral-900/10">
-                                                            <div className="flex-1">
-                                                                <IntelligenceGraph trace={uiTrace} claim={currentClaim} />
-                                                            </div>
+                                                        {/* ── RIGHT COLUMN ── */}
+                                                        <div>
+                                                            {/* Mechanism Graph — default open */}
+                                                            <AccordionSection title="Mechanism Topology" icon={Layers} defaultOpen={true}>
+                                                                {isComplete ? (
+                                                                    <IntelligenceGraph trace={uiTrace} claim={currentClaim} />
+                                                                ) : (
+                                                                    <div className="py-8 flex flex-col items-center opacity-40">
+                                                                        <Loader2 className="w-5 h-5 animate-spin text-neutral-600 mb-2" />
+                                                                        <span className="text-[9px] font-mono text-neutral-600 uppercase tracking-widest">
+                                                                            Awaiting trace completion...
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+                                                            </AccordionSection>
 
-                                                            {/* PubChem Hardened View (Bottom of Graph) */}
-                                                            {uiTrace.metrics.pubchemUsed && (
-                                                                <section className="mt-12 p-4 rounded-xl bg-green-500/5 border border-green-500/10 shadow-[inner_0_0_20px_rgba(34,197,94,0.05)]">
-                                                                    <div className="flex items-center gap-2 mb-3">
-                                                                        <ShieldCheck className="w-3.5 h-3.5 text-green-500" />
-                                                                        <span className="text-[10px] font-bold text-green-400 uppercase tracking-widest">Molecular Identity Enforced</span>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-3">
-                                                                        <Hash className="w-3 h-3 text-neutral-600" />
-                                                                        <span className="text-[9px] font-mono text-neutral-500 truncate select-all">{uiTrace.metrics.proofHash}</span>
-                                                                    </div>
-                                                                </section>
+                                                            {/* Mechanism Detail */}
+                                                            {renderPermissions.canRenderTier2({ claims: [currentClaim] }).allowed && (
+                                                                <AccordionSection title="Mechanistic Detail" icon={Beaker} defaultOpen={false}>
+                                                                    <Tier2Mechanism
+                                                                        trace={uiTrace}
+                                                                        claim={currentClaim}
+                                                                        expertMode={isExpertMode}
+                                                                    />
+                                                                </AccordionSection>
+                                                            )}
+
+                                                            {/* Causality */}
+                                                            {renderPermissions.canRenderTier3(uiTrace).allowed && (
+                                                                <AccordionSection title="Causal Chain" icon={Activity} defaultOpen={false}>
+                                                                    <Tier3Causality
+                                                                        uiTrace={uiTrace}
+                                                                        claimIdx={selectedClaimIdx}
+                                                                        expertMode={isExpertMode}
+                                                                    />
+                                                                </AccordionSection>
+                                                            )}
+
+                                                            {/* Baseline Evidence Summary */}
+                                                            {uiTrace.baseline_evidence_summary && (
+                                                                <AccordionSection title="Baseline Evidence" icon={BarChart3} defaultOpen={false}>
+                                                                    <BaselineEvidenceCard data={uiTrace.baseline_evidence_summary} />
+                                                                </AccordionSection>
                                                             )}
                                                         </div>
                                                     </div>
-                                                </div>
+                                                </>
                                             ) : (
                                                 <div className="w-full py-32 flex flex-col items-center opacity-40">
                                                     <ZapOff className="w-8 h-8 text-neutral-600 mb-4" />
@@ -458,31 +484,30 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                             </>
                         )}
 
-                        {/* 🛡️ Knowledge Limitation Declaration (Requirement Upgrade 27.6) */}
-                        <div className="mx-6 mb-6 p-4 rounded bg-neutral-900/50 border border-neutral-800/50 opacity-80 hover:opacity-100 transition-opacity">
+                        {/* Knowledge Limitation Declaration */}
+                        <div className="mx-4 md:mx-6 mb-4 md:mb-6 mt-2 p-4 rounded-lg bg-neutral-900/40 backdrop-blur-sm border border-neutral-800/40 opacity-80 hover:opacity-100 transition-opacity">
                             <div className="flex items-start gap-3">
-                                <Info className="w-3.5 h-3.5 text-neutral-500 mt-0.5" />
+                                <Info className="w-3.5 h-3.5 text-neutral-500 mt-0.5 shrink-0" />
                                 <div className="space-y-1">
                                     <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest">Knowledge Limitation</span>
                                     <p className="text-[10px] text-neutral-600 leading-relaxed italic">
                                         This execution reflects only indexed registry data and formalized policy rules.
-                                        Absence of evidence is not evidence of absence. All biological mechanisms are
-                                        modeled under standard physiological conditions.
+                                        Absence of evidence is not evidence of absence.
                                     </p>
                                 </div>
                             </div>
                         </div>
 
-                        {/* 🦶 Data Provenance Footer (MANDATORY) */}
-                        <div className="px-5 py-3 border-t border-neutral-800 bg-neutral-950 flex items-center justify-between">
+                        {/* Data Provenance Footer */}
+                        <div className="px-4 md:px-5 py-3 border-t border-neutral-800 bg-neutral-950 flex items-center justify-between">
                             <div className="flex items-center gap-2 opacity-50">
                                 <ShieldCheck className="w-3 h-3 text-neutral-500" />
-                                <span className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest">
-                                    Generated from runtime execution trace. Only verified system outputs displayed.
+                                <span className="text-[8px] md:text-[9px] font-mono text-neutral-500 uppercase tracking-widest">
+                                    Verified system outputs only.
                                 </span>
                             </div>
                             <span className="text-[9px] font-mono text-neutral-700">
-                                Trace v{uiTrace?.trace_schema_version || uiTrace?.metrics?.trace_schema_version || '1.3'}
+                                Trace v{uiTrace?.trace_schema_version || '1.2.8'}
                             </span>
                         </div>
                     </motion.div>
