@@ -28,10 +28,7 @@ const SystemStatus = ({ sessionId, turnCount, confidence = 'High', warnings = []
                 </div>
             </div>
 
-            </div>
-
             <div className="flex items-center gap-6">
-
                 {/* Warnings Indicator */}
                 {warnings.length > 0 && (
                     <div className="flex items-center gap-2 px-2 py-0.5 rounded bg-accent-muted/30 border border-accent/20">
@@ -42,7 +39,7 @@ const SystemStatus = ({ sessionId, turnCount, confidence = 'High', warnings = []
                     </div>
                 )}
             </div>
-        </div >
+        </div>
     );
 };
 
