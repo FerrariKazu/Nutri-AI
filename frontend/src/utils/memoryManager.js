@@ -1,93 +1,155 @@
 /**
- * Memory Manager for User Preferences
+ * Memory Manager for User Identity & Preferences
  * 
- * Implements user-scoped preference persistence via localStorage
+ * Auth Flow:
+ *   1. Frontend calls POST /api/dev-login → backend signs JWT
+ *   2. Token cached in localStorage
+ *   3. All API calls send Authorization: Bearer <token>
+ *   4. No secret ever touches the client
  */
 
-const USER_ID_KEY = "nutri_user_id";
+const AUTH_TOKEN_KEY = "nutri_auth_token";
+const AUTH_USER_KEY = "nutri_user_id";
 const PREFS_KEY = "nutri_user_prefs";
-
-// Storage size limit (5MB)
 const MAX_STORAGE_SIZE = 5 * 1024 * 1024;
 
+// ─── Auth Token Management ──────────────────────────────────────
+
 /**
- * Get or create stable user ID
- * @returns {string} - UUID for this user
+ * Decode JWT payload (no verification — that's the server's job)
  */
-export const getUserId = () => {
-    let userId = localStorage.getItem(USER_ID_KEY);
-    if (!userId) {
-        userId = crypto.randomUUID();
-        localStorage.setItem(USER_ID_KEY, userId);
-        console.log('[MEMORY] Created new user_id:', userId);
+function decodeTokenPayload(token) {
+    try {
+        const parts = token.split(".");
+        if (parts.length !== 3) return null;
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+        return payload;
+    } catch {
+        return null;
     }
-    return userId;
+}
+
+/**
+ * Check if the cached token is expired
+ */
+export const isTokenExpired = () => {
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!token) return true;
+
+    const payload = decodeTokenPayload(token);
+    if (!payload?.exp) return true;
+
+    // Expire 60s early to avoid race conditions
+    return Date.now() / 1000 > payload.exp - 60;
 };
 
 /**
- * Save user preferences
- * @param {object} prefs - Preference updates (skill_level, equipment, dietary_constraints)
- * @returns {string} - user_id
+ * Get the cached auth token. Returns null if missing or expired.
  */
+export const getAuthToken = () => {
+    if (isTokenExpired()) return null;
+    return localStorage.getItem(AUTH_TOKEN_KEY);
+};
+
+/**
+ * Get user_id from the cached token's sub claim.
+ */
+export const getUserId = () => {
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!token) return localStorage.getItem(AUTH_USER_KEY) || null;
+
+    const payload = decodeTokenPayload(token);
+    return payload?.sub || localStorage.getItem(AUTH_USER_KEY) || null;
+};
+
+/**
+ * Dev Login: Calls POST /api/dev-login to obtain a backend-signed JWT.
+ * @param {string} baseURL - Resolved backend URL
+ * @param {string|null} existingUserId - Reuse existing user_id if available
+ * @returns {Promise<string>} The auth token
+ */
+export const loginDev = async (baseURL = "", existingUserId = null) => {
+    const userId = existingUserId || localStorage.getItem(AUTH_USER_KEY) || null;
+
+    const response = await fetch(`${baseURL}/api/dev-login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(userId ? { user_id: userId } : {}),
+    });
+
+    if (!response.ok) {
+        throw new Error(`Dev login failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Cache token + user_id
+    localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+    localStorage.setItem(AUTH_USER_KEY, data.user_id);
+
+    console.log("[AUTH] Dev token acquired for user:", data.user_id);
+    return data.token;
+};
+
+/**
+ * Ensure we have a valid token. Auto-login if expired or missing.
+ * @param {string} baseURL - Backend URL
+ * @returns {Promise<string>} Valid auth token
+ */
+export const ensureAuth = async (baseURL = "") => {
+    const existing = getAuthToken();
+    if (existing) return existing;
+
+    return await loginDev(baseURL);
+};
+
+/**
+ * Clear auth state (logout)
+ */
+export const clearAuth = () => {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_USER_KEY);
+    console.log("[AUTH] Cleared auth state");
+};
+
+// ─── Preferences (unchanged) ────────────────────────────────────
+
 export const savePreferences = (prefs) => {
     const userId = getUserId();
-
-    // Get existing prefs
     const stored = localStorage.getItem(PREFS_KEY);
     const existing = stored ? JSON.parse(stored) : {};
 
-    // Merge with new prefs
     const updated = {
         ...existing,
         ...prefs,
-        userId,  // Ensure user_id is saved
+        userId,
         updated_at: new Date().toISOString()
     };
 
-    // Check storage size before saving
     const sizeEstimate = JSON.stringify(updated).length;
     if (sizeEstimate > MAX_STORAGE_SIZE) {
-        console.warn('[MEMORY] Preferences exceed 5MB limit. Truncating...');
-        // Remove oldest data if needed
+        console.warn("[MEMORY] Preferences exceed 5MB limit.");
         return userId;
     }
 
     localStorage.setItem(PREFS_KEY, JSON.stringify(updated));
-    console.log('[MEMORY] Preferences saved:', prefs);
-
     return userId;
 };
 
-/**
- * Load user preferences
- * @returns {object|null} - Preference object or null
- */
 export const loadPreferences = () => {
     const stored = localStorage.getItem(PREFS_KEY);
     if (!stored) return null;
-
     try {
-        const prefs = JSON.parse(stored);
-        console.log('[MEMORY] Preferences loaded:', prefs);
-        return prefs;
-    } catch (e) {
-        console.error('[MEMORY] Failed to parse preferences:', e);
+        return JSON.parse(stored);
+    } catch {
         return null;
     }
 };
 
-/**
- * Clear all preferences
- */
 export const clearPreferences = () => {
     localStorage.removeItem(PREFS_KEY);
-    console.log('[MEMORY] Preferences cleared');
 };
 
-/**
- * Get storage usage estimate
- * @returns {number} - Bytes used
- */
 export const getStorageUsage = () => {
     const prefs = localStorage.getItem(PREFS_KEY);
     return prefs ? prefs.length : 0;
