@@ -79,6 +79,11 @@
     }
 
     .intelligence-glass {
-        @apply backdrop-blur-[12px] bg-[#1e1e2d]/65 border border-[#7878a0]/15 shadow-[0_4px_20px_rgba(0, 0, 0, 0.4)] rounded-[12px];
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        background-color: rgba(30, 30, 45, 0.65);
+        border: 1px solid rgba(120, 120, 160, 0.15);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        border-radius: 12px;
     }
 }
