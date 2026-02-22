@@ -90,7 +90,7 @@ const adaptStrict = (rawTrace) => {
         const adapted = adaptClaimForUI(claim);
         if (adapted?.mechanism?.nodes) {
             adapted.mechanism.nodes.forEach(node => {
-                node.label = node.label || node.id;
+                node.label = node.label ?? node.id;
             });
         }
         return adapted;
@@ -103,7 +103,7 @@ const adaptStrict = (rawTrace) => {
     const topLevelGraph = rawTrace.graph || { nodes: [], edges: [] };
     if (topLevelGraph.nodes) {
         topLevelGraph.nodes.forEach(node => {
-            node.label = node.label || node.id;
+            node.label = node.label ?? node.id;
         });
     }
 
@@ -111,7 +111,7 @@ const adaptStrict = (rawTrace) => {
     const causalityChain = causality.chain || [];
     causalityChain.forEach(node => {
         if (node.id) {
-            node.label = node.label || node.id;
+            node.label = node.label ?? node.id;
         }
     });
 
