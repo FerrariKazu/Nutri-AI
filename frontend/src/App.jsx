@@ -476,7 +476,7 @@ function App() {
 
     return (
         <ErrorBoundary>
-            <div className="flex h-screen w-screen bg-neutral-950 text-neutral-100 font-sans overflow-hidden selection:bg-accent/30">
+            <div className="h-screen w-screen bg-neutral-950 text-neutral-100 font-sans overflow-hidden selection:bg-accent/30 relative">
 
                 {/* 1. Sidebar (Persistent on Desktop, Drawer on Mobile) */}
                 <Sidebar
@@ -484,12 +484,18 @@ function App() {
                     setIsOpen={setIsSidebarOpen}
                     conversations={conversations}
                     currentSessionId={sessionId}
-                    onSelectSession={handleSwitchSession}
-                    onNewChat={handleNewChat}
+                    onSelectSession={(sid) => {
+                        handleSwitchSession(sid);
+                        setIsSidebarOpen(false);
+                    }}
+                    onNewChat={() => {
+                        handleNewChat();
+                        setIsSidebarOpen(false);
+                    }}
                 />
 
                 {/* Main Content Area */}
-                <div className="flex-1 flex flex-col h-full bg-neutral-900/20 relative">
+                <div className="w-full h-full bg-neutral-900/20 relative">
 
                     {/* Infrastructure Failure Banner */}
                     {backendStatus === 'fail' && (
