@@ -155,8 +155,20 @@ function App() {
             }
         } catch (e) {
             console.error('[HYDRATE] Failed to hydrate:', e);
+            if (e.status === 403) {
+                console.warn("⚠️ [AUTH] Session 403: Stale identity detected. Clearing session...");
+                clearSession();
+                setSessionId(null);
+                setMessages([]);
+                setTurnCount(0);
+                setStreamStatus('DONE'); // Unlock UI to show landing screen
+            } else {
+                setStreamStatus('ERROR');
+            }
         } finally {
-            setStreamStatus('IDLE');
+            if (streamStatus === 'HYDRATING') {
+                setStreamStatus('IDLE');
+            }
         }
     };
 
