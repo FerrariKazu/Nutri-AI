@@ -36,24 +36,17 @@ const ChatHeader = ({ title, lastActive, mode, onOpenSidebar }) => {
                 />
 
                 <div className="flex flex-col overflow-hidden">
-                    <h1 className="text-sm font-medium text-neutral-200 tracking-wide font-serif truncate max-w-[200px] md:max-w-md">
-                        {title || 'New Conversation'}
-                    </h1>
-                    <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-neutral-500">
-                        <span className="truncate">
-                            {lastActive ? `Active ${timeAgo(lastActive)}` : 'Ready'}
-                        </span>
-                        {mode && (
-                            <>
-                                <span className="text-neutral-800">•</span>
-                                <span className="text-accent/60 truncate">{mode}</span>
-                            </>
+                    {title && title !== 'New Conversation' && (
+                        <h1 className="text-sm font-medium text-neutral-200 tracking-wide font-serif truncate max-w-[200px] md:max-w-md animate-fade-in">
+                            {title}
+                        </h1>
+                    )}
                         )}
-                    </div>
                 </div>
             </div>
-            {/* Optional right-side controls can go here */}
         </div>
+            {/* Optional right-side controls can go here */ }
+        </div >
     );
 };
 
