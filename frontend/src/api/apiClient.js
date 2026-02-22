@@ -608,7 +608,7 @@ export async function getConversation(sessionId) {
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to fetch history: ${response.status}`);
+            throw new APIError(`Failed to fetch history: ${response.status}`, response.status, response);
         }
 
         const data = await response.json();
