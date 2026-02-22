@@ -74,45 +74,12 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
         }
     }, []);
 
-    if (isVersionMismatch) {
-        return (
-            <div className="p-4 bg-red-900/20 border border-red-500/50 rounded-xl flex items-center gap-3 text-red-400">
-                <AlertTriangle size={20} />
-                <div className="text-sm">
-                    <span className="font-bold block text-red-300">Trace Contract Error</span>
-                    Unsupported schema version: {currentVersion}. Frontend requires 1.2.7.
-                </div>
-            </div>
-        );
-    }
-
-    const toggleExpertMode = (e) => {
-        e.stopPropagation();
-        const newMode = !isExpertMode;
-        setIsExpertMode(newMode);
-        localStorage.setItem('nutri_expert_mode', newMode);
-    };
-
-    const toggleRawView = (e) => {
-        e.stopPropagation();
-        setShowRawJson(!showRawJson);
-    };
-
-    const handleClaimSelect = (idx) => {
-        setSelectedClaimIdx(idx);
-    };
-
     const handleCopy = useCallback(() => {
         const text = JSON.stringify(uiTrace?._raw || uiTrace, null, 2);
         navigator.clipboard.writeText(text);
         setCopySuccess(true);
         setTimeout(() => setCopySuccess(false), 2000);
     }, [uiTrace]);
-
-    // Safety: Ensure selected index is valid
-    const currentClaim = claims.length > 0
-        ? (claims[selectedClaimIdx] || claims[0])
-        : null;
 
     // Epistemic Color
     const statusColor = useMemo(() => EPISTEMIC_COLORS[epistemicStatus] || '#94a3b8', [epistemicStatus]);
@@ -139,6 +106,18 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
         }
         return null;
     }, [uiTrace, isStandby]);
+
+    if (isVersionMismatch) {
+        return (
+            <div className="p-4 bg-red-900/20 border border-red-500/50 rounded-xl flex items-center gap-3 text-red-400">
+                <AlertTriangle size={20} />
+                <div className="text-sm">
+                    <span className="font-bold block text-red-300">Trace Contract Error</span>
+                    Unsupported schema version: {currentVersion}. Frontend requires 1.2.7.
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="mt-6 border border-neutral-800 rounded-xl overflow-hidden bg-neutral-900/20 backdrop-blur-sm animate-fade-in shadow-2xl text-card-foreground">
