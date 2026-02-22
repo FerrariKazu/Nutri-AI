@@ -59,7 +59,7 @@ const Tier3Causality = React.memo(({ uiTrace, claimIdx, expertMode }) => {
                 </div>
 
                 {missingFields.length > 0 && (
-                    <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/10 flex items-start gap-3 shadow-inner">
+                    <div className="intelligence-glass p-3 flex items-start gap-3 shadow-inner">
                         <HelpCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                         <div>
                             <div className="flex items-center gap-2">
@@ -83,7 +83,7 @@ const Tier3Causality = React.memo(({ uiTrace, claimIdx, expertMode }) => {
                 )}
 
                 {causality.riskCount > 0 && (
-                    <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/10 flex items-start gap-3">
+                    <div className="intelligence-glass p-3 flex items-start gap-3 border-red-500/20">
                         <ShieldAlert className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                         <div>
                             <div className="flex items-center gap-2">

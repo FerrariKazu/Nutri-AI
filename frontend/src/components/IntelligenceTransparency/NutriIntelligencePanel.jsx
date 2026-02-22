@@ -32,7 +32,10 @@ import EvidenceLineageViewer from './EvidenceLineageViewer';
 import PolicyAuthorityCard from './PolicyAuthorityCard';
 import ExecutionProfileCard from './ExecutionProfileCard';
 import IntelligenceGraph from './IntelligenceGraph';
-import { Tooltip } from './UIUtils';
+import RuleFiringTimeline from './RuleFiringTimeline';
+import RegistrySnapshot from './RegistrySnapshot';
+import CausalityGraph from './CausalityGraph';
+import { formatConfidence } from './UIUtils';
 import { renderPermissions } from '../../contracts/renderPermissions';
 import { EPISTEMIC_COLORS } from '../../contracts/executionTraceSchema';
 
@@ -377,6 +380,19 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                     {/* Scientific Observation Layer (Full Width) */}
                                                     <AccordionSection title="Scientific Observation" icon={Activity} defaultOpen={false}>
                                                         <EvidenceLineageViewer evidenceSet={currentClaim.evidence} />
+                                                    </AccordionSection>
+
+                                                    {/* Causality & Risk (Full Width) */}
+                                                    <AccordionSection title="Causality & Risk" badge="Tier 3" defaultExpanded={true}>
+                                                        <div className="space-y-4">
+                                                            <Tier3Causality uiTrace={uiTrace} claimIdx={0} expertMode={isExpertMode} />
+                                                            {uiTrace.causality?.chain?.length > 0 && (
+                                                                <div className="pt-4 border-t border-neutral-800/40">
+                                                                    <p className="text-[9px] font-mono text-neutral-500 uppercase tracking-widest mb-3">Logic Chain (Deterministic)</p>
+                                                                    <CausalityGraph chain={uiTrace.causality.chain} />
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </AccordionSection>
 
                                                     {/* ═══ RESPONSIVE TWO-COLUMN LAYOUT ═══ */}
