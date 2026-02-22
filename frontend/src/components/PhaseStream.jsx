@@ -172,7 +172,8 @@ const PhaseStream = ({ messages, streamStatus, onPromptSelect }) => {
                             </div>
                         )}
                     </div>
-                ))}
+                ))
+            )}
         </div>
     );
 };
