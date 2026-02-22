@@ -46,7 +46,7 @@ const PhaseStream = ({ messages, streamStatus, onPromptSelect }) => {
         <div
             ref={scrollRef}
             onScroll={handleScroll}
-            className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 md:space-y-12 relative scroll-smooth"
+            className="flex-1 overflow-y-auto px-4 py-4 md:px-8 md:py-6 space-y-8 md:space-y-12 relative scroll-smooth"
         >
             {/* 1. Hero / Landing State (Rendered ONLY when messages.length === 0) */}
             {isEmptyState ? (

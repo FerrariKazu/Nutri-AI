@@ -516,13 +516,11 @@ function App() {
                     )}
 
                     {/* 2. Chat Header (Fixed Top) */}
-                    <div className="h-16 shrink-0">
-                        <ChatHeader
-                            title={conversations.find(c => c.session_id === sessionId)?.title}
-                            lastActive={conversations.find(c => c.session_id === sessionId)?.last_active}
-                            onOpenSidebar={() => setIsSidebarOpen(true)}
-                        />
-                    </div>
+                    <ChatHeader
+                        title={conversations.find(c => c.session_id === sessionId)?.title}
+                        lastActive={conversations.find(c => c.session_id === sessionId)?.last_active}
+                        onOpenSidebar={() => setIsSidebarOpen(true)}
+                    />
 
                     {/* System Telemetry - Top (Just below header) */}
                     <div className="relative shrink-0">
