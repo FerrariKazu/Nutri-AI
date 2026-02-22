@@ -113,7 +113,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                 <AlertTriangle size={20} />
                 <div className="text-sm">
                     <span className="font-bold block text-red-300">Trace Contract Error</span>
-                    Unsupported schema version: {currentVersion}. Frontend requires 1.2.7.
+                    Unsupported schema version: {currentVersion}. Frontend requires 1.2.8.
                 </div>
             </div>
         );
