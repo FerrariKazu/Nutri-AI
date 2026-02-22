@@ -121,9 +121,5 @@ const Sidebar = ({
         </>
     );
 };
-{/* Removed internal floating trigger - now handled by header */ }
-        </>
-    );
-};
 
 export default Sidebar;
