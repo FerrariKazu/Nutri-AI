@@ -40,16 +40,23 @@ function debugLog(category, message, data = null) {
 function debugError(category, message, error = null) {
     const timestamp = new Date().toISOString();
     const prefix = `[${timestamp}] [${category}] ❌`;
+    const isDev = import.meta.env.DEV;
 
     console.error(`${prefix} ${message}`);
     if (error) {
-        console.error(`${prefix} Error details:`, {
+        const errorDetails = {
             name: error.name,
             message: error.message,
             status: error.status,
-            response: error.response,
+            body: error.body,
             stack: error.stack
-        });
+        };
+
+        if (isDev) {
+            console.error(`${prefix} DETAILED ERROR:`, errorDetails);
+        } else {
+            console.error(`${prefix} ${error.name}: ${error.message} (Status: ${error.status || 'N/A'})`);
+        }
     }
 }
 
@@ -120,11 +127,13 @@ const API_CONFIG = {
 // ============================================================================ 
 
 class APIError extends Error {
-    constructor(message, status, response) {
+    constructor(message, status, response, body = null) {
         super(message);
         this.name = 'APIError';
         this.status = status;
         this.response = response;
+        this.body = body;
+        // The stack is automatically captured by the Error constructor
     }
 }
 
@@ -227,9 +236,27 @@ export function clearSession() {
 }
 
 
-// ============================================================================ 
-// CORE API FUNCTIONS
-// ============================================================================ 
+/**
+ * Helper to handle response and throw APIError with body
+ */
+async function handleAPIResponse(response, customMessage = null) {
+    if (response.ok) return response;
+
+    let body = null;
+    try {
+        const text = await response.text();
+        try {
+            body = JSON.parse(text);
+        } catch (e) {
+            body = text;
+        }
+    } catch (e) {
+        body = "(Could not read response body)";
+    }
+
+    const message = customMessage || `API Error: ${response.status} ${response.statusText}`;
+    throw new APIError(message, response.status, response, body);
+}
 
 /**
  * Send a simple prompt and get complete response
@@ -248,41 +275,19 @@ export async function sendPrompt(prompt, mode = 'standard', signal = null) {
 
     try {
         const response = await retry(async () => {
+            const token = await ensureAuth(baseURL);
             const res = await fetch(`${baseURL}/api/chat`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'ngrok-skip-browser-warning': 'true',
-                    'Bypass-Tunnel-Reminder': 'true',
-                    'Authorization': `Bearer ${await ensureAuth(baseURL)}`,
+                    'Authorization': `Bearer ${token}`,
+                    'ngrok-skip-browser-warning': 'true'
                 },
-                body: JSON.stringify({
-                    message: prompt,
-                    mode: mode,
-                }),
-                signal: signal || controller.signal,
+                body: JSON.stringify({ prompt, mode }),
+                signal
             });
 
-            // Handle HTTP errors
-            if (!res.ok) {
-                const errorText = await res.text();
-                const errorData = safeParseJSON(errorText);
-
-                debugError('API', `HTTP ERROR: ${res.status} ${res.statusText}`, {
-                    status: res.status,
-                    response: errorData,
-                    rawText: errorText
-                });
-
-                throw new APIError(
-                    errorData?.error || `HTTP ${res.status}: ${res.statusText}`,
-                    res.status,
-                    errorData
-                );
-            }
-
-            debugLog('API', `📥 RESPONSE: ${res.status} OK`);
-            return res;
+            return await handleAPIResponse(res, "Direct chat failed");
         }, API_CONFIG.maxRetries, API_CONFIG.retryDelay);
 
         // Sanitize response to prevent system prompt leakage
@@ -417,26 +422,17 @@ export function streamPrompt(
                 message: prompt,
                 mode: mode
             });
+            const token = await ensureAuth(baseURL);
             const response = await fetch(`${baseURL}/api/chat/stream?${params.toString()}`, {
-                method: 'GET',
                 headers: {
-                    'ngrok-skip-browser-warning': 'true',
-                    'Authorization': `Bearer ${await ensureAuth(baseURL)}`,
+                    'Authorization': `Bearer ${token}`,
+                    'ngrok-skip-browser-warning': 'true'
                 },
-                signal: combinedSignal,
+                signal
             });
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                debugError('STREAM', `HTTP ERROR: ${response.status}`, {
-                    status: response.status,
-                    text: errorText
-                });
-                throw new APIError(
-                    `HTTP ${response.status}: ${response.statusText}`,
-                    response.status
-                );
-            }
+            await handleAPIResponse(response, "Stream initiation failed");
+            const reader = response.body.getReader();
 
             debugLog('STREAM', '🟢 Response OK, starting reader...');
 
@@ -547,14 +543,15 @@ export async function getConversationsList() {
     debugLog('API', '🔄 Fetching conversation list...');
     try {
         const baseURL = await getBackendURL();
+        const token = await ensureAuth(baseURL);
         const response = await fetch(`${baseURL}/api/conversations`, {
             headers: {
                 'ngrok-skip-browser-warning': 'true',
-                'Authorization': `Bearer ${await ensureAuth(baseURL)}`,
+                'Authorization': `Bearer ${token}`,
             }
         });
 
-        if (!response.ok) throw new APIError(`Failed to fetch list: ${response.status}`, response.status, response);
+        await handleAPIResponse(response, "Failed to fetch list");
 
         const data = await response.json();
         debugLog('API', `📥 Received ${data.conversations?.length || 0} conversations`);
@@ -568,16 +565,16 @@ export async function getConversationsList() {
 export async function createNewSession() {
     debugLog('API', '🆕 Creating new session...');
     try {
-        const baseURL = await getBackendURL();
+        const token = await ensureAuth(baseURL);
         const response = await fetch(`${baseURL}/api/conversation`, {
             method: 'POST',
             headers: {
                 'ngrok-skip-browser-warning': 'true',
-                'Authorization': `Bearer ${await ensureAuth(baseURL)}`,
+                'Authorization': `Bearer ${token}`,
             }
         });
 
-        if (!response.ok) throw new Error('Creation failed');
+        await handleAPIResponse(response, "Conversation creation failed");
 
         const data = await response.json();
 
@@ -600,16 +597,15 @@ export async function getConversation(sessionId) {
     debugLog('API', `🔄 Fetching conversation history for session: ${sessionId}`);
     try {
         const baseURL = await getBackendURL();
+        const token = await ensureAuth(baseURL);
         const response = await fetch(`${baseURL}/api/conversation?session_id=${sessionId}`, {
             headers: {
                 'ngrok-skip-browser-warning': 'true',
-                'Authorization': `Bearer ${await ensureAuth(baseURL)}`,
+                'Authorization': `Bearer ${token}`,
             }
         });
 
-        if (!response.ok) {
-            throw new APIError(`Failed to fetch history: ${response.status}`, response.status, response);
-        }
+        await handleAPIResponse(response, "History fetch failed");
 
         const data = await response.json();
 
@@ -837,18 +833,22 @@ export function streamNutriChat(
 export async function setMode(mode) {
     try {
         const baseURL = await getBackendURL();
+        const token = await ensureAuth(baseURL);
         const response = await fetch(`${baseURL}/api/mode`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'ngrok-skip-browser-warning': 'true'
             },
             body: JSON.stringify({ mode }),
         });
 
-        return response.ok;
+        await handleAPIResponse(response, "Set mode failed");
+        return true;
 
     } catch (error) {
-        console.error('Failed to set mode:', error);
+        debugError('API', 'Failed to set mode', error);
         return false;
     }
 }
@@ -859,8 +859,12 @@ export async function setMode(mode) {
 export async function getHealth() {
     try {
         const baseURL = await getBackendURL();
+        const token = await ensureAuth(baseURL);
         const response = await fetch(`${baseURL}/api/health`, {
-            headers: { 'ngrok-skip-browser-warning': 'true' }
+            headers: {
+                'ngrok-skip-browser-warning': 'true',
+                'Authorization': `Bearer ${token}`
+            }
         });
         if (!response.ok) return { status: 'offline' };
         return await response.json();
@@ -875,11 +879,17 @@ export async function getHealth() {
 export async function getStats() {
     try {
         const baseURL = await getBackendURL();
-        const response = await fetch(`${baseURL}/api/stats`);
+        const token = await ensureAuth(baseURL);
+        const response = await fetch(`${baseURL}/api/stats`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'ngrok-skip-browser-warning': 'true'
+            }
+        });
         if (!response.ok) return { recipes: 0, ingredients: 0, papers: 0 };
         return await response.json();
     } catch (error) {
-        console.error('Failed to get stats:', error);
+        debugError('API', 'Failed to get stats', error);
         return { recipes: 0, ingredients: 0, papers: 0 };
     }
 }
