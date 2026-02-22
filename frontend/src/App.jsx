@@ -64,6 +64,7 @@ function App() {
     const abortRef = useRef(null);
     const timeoutRef = useRef(null);
     const stallTimeoutRef = useRef(null);
+    const isHydratingRef = useRef(false);
 
     // Initial Load: Fetch List & Hydrate Most Recent
     useEffect(() => {
@@ -114,6 +115,14 @@ function App() {
 
     // Helper: Hydrate a specific session
     const hydrateSession = async (sid) => {
+        if (!sid) {
+            setStreamStatus('IDLE');
+            return;
+        }
+
+        if (isHydratingRef.current) return;
+        isHydratingRef.current = true;
+
         setStreamStatus('HYDRATING');
         setMessages([]); // Clear UI immediately
         try {
@@ -161,14 +170,22 @@ function App() {
                 setSessionId(null);
                 setMessages([]);
                 setTurnCount(0);
+
+                // Nuclear URL Cleanup: Remove ?session_id=... to prevent reload loops
+                if (window.location.search.includes('session_id')) {
+                    const url = new URL(window.location);
+                    url.searchParams.delete('session_id');
+                    window.history.replaceState({}, document.title, url.pathname + url.search);
+                }
+
                 setStreamStatus('DONE'); // Unlock UI to show landing screen
             } else {
                 setStreamStatus('ERROR');
             }
         } finally {
-            if (streamStatus === 'HYDRATING') {
-                setStreamStatus('IDLE');
-            }
+            isHydratingRef.current = false;
+            // Only set IDLE if we didn't just 403-reset
+            setStreamStatus(prev => prev === 'HYDRATING' ? 'IDLE' : prev);
         }
     };
 
