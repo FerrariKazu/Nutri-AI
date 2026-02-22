@@ -37,29 +37,26 @@
         @apply h-full;
     }
 
-    /* ===== Hide Scrollbars Globally ===== */
+    /* ===== Hide Scrollbars Globally - NUCLEAR OPTION ===== */
     * {
-        scrollbar-width: none;
+        scrollbar-width: none !important;
         /* Firefox */
-        -ms-overflow-style: none;
+        -ms-overflow-style: none !important;
         /* IE/Edge */
     }
 
     *::-webkit-scrollbar {
-        display: none;
+        display: none !important;
         /* Chrome/Safari/Webkit */
+        width: 0 !important;
+        height: 0 !important;
     }
 
     ::-webkit-scrollbar {
-        display: none;
+        display: none !important;
     }
 }
 
-/* Firefox support */
-* {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(120, 120, 160, 0.6) rgba(20, 20, 28, 0.6);
-}
 
 @layer utilities {
     .safe-bottom {
