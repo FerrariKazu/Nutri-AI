@@ -70,12 +70,25 @@ const PhaseStream = ({ messages, streamStatus, onPromptSelect }) => {
 
     // Daily Rotating Suggestions Logic
     const dailySuggestions = useMemo(() => {
+        // Step 1: Identity Extraction (Robust fallback to prevent NaN/Undefined seeds)
         const userId = getUserId() || 'anonymous';
+
+        // Step 2: Temporal Seed (UTC Date)
         const today = new Date().toISOString().slice(0, 10);
-        const seed = hashString(today + userId);
+
+        // Step 3: Combined Deterministic Seed
+        const seedValue = today + userId;
+        const seed = hashString(seedValue);
+
+        console.log(`[SUGGESTIONS] Seeding with: "${seedValue}" (hash: ${seed})`);
+
+        // Step 4: Shuffled Selection
         const shuffled = seededShuffle(SUGGESTION_POOL, seed);
+
+        // Step 5: Diversified Take (1 Diagnostic, 1 Procedural, 1 Scientific)
+        // For now, just take top 3 as requested, but ensure it's reactive.
         return shuffled.slice(0, 3);
-    }, []); // Recalculates only once per session typically, or if user/day logic is added to dependencies
+    }, [messages.length, streamStatus]); // Re-evaluate when session state changes
 
     return (
         <div
