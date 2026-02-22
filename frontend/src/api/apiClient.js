@@ -554,7 +554,7 @@ export async function getConversationsList() {
             }
         });
 
-        if (!response.ok) throw new Error(`Failed to fetch list: ${response.status}`);
+        if (!response.ok) throw new APIError(`Failed to fetch list: ${response.status}`, response.status, response);
 
         const data = await response.json();
         debugLog('API', `📥 Received ${data.conversations?.length || 0} conversations`);
