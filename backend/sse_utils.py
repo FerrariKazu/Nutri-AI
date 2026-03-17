@@ -2,6 +2,8 @@ import json
 import logging
 from typing import Any
 
+from backend.contracts.output_contract import ContractViolationError, validate_sse_content
+
 logger = logging.getLogger(__name__)
 
 def safe_json(obj: Any, seen: set = None, depth: int = 0) -> Any:
@@ -79,39 +81,33 @@ def format_sse_event(event: str, data: Any) -> str:
         if event != "error_event": # Allow simple error_event without ID for fallback
             assert stream_id is not None, f"SSE {event} must include stream_id"
         
-        # 3. Token Content Enforcement (User Request: Strict string checking)
-        textual_events = ("token", "reasoning", "message")
-        if event in textual_events:
-            content = payload.get("content", "")
-            
-            # Backend Assertion to prevent regressions
-            if not isinstance(content, str):
-                logger.error(f"[SSE] Contract Violation: {event} content is not a string (got {type(content)})")
-                assert isinstance(content, str), f"SSE {event} content must be string"
-            
-            # 4. NUCLEAR SAFETY CHECK (Zero JSON leakage in textual content)
-            # We only check the textual content, not the whole envelope.
-            content_str = str(content).strip()
-            if content_str.startswith(("{", "[")) and content_str != "[DONE]" and not content_str.startswith("[System Error"):
-                logger.error(f"🚨 NUCLEAR SAFETY VIOLATION: JSON leakage detected in {event} content!")
-                raise RuntimeError(f"UI SAFETY VIOLATION: JSON detected in {event} stream.")
+        # 3. Token Content Enforcement — Type-based only, no prefix heuristics
+        content = payload.get("content", "")
+        try:
+            validate_sse_content(event, content)
+        except ContractViolationError as cve:
+            logger.critical(f"🚨 [TRANSPORT_VIOLATION] {cve}")
+            raise
 
         # 5. Serialize THE ENTIRE ENVELOPE to JSON
         json_envelope = json.dumps(safe_json(payload))
         
         # [TRACE_AUDIT] Transport Validation
         try:
-             # Check if this event carries a trace
-             trace = None
-             if event == "execution_trace":
-                 trace = payload.get("content")
-             elif isinstance(payload, dict) and "execution_trace" in payload:
-                 trace = payload["execution_trace"]
-             
-             if trace:
-                 claims = trace.get("claims", [])
-                 logger.info(f"[TRACE_AUDIT] 🚀 SSE SENT TO CLIENT: Event={event}, Claims={len(claims)}")
-        except Exception:
+            # Inspect the final serialized data
+            final_payload = json.loads(json_envelope)
+            if event == "execution_trace":
+                trace_data = final_payload.get("content")
+                if trace_data:
+                    scientific = trace_data.get("scientific_layer", {})
+                    claims = scientific.get("claims", [])
+                    keys = list(trace_data.keys())
+                    logger.info(f"[TRACE_AUDIT] 🚀 SSE SENT: Event={event}, Claims={len(claims)}, Status={trace_data.get('epistemic_status')}")
+                    logger.info(f"[TRACE_AUDIT] Keys: {keys}")
+                    if "epistemic_status" not in keys:
+                        logger.error(f"[TRACE_AUDIT] 🚨 MISSING: epistemic_status! Keys={keys}")
+        except Exception as ae:
+            logger.debug(f"[TRACE_AUDIT] Failed: {ae}")
             pass
 
         return f"event: {event}\ndata: {json_envelope}\n\n"

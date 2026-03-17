@@ -85,7 +85,8 @@ INDEX_CONFIGS = {
         source_paths=[
             'chemistry/FoodDB/',
             'chemistry/DSSTox/',
-            'chemistry/FartDB.parquet'
+            'chemistry/FartDB.parquet',
+            'chemistry/composition-data.xlsx'
         ],
         output_name='chemistry',
         chunk_size=900,
@@ -100,10 +101,38 @@ INDEX_CONFIGS = {
     ),
 }
 
+# Chemistry Schema Mapping Registry
+DATASET_SCHEMAS = {
+    "Content.csv": {
+        "template": "{orig_food_common_name} contains {standard_content} {orig_unit} of nutrient (ID: {food_id})"
+    },
+    "Nutrient.csv": {
+        "text_fields": ["name", "description"]
+    },
+    "composition-data.xlsx": {
+        "text_fields": ["orig_food_common_name", "nutrient_name", "amount", "unit", "description"]
+    },
+    "Compound.csv": {
+        "text_fields": ["name", "description", "formula"]
+    },
+    "Pathway.csv": {
+        "text_fields": ["name", "description"]
+    }
+}
+
+# Files that contain only relational IDs and should be ignored for vector search
+RELATIONAL_EXCLUSIONS = {
+    'FoodTaxonomy.csv', 'Reference.csv', 'CompoundSynonym.csv', 
+    'CompoundsEnzyme.csv', 'CompoundsFlavor.csv', 'CompoundsPathway.csv', 
+    'PdbIdentifier.csv', 'Pfam.csv', 'PfamMembership.csv',
+    'AccessionNumber.csv', 'MapItemsPathway.csv', 'NcbiTaxonomyMap.csv',
+    'EnzymeSynonym.csv', 'OntologySynonym.csv'
+}
+
 DATA_SOURCES_DIR = PROJECT_ROOT / 'data_sources'
-OUTPUT_DIR = PROJECT_ROOT / 'backend' / 'indexes'
-EMBEDDING_MODEL = 'BAAI/bge-m3'
-EMBEDDING_DIM = 1024
+OUTPUT_DIR = PROJECT_ROOT / 'vector_store'
+EMBEDDING_MODEL = 'BAAI/bge-small-en-v1.5'
+EMBEDDING_DIM = 384
 
 
 # ============================================================================
@@ -224,6 +253,11 @@ def load_directory_data(
             for item in items:
                 item['_source_file'] = file_path.name
             
+            # Filter relational exclusions
+            if file_path.name in RELATIONAL_EXCLUSIONS:
+                logger.info(f"Skipping relational file: {file_path.name}")
+                continue
+                
             all_items.extend(items)
     
     return all_items
@@ -286,24 +320,47 @@ def build_nutrition_text(item: Dict[str, Any]) -> str:
 
 
 def build_chemistry_text(item: Dict[str, Any]) -> str:
-    """Build searchable text from chemistry data."""
+    """Build searchable text from chemistry data using schema registry."""
+    source_file = item.get('_source_file', '')
+    schema = DATASET_SCHEMAS.get(source_file)
+    
     parts = []
     
-    # Compound name
-    name = item.get('name') or item.get('compound_name') or ''
-    if name:
-        parts.append(name)
+    if schema:
+        # 1. Template based mapping
+        if 'template' in schema:
+            try:
+                # Fill template with available fields, default to empty string if missing
+                safe_item = {k: (v if v is not None else '') for k, v in item.items()}
+                text = schema['template'].format(**safe_item)
+                parts.append(text)
+            except KeyError as e:
+                logger.warning(f"Missing field {e} for template in {source_file}")
+        
+        # 2. Field list based mapping
+        if 'text_fields' in schema:
+            for field in schema['text_fields']:
+                val = item.get(field)
+                if val and str(val).strip():
+                    if field in ['formula', 'moldb_smiles']:
+                        parts.append(f"Formula: {str(val)[:100]}")
+                    else:
+                        parts.append(str(val))
     
-    # Description
-    desc = item.get('description') or ''
-    if desc:
-        parts.append(desc[:500])
-    
-    # Formula
-    formula = item.get('moldb_smiles') or item.get('formula') or ''
-    if formula:
-        parts.append(f"Formula: {formula[:100]}")
-    
+    # 3. Fallback to generic fields if no schema matches or produces tokens
+    if not parts:
+        name = item.get('name') or item.get('compound_name') or item.get('title') or ''
+        if name:
+            parts.append(str(name))
+        
+        desc = item.get('description') or ''
+        if desc:
+            parts.append(str(desc)[:500])
+            
+        formula = item.get('formula') or item.get('moldb_smiles') or ''
+        if formula:
+            parts.append(f"Formula: {str(formula)[:100]}")
+            
     return ' '.join(parts)
 
 
@@ -369,12 +426,8 @@ _embedder = None
 
 def get_embedder():
     """Get or create embedder singleton."""
-    global _embedder
-    if _embedder is None:
-        from backend.embedder_bge import EmbedderBGE
-        _embedder = EmbedderBGE(model_name=EMBEDDING_MODEL)
-        logger.info(f"Loaded embedder: {EMBEDDING_MODEL}")
-    return _embedder
+    from backend.retriever.embedder_singleton import EmbedderSingleton
+    return EmbedderSingleton.get()
 
 
 def embed_texts(texts: List[str], batch_size: int = 32) -> np.ndarray:
@@ -383,7 +436,7 @@ def embed_texts(texts: List[str], batch_size: int = 32) -> np.ndarray:
     
     logger.info(f"Embedding {len(texts)} texts (batch_size={batch_size})...")
     
-    embeddings = embedder.embed_texts(texts, batch_size=batch_size)
+    embeddings = embedder.embed_documents(texts)
     
     # Normalize for cosine similarity
     norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
@@ -407,7 +460,7 @@ def build_index(
         return False
     
     output_path = OUTPUT_DIR / f"{config.output_name}.faiss"
-    meta_path = OUTPUT_DIR / f"{config.output_name}_meta.json"
+    meta_path = OUTPUT_DIR / f"{config.output_name}.meta.json"
     
     # Check if already exists
     if output_path.exists() and not force:
@@ -431,13 +484,17 @@ def build_index(
             continue
         
         if full_path.is_dir():
-            items = load_directory_data(full_path, config.file_types or [])
+            # Increase limit for chemistry directory loading
+            limit = 50000 if index_type == 'chemistry' else 5000
+            items = load_directory_data(full_path, config.file_types or [], limit_per_file=limit)
         elif full_path.suffix == '.csv' or full_path.suffix == '.tsv':
             items = load_csv_data(full_path)
         elif full_path.suffix == '.parquet':
             items = load_parquet_data(full_path)
         elif full_path.suffix == '.pdf':
             items = load_pdf_data(full_path)
+        elif full_path.suffix in ['.xlsx', '.xls']:
+            items = load_excel_data(full_path)
         else:
             logger.warning(f"Unsupported file type: {full_path}")
             continue
@@ -482,8 +539,31 @@ def build_index(
     
     # Build FAISS index
     logger.info("Building FAISS index...")
-    index = faiss.IndexFlatIP(EMBEDDING_DIM)  # Inner product for cosine similarity
-    index.add(embeddings)
+    
+    if index_type == 'chemistry':
+        # IVFPQ for chemistry to save memory (27GB -> ~2GB)
+        nlist = 256  # Optimized for ~20k vectors (vectors per centroid >= 40)
+        m = 32
+        bits = 8
+        logger.info(f"Using IVFPQ compression for chemistry: nlist={nlist}, m={m}")
+        
+        # Training sample safety guard
+        train_size = min(len(embeddings), 200000)
+        train_indices = np.random.choice(len(embeddings), train_size, replace=False)
+        train_vectors = embeddings[train_indices]
+        
+        quantizer = faiss.IndexFlatIP(EMBEDDING_DIM)
+        index = faiss.IndexIVFPQ(quantizer, EMBEDDING_DIM, nlist, m, bits)
+        
+        logger.info("Training IVFPQ...")
+        index.train(train_vectors)
+        logger.info("Adding vectors...")
+        index.add(embeddings)
+        index.nprobe = 8
+    else:
+        # Default IndexFlatIP for other smaller or performance-critical indexes
+        index = faiss.IndexFlatIP(EMBEDDING_DIM)
+        index.add(embeddings)
     
     logger.info(f"Index contains {index.ntotal} vectors")
     

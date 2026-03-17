@@ -53,6 +53,30 @@ MOCK_EVIDENCE_DB = {
             "publication_year": 2005,
             "evidence_grade": EvidenceGrade.WEAK
         }
+    ],
+    "yeast_fermentation_co2": [
+        {
+            "id": "ev_005",
+            "source_identifier": "Food Chem: 10.1016/j.foodchem.2020.123",
+            "study_type": StudyType.MECHANISTIC_INFERENCE,
+            "experimental_model": "Biochemical Assay",
+            "n": 0,
+            "effect_direction": EffectDirection.POSITIVE,
+            "publication_year": 2020,
+            "evidence_grade": EvidenceGrade.MODERATE
+        }
+    ],
+    "leavening_gas_law": [
+        {
+            "id": "ev_006",
+            "source_identifier": "Physical Chemistry: Ideal Gas Law",
+            "study_type": StudyType.MECHANISTIC_INFERENCE,
+            "experimental_model": "Physics Principles",
+            "n": 0,
+            "effect_direction": EffectDirection.POSITIVE,
+            "publication_year": 1834,
+            "evidence_grade": EvidenceGrade.SPECULATIVE
+        }
     ]
 }
 
@@ -83,6 +107,10 @@ class EvidenceResolver:
         elif "sugar" in statement or "sucrose" in statement:
             if "tas1r2" in statement or "sweet" in statement:
                 lookup_key = "sucrose_activates_tas1r2"
+        elif "yeast" in statement or "fermentation" in statement or "bread" in statement:
+            lookup_key = "yeast_fermentation_co2"
+        elif "leavening" in statement or "expansion" in statement:
+            lookup_key = "leavening_gas_law"
         
         if lookup_key and lookup_key in MOCK_EVIDENCE_DB:
             raw_ev = MOCK_EVIDENCE_DB[lookup_key]

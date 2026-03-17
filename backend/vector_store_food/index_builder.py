@@ -11,7 +11,8 @@ from tqdm import tqdm
 import logging
 
 from backend.nutrition_loader.schema import UnifiedFood
-from . import embedder
+from . import embedder as embedder_utils
+from backend.retriever.embedder_singleton import EmbedderSingleton
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +41,8 @@ def build_index(items: List[UnifiedFood], out_dir: str = None, batch_size: int =
     
     logger.info(f"Building food index from {len(items)} items...")
     
-    # Load embedder
-    embedder.load_model()
+    # Load embedder via singleton
+    model = EmbedderSingleton.get()
     
     # Prepare texts
     logger.info("Preparing texts...")
@@ -50,7 +51,7 @@ def build_index(items: List[UnifiedFood], out_dir: str = None, batch_size: int =
     metadata = {}
     
     for item in tqdm(items, desc="Preparing"):
-        text = embedder.prepare_recipe_text(item)
+        text = embedder_utils.prepare_recipe_text(item)
         texts.append(text)
         uuids.append(str(item.uuid))
         
@@ -59,7 +60,7 @@ def build_index(items: List[UnifiedFood], out_dir: str = None, batch_size: int =
     
     # Generate embeddings
     logger.info(f"Generating embeddings (batch_size={batch_size})...")
-    embeddings = embedder.embed_texts(texts, batch_size=batch_size, show_progress=True)
+    embeddings = model.embed_texts(texts, batch_size=batch_size)
     
     # Build FAISS index (IndexFlatIP for cosine via normalized vectors)
     dim = embeddings.shape[1]

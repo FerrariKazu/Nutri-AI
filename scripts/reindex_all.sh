@@ -15,10 +15,10 @@ if [ -d "venv" ]; then
 fi
 
 # Check Python
-python --version
+python3 --version
 
 # Run reindexing script
-python scripts/reindex.py
+python3 scripts/reindex.py
 
 echo ""
 echo "=============================================="

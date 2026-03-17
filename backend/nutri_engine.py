@@ -1,12 +1,8 @@
 """
 NutriEngine - Unified Response Generator
 
-Same persona, different modes. This replaces:
-- FoodConversationAgent
-- FinalPresentationAgent.converse
-- FinalPresentationAgent.present_recipe
-
-All paths share the same NUTRI_CORE_PERSONA and conversation memory.
+Each response mode uses a specialized system prompt 
+determined by the current GovernanceState.
 """
 
 import logging
@@ -15,16 +11,20 @@ from typing import Dict, Any, Optional, Callable, List
 import asyncio
 
 from backend.response_modes import ResponseMode
-from backend.persona import NUTRI_CORE_PERSONA
+from backend.prompts.system_roles import get_system_prompt_for_state
 from backend.mode_constraints import (
     CONVERSATION_CONSTRAINTS,
     DIAGNOSTIC_CONSTRAINTS,
     PROCEDURAL_CONSTRAINTS,
     NUTRITION_ANALYSIS_CONSTRAINTS,
+    MECHANISTIC_CONSTRAINTS,
     NUTRITION_CONFIDENCE_POLICY
 )
 from backend.llm_qwen3 import LLMQwen3
 from backend.nutrition_enforcer import NutritionEnforcer
+from backend.governance_types import ALLOW_DEFAULT_SERVINGS, ALLOW_NUMERIC_HALLUCINATION
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +50,11 @@ class NutriEngine:
         **kwargs
     ) -> str:
         logger.info(f"🎯 NutriEngine generating in {mode.value} mode")
-        
+
         # 1. Build system prompt
         pubchem_data = kwargs.get("pubchem_data")
-        system_prompt = self._build_prompt(mode, synthesis_data, pubchem_data)
+        gov_state = kwargs.get("gov_state", None)
+        system_prompt = self._build_prompt(mode, synthesis_data, pubchem_data, gov_state)
 
         # 2. Get conversation history
         history = self.memory.get_messages(session_id)
@@ -62,8 +63,8 @@ class NutriEngine:
         micro_planning_guidance = (
             "\n\nCONVERSATIONAL MICRO-PLANNING (Hidden):\n"
             "Analyze the user's latest message:\n"
-            "- Emotion: Is the user confused, frustrated, curious, or ready to act?\n"
-            "- Intent: What is the emotional or practical goal (reassurance, explanation, confirmation)?\n"
+            "- Objective: Is the user confused, frustrated, seeking information, or ready to act?\n"
+            "- Intent: What is the primary goal (clarification, technical explanation, confirmation)?\n"
             "- Target Length: Should the response be concise (fast confirmation) or detailed (deeper explanation)?\n"
             "Adjust your tone, verbosity, and pacing accordingly. DO NOT mention this analysis in your response."
         )
@@ -81,13 +82,12 @@ class NutriEngine:
             response = self.llm.generate_text(messages, stream_callback=stream_callback)
             
             # 5. Governance Safety Net (Hard Strip)
-            # 5. Governance Safety Net (Hard Strip)
-            if mode != ResponseMode.NUTRITION_ANALYSIS:
-                governed_response = self._apply_nutrition_governance(response, mode)
-                if governed_response != response:
-                    logger.warning("🛡️ Nutrition Governance triggered: Stripped numeric leakage.")
-                    response = governed_response
-                    # If we already streamed, we can't easily undo, but we store the governed version.
+            # Apply to ALL modes in Phase 1.6 to ensure zero numeric leakage
+            governed_response = self._apply_nutrition_governance(response, mode)
+            if governed_response != response:
+                logger.warning("🛡️ [GOVERNANCE] Nutrition Governance triggered: Stripped numeric leakage.")
+                response = governed_response
+                # If we already streamed, we can't easily undo, but we store the governed version.
 
         except Exception as e:
             logger.error(f"Generation error: {e}")
@@ -261,10 +261,12 @@ class NutriEngine:
             if re.search(r"\bof\s+[a-z]+", post_context):
                 return snippet
                 
-            # Default to blocking raw numbers in non-procedural modes to be safe?
-            # E.g. "It has 50g." -> Block.
-            # "Add 50g." -> Block (should be procedural).
-            return "[qualitatively significant amount]"
+            # Default to blocking raw numbers in non-procedural modes.
+            # PHASE 1.6: If ALLOW_NUMERIC_HALLUCINATION is False, be more aggressive.
+            if not ALLOW_NUMERIC_HALLUCINATION:
+                return "[qualitatively significant amount]"
+            
+            return snippet # Fallback (should not be reached in Phase 1.6)
 
         governed_text = re.sub(contextual_unit_pattern, contextual_replacement, governed_text, flags=re.IGNORECASE)
 
@@ -293,16 +295,25 @@ class NutriEngine:
         self,
         mode: ResponseMode,
         synthesis_data: Optional[Dict[str, Any]],
-        pubchem_data: Optional[Any] = None
+        pubchem_data: Optional[Any] = None,
+        gov_state: Optional[Any] = None
     ) -> str:
         constraints = {
             ResponseMode.CONVERSATION: CONVERSATION_CONSTRAINTS,
             ResponseMode.DIAGNOSTIC: DIAGNOSTIC_CONSTRAINTS,
             ResponseMode.PROCEDURAL: PROCEDURAL_CONSTRAINTS,
             ResponseMode.NUTRITION_ANALYSIS: NUTRITION_ANALYSIS_CONSTRAINTS,
+            ResponseMode.MECHANISTIC: MECHANISTIC_CONSTRAINTS,
         }
 
-        prompt = NUTRI_CORE_PERSONA + "\n\n" + constraints[mode]
+        # 🤖 Phase 1.8: Dynamic System Prompt Injection
+        # Default to ALLOW_QUALITATIVE if not provided, for backward compatibility
+        if gov_state is None:
+            from backend.governance_types import GovernanceState
+            gov_state = GovernanceState.ALLOW_QUALITATIVE
+            
+        base_prompt = get_system_prompt_for_state(gov_state)
+        prompt = base_prompt + "\n\n" + constraints.get(mode, CONVERSATION_CONSTRAINTS)
         
         if mode == ResponseMode.NUTRITION_ANALYSIS:
             prompt += "\n\n" + NUTRITION_CONFIDENCE_POLICY

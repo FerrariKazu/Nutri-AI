@@ -73,9 +73,42 @@ def asks_for_steps(message: str) -> bool:
         for phrase in [
             "how do i", "give me steps", "walk me through",
             "recipe for", "make me", "step by step", "can you make",
-            "show me how", "teach me to", "instructions for"
+            "show me how", "teach me to", "instructions for",
+            "design a meal", "create a dish"
         ]
     )
+
+
+def is_mechanistic_intent(message: str) -> bool:
+    """
+    Detects PURE mechanistic/scientific inquiries that are NOT recipe requests.
+    Examples: "What makes bread fluffy?", "Why does meat brown?"
+    
+    Logic:
+    1. Must look like a causal question (why/how/what makes)
+    2. Must NOT look like a recipe request (ingredients, calories, instructions)
+    """
+    msg_lower = message.lower()
+    
+    # Positive Signals (Causal phrasing)
+    causal_triggers = [
+        "why does", "why do", "why is", "how does", "how do",
+        "what makes", "what causes", "effect of", "impact of",
+        "leads to", "results in", "helps with", "reduces",
+        "improves", "functions of", "role of", "chemistry of",
+        "science of", "physics of", "biology of"
+    ]
+    has_causal = any(t in msg_lower for t in causal_triggers)
+    
+    # Negative Signals (Recipe/Diet constraints)
+    recipe_blockers = [
+        "recipe", "design a", "make me", "cook a", "ingredients",
+        "calories", "macros", "protein count", "meal plan",
+        "shopping list", "instructions", "step by step"
+    ]
+    has_recipe = any(t in msg_lower for t in recipe_blockers)
+    
+    return has_causal and not has_recipe
 
 
 import logging

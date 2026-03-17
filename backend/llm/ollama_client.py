@@ -1,6 +1,5 @@
 import logging
 import os
-import ollama
 from typing import List, Dict, Optional, Generator
 from .base import LLMClient
 
@@ -10,6 +9,7 @@ class OllamaClient(LLMClient):
     """Legacy wrapper for Ollama-served models"""
     
     def __init__(self, model_name: str):
+        import ollama
         host = os.getenv("LLM_ENDPOINT", "http://localhost:11434")
         self.client = ollama.Client(host=host, timeout=300.0)
         self.model_name = model_name

@@ -85,7 +85,7 @@ fi
 export PYTHONPATH=$PYTHONPATH:.
 export LLM_BACKEND="llama_cpp"
 export LLAMA_PORT=8081
-nohup python -u backend/server.py > "$SCRIPT_DIR/api.log" 2>&1 &
+nohup python3 -u backend/server.py > "$SCRIPT_DIR/api.log" 2>&1 &
 echo -e "${GREEN}⚙️  Backend started (logs: api.log)${NC}"
 
 # 3. Frontend

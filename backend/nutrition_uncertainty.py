@@ -19,6 +19,7 @@ class UncertaintyModel:
     variance_drivers: Dict[str, float]
     weakest_link_id: Optional[str]
     explanation: str
+    confidence_breakdown: Dict[str, Any] = field(default_factory=dict)
 
 class UncertaintyCalculator:
     """
@@ -75,10 +76,26 @@ class UncertaintyCalculator:
 
         # 3. Aggregate using Weighted Minimum (Worst-case)
         if not claim_uncertainties:
-            return UncertaintyModel(1.0, [], {}, None, "No claims to analyze.")
+            return UncertaintyModel(0.0, [], {}, None, "No claims to analyze.", {
+                "baseline": 0.2,
+                "multipliers": [],
+                "policy_adjustment": 0.0,
+                "final": 0.0
+            })
             
         weakest_claim = min(claim_uncertainties, key=lambda x: x.final_confidence)
         response_confidence = weakest_claim.final_confidence
+        
+        # 4. Construct Structured Breakdown (Upgrade 27)
+        # For simplicity in this iteration, we map the worst-case claim to the response breakdown
+        breakdown = {
+            "baseline": weakest_claim.base_confidence,
+            "multipliers": [
+                {"label": driver.replace('_', ' ').capitalize(), "value": -penalty} for driver, penalty in weakest_claim.penalties.items()
+            ],
+            "policy_adjustment": 0.0, # Placeholder for MetaLearner adjustment
+            "final": response_confidence
+        }
         
         explanation = self._generate_explanation(overall_drivers, weakest_claim)
         
@@ -89,7 +106,8 @@ class UncertaintyCalculator:
             claim_uncertainties=claim_uncertainties,
             variance_drivers=overall_drivers,
             weakest_link_id=weakest_claim.claim_id,
-            explanation=explanation
+            explanation=explanation,
+            confidence_breakdown=breakdown
         )
 
     def _generate_explanation(self, drivers: Dict[str, float], weakest: ClaimUncertainty) -> str:

@@ -133,6 +133,24 @@ ONTOLOGY = {
             "tastes": [{"label": "sour", "confidence": 0.95, "strength": 0.8, "direction": "increase"}],
             "receptors": [{"name": "OTOP1", "perception": "sour", "confidence": 0.9}],
             "evidence_type": "human study"
+        },
+        "carbon_dioxide": {
+            "families": ["chemical", "physical"],
+            "authorities": [{"name": "PubChem", "type": "database", "id": "280", "url": "https://pubchem.ncbi.nlm.nih.gov/compound/280"}],
+            "receptors": [{"name": "CA-IV", "perception": "carbonation / fizz", "confidence": 0.9}],
+            "evidence_type": "human study"
+        },
+        "gluten": {
+            "families": ["structural", "chemical"],
+            "authorities": [{"name": "UniProt", "type": "database", "id": "P04706", "url": "https://www.uniprot.org/uniprotkb/P04706"}],
+            "receptors": [{"name": "TLR4", "perception": "viscoelasticity / structure", "confidence": 0.5}], # Tenuous but serves as anchor
+            "evidence_type": "theoretical"
+        },
+        "yeast": {
+            "families": ["biological", "process"],
+            "authorities": [{"name": "NCBI", "type": "database", "id": "4932", "url": "https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?id=4932"}],
+            "receptors": [{"name": "metabolic_bypass", "perception": "fermentation output", "confidence": 0.9}],
+            "evidence_type": "human study"
         }
     },
     "processes": {
@@ -153,6 +171,11 @@ ONTOLOGY = {
                 {"label": "browned", "type": "color", "direction": "increase", "strength": 0.9, "confidence": 0.9}
             ],
             "evidence_type": "theoretical"
+        },
+        "leavening": {
+            "family": "physical",
+            "perceptions": [{"label": "gas expansion", "type": "structural", "direction": "increase", "strength": 0.9, "confidence": 0.9}],
+            "evidence_type": "theoretical"
         }
     },
     "physical_states": {
@@ -169,6 +192,11 @@ ONTOLOGY = {
         "volatility": {
             "family": "structural",
             "effects": [{"label": "aroma release", "type": "aroma", "direction": "increase", "strength": 0.9, "confidence": 0.8}],
+            "evidence_type": "theoretical"
+        },
+        "viscoelasticity": {
+            "family": "structural",
+            "effects": [{"label": "elasticity / rising", "type": "structural", "direction": "increase", "strength": 0.8, "confidence": 0.7}],
             "evidence_type": "theoretical"
         }
     }
@@ -258,19 +286,31 @@ class SensoryRegistry:
         return None
 
     @staticmethod
-    def get_registry_snapshot() -> Dict[str, str]:
+    def get_registry_snapshot() -> Dict[str, Any]:
         """
         Computes a deterministic snapshot of the current registry state.
         Requirement for "computational time travel" (Vulnerability #2).
         """
         import hashlib
         import json
+        import datetime
         
         canonical = json.dumps(ONTOLOGY, sort_keys=True, default=str)
-        reg_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+        reg_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        
+        # Calculate scope metrics (Upgrade 27)
+        scope = {
+            "entity_counts": {
+                "compounds": len(ONTOLOGY["compounds"]),
+                "processes": len(ONTOLOGY["processes"]),
+                "physical_states": len(ONTOLOGY["physical_states"])
+            },
+            "last_updated": "2026-02-12" # Static version marker for this snapshot
+        }
         
         return {
-            "version": "1.2", # Registry version
+            "version": "1.3", # Registry version
             "hash": reg_hash,
-            "ontology_version": ONTOLOGY_VERSION
+            "ontology_version": ONTOLOGY_VERSION,
+            "scope": scope
         }

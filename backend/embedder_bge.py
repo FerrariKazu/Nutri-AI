@@ -13,18 +13,52 @@ from FlagEmbedding import BGEM3FlagModel
 logger = logging.getLogger(__name__)
 
 
+def _normalize_embedding(vec) -> np.ndarray:
+    """
+    Flatten any BGE-M3 output into a FAISS-safe 1D float32 vector.
+    Handles shapes: (D,), (1, D), (1, 1, D) or nested Python lists.
+    """
+    if isinstance(vec, list):
+        vec = np.array(vec)
+    vec = np.array(vec, dtype=np.float32)
+    if vec.ndim > 1:
+        vec = vec.reshape(-1)
+    return vec
+
+
+
 class EmbedderBGE:
-    """BGE-M3 embedding wrapper with caching"""
+    """BGE-M3 embedding wrapper with caching and class-level singleton.
     
+    Use EmbedderBGE.get_instance(model_name) instead of direct instantiation
+    to avoid reloading the 1.3 GB model once per index.
+    """
+    _instances: dict = {}  # model_name → EmbedderBGE singleton
+
+    def __new__(cls, model_name: str = "BAAI/bge-m3", use_fp16: bool = False, cache_file: str = None):
+        """Ensure only one instance per model_name is ever created."""
+        if model_name not in cls._instances:
+            instance = super().__new__(cls)
+            cls._instances[model_name] = instance
+            logger.info(f"[EMBEDDER_SINGLETON] Creating new instance for '{model_name}'")
+        else:
+            logger.debug(f"[EMBEDDER_SINGLETON] Reusing existing instance for '{model_name}'")
+        return cls._instances[model_name]
+
+    @classmethod
+    def get_instance(cls, model_name: str = "BAAI/bge-m3", use_fp16: bool = False, cache_file: str = None) -> "EmbedderBGE":
+        """Return a cached singleton for the given model_name (delegating to __new__)."""
+        return cls(model_name, use_fp16=use_fp16, cache_file=cache_file)
+
+
     def __init__(self, model_name: str = "BAAI/bge-m3", use_fp16: bool = False, cache_file: str = None):
         """
         Initialize BGE-M3 embedder
-        
-        Args:
-            model_name: HuggingFace model name or local path
-            use_fp16: Use FP16 for GPU inference
-            cache_file: Optional path to embedding cache JSON. If None, caching is disabled.
         """
+        # Guard against multiple initializations in singleton pattern
+        if hasattr(self, "_initialized") and self._initialized:
+            return
+            
         self.model_name = model_name
         self.use_fp16 = use_fp16
         self.cache_file = Path(cache_file) if cache_file else None
@@ -41,12 +75,15 @@ class EmbedderBGE:
                 logger.warning(f"Failed to load cache: {e}")
         
         # Initialize model
-        logger.info(f"Loading BGE-M3 model: {model_name} on CPU (Resource Guard)")
+        import torch
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        logger.info(f"Loading BGE-M3 model: {model_name} on {device}")
         self.model = BGEM3FlagModel(
             model_name,
             use_fp16=use_fp16,
-            device='cpu'  # FORCE CPU to prevent CUDA OOM with main LLM
+            device=device
         )
+        self._initialized = True
         logger.info("✅ BGE-M3 model loaded")
     
     def embed_text(self, text: str, max_length: int = 8192) -> np.ndarray:
@@ -66,7 +103,12 @@ class EmbedderBGE:
         embedding = result['dense_vecs'][0]
         
         # Normalize (L2 norm)
-        embedding = embedding / np.linalg.norm(embedding)
+        norm = np.linalg.norm(embedding)
+        if norm > 0:
+            embedding = embedding / norm
+
+        # Guarantee FAISS-safe 1D float32 vector
+        embedding = _normalize_embedding(embedding)
         
         # Cache result
         if self.caching_enabled:

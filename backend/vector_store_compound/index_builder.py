@@ -10,7 +10,7 @@ from typing import List, Dict
 from tqdm import tqdm
 import logging
 
-from . import embedder
+from backend.retriever.embedder_singleton import EmbedderSingleton
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +39,8 @@ def build_index(items: List, out_dir: str = None, batch_size: int = 64) -> None:
     
     logger.info(f"Building compound index from {len(items)} items...")
     
-    # Load embedder
-    embedder.load_model()
+    # Load embedder via singleton
+    model = EmbedderSingleton.get()
     
     # Prepare texts
     logger.info("Preparing compound texts...")
@@ -49,7 +49,10 @@ def build_index(items: List, out_dir: str = None, batch_size: int = 64) -> None:
     metadata = {}
     
     for item in tqdm(items, desc="Preparing"):
-        text = embedder.prepare_compound_text(item)
+        # Assuming embedder module had these helper functions
+        # If not, I may need to adjust import or keep 'from . import embedder' for helpers
+        from . import embedder as embedder_utils
+        text = embedder_utils.prepare_compound_text(item)
         texts.append(text)
         uuids.append(str(item.uuid))
         
@@ -61,22 +64,45 @@ def build_index(items: List, out_dir: str = None, batch_size: int = 64) -> None:
     
     # Generate embeddings
     logger.info(f"Generating compound embeddings (batch_size={batch_size})...")
-    embeddings = embedder.embed_texts(texts, batch_size=batch_size, show_progress=True)
+    embeddings = model.embed_texts(texts, batch_size=batch_size)
+    embeddings = embeddings.astype('float32') # Ensure float32 for FAISS
     
-    # Build FAISS index
+    # Build FAISS compressed index (IndexIVFPQ)
     dim = embeddings.shape[1]
-    index = faiss.IndexFlatIP(dim)
+    nlist = 4096
+    m = 64
+    bits = 8
     
+    logger.info(f"Building IVFPQ index: nlist={nlist}, m={m}, bits={bits}")
+    
+    # 1. Training subset selection (Min 40x nlist = 163,840)
+    train_size = min(len(embeddings), 200000)
+    logger.info(f"Sampling {train_size} vectors for training...")
+    train_indices = np.random.choice(len(embeddings), train_size, replace=False)
+    train_vectors = embeddings[train_indices]
+    
+    # 2. Setup Quantizer and IVFPQ
+    quantizer = faiss.IndexFlatIP(dim)
+    index = faiss.IndexIVFPQ(quantizer, dim, nlist, m, bits)
+    
+    # 3. Train
+    logger.info("Training IVFPQ quantizer...")
+    index.train(train_vectors)
+    
+    # 4. Add all vectors
     logger.info("Adding vectors to FAISS compound index...")
-    index.add(embeddings.astype('float32'))
+    index.add(embeddings)
     
-    logger.info(f"Compound index built: {index.ntotal} vectors, {dim} dimensions")
+    # 5. Set nprobe for recall safety
+    index.nprobe = 16
+    
+    logger.info(f"Compound index built: {index.ntotal} vectors, {dim} dimensions (IVFPQ)")
     
     # Save index (atomic)
     index_tmp = output_dir / "index.tmp"
     faiss.write_index(index, str(index_tmp))
     index_tmp.rename(output_dir / "index.bin")
-    logger.info(f"Saved to {output_dir / 'index.bin'}")
+    logger.info(f"Saved compressed index to {output_dir / 'index.bin'}")
     
     # Save IDs
     with open(output_dir / "ids.json", 'w') as f:

@@ -48,6 +48,7 @@ def run_startup_audit():
         "llm/factory.py",
         "llm/ollama_client.py",
         "llm/llama_cpp_client.py",
+        "llm/local_llama_client.py",
         "llm/base.py",
         "llm_qwen3.py"
     ]

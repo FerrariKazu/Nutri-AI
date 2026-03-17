@@ -9,3 +9,4 @@ class ResponseMode(Enum):
     DIAGNOSTIC = "diagnostic"       # Problem-solving, explanations
     PROCEDURAL = "procedural"       # Step-by-step recipes/instructions
     NUTRITION_ANALYSIS = "nutrition_analysis"  # Specialized: Gated numeric data
+    MECHANISTIC = "mechanistic"     # Causal/scientific explanation (v2.0)

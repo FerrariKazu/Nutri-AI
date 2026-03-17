@@ -57,7 +57,7 @@ class ResourceBudget:
             logger.error(msg)
             raise RuntimeError(msg)
             
-        if requires_gpu and status.get("gpu_vram_percent", 0) > 85.0:
+        if requires_gpu and (status.get("gpu_vram_percent") or 0) > 85.0:
             msg = f"[RESOURCE_BUDGET_EXCEEDED] GPU constrained. Rejection '{task_name}'."
             logger.warning(msg)
             raise RuntimeError(msg)

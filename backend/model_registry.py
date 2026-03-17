@@ -25,19 +25,32 @@ MODEL_REGISTRY: Dict[str, ModelSpec] = {
         provider="llama_cpp",
         context_length=32768,
         allowed_agents=[
-            "orchestrator",
-            "intent_agent",
-            "synthesis_engine",
-            "presentation_agent",
-            "rag_agent",
-            "refinement_agent",
-            "verifier_agent",
-            "variant_selector",
-            "explainer_agent",
-            "counterfactual_agent",
-            "interactive_explainer",
-            "claim_verifier",
-            "claim_extractor"
+            "orchestrator", "intent_agent", "intent_classifier", "synthesis_engine",
+            "presentation_agent", "rag_agent", "refinement_agent", "verifier_agent",
+            "variant_selector", "explainer_agent", "counterfactual_agent",
+            "interactive_explainer", "claim_verifier", "claim_extractor"
+        ]
+    ),
+    "deepseek-v3": ModelSpec(
+        name="deepseek-ai/DeepSeek-V3",
+        provider="together",
+        context_length=64000,
+        allowed_agents=[
+            "orchestrator", "intent_agent", "intent_classifier", "synthesis_engine",
+            "presentation_agent", "rag_agent", "refinement_agent", "verifier_agent",
+            "variant_selector", "explainer_agent", "counterfactual_agent",
+            "interactive_explainer", "claim_verifier", "claim_extractor"
+        ]
+    ),
+    "llama-3.1-70b": ModelSpec(
+        name="meta-llama/Meta-Llama-3.1-70B-Instruct",
+        provider="together",
+        context_length=32000,
+        allowed_agents=[
+            "orchestrator", "intent_agent", "intent_classifier", "synthesis_engine",
+            "presentation_agent", "rag_agent", "refinement_agent", "verifier_agent",
+            "variant_selector", "explainer_agent", "counterfactual_agent",
+            "interactive_explainer", "claim_verifier", "claim_extractor"
         ]
     )
 }
@@ -45,14 +58,10 @@ MODEL_REGISTRY: Dict[str, ModelSpec] = {
 def get_model_spec(agent_name: str, model_name: Optional[str] = None) -> ModelSpec:
     """
     Retrieves the ModelSpec for a specific agent.
-    If no model_name is provided, it defaults to the primary production model.
-    
-    Hard failures:
-    1. Requested model not in registry.
-    2. Agent not authorized to use the model.
+    Defaults to DeepSeek-V3 if no model_name provided.
     """
-    # 🟢 Default to Qwen3-4B for production
-    target_model = model_name or "qwen3-4b"
+    # 🟢 Phase 3: Default to TogetherAI (DeepSeek-V3)
+    target_model = model_name or "deepseek-v3"
     
     if target_model not in MODEL_REGISTRY:
         error_msg = f"❌ [REGISTRY] Hard Failure: Model '{target_model}' not found in registry."

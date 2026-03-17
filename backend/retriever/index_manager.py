@@ -21,10 +21,11 @@ class IndexManager:
     Implements Lazy Loading and LRU-style eviction (manual/explicit).
     """
     
-    # Estimated memory footprint (GB) for guard checks
+    # Pre-flight estimates used for eviction logic (prior to full header read)
+    # Chemistry: IVFPQ (0.5GB), Branded: Scalar8 (6.0GB)
     INDEX_COSTS_GB = {
-        IndexType.CHEMISTRY: 12.0,
-        IndexType.USDA_BRANDED: 6.0,
+        IndexType.CHEMISTRY: 0.6,
+        IndexType.USDA_BRANDED: 6.5,
         IndexType.USDA_FOUNDATION: 0.1,
         IndexType.SCIENCE: 0.05,
     }
@@ -35,6 +36,7 @@ class IndexManager:
     def __init__(self, project_root: Path):
         self.project_root = project_root
         self.loaded_indices: Dict[IndexType, FaissRetriever] = {}
+        self.failed_indices = set()
         logger.info("IndexManager initialized. No indices loaded.")
 
     def get_retriever(self, index_type: IndexType) -> Optional[FaissRetriever]:
@@ -45,12 +47,15 @@ class IndexManager:
         # 1. Fast path: already loaded
         if index_type in self.loaded_indices:
             return self.loaded_indices[index_type]
+        
+        if index_type in self.failed_indices:
+            logger.warning(f"Skipping load for {index_type.value} - previously failed.")
+            return None
 
-        # 2. Safety Check & Eviction
+        # 2. Safety Check & Dynamic Initialization
         required_gb = self.INDEX_COSTS_GB.get(index_type, 0.5)
         self._ensure_safe_memory(index_type, required_gb)
-
-        # 3. Load
+        
         return self._load_index(index_type)
 
     def _ensure_safe_memory(self, target_index: IndexType, required_gb: float):
@@ -83,9 +88,17 @@ class IndexManager:
         """Internal load logic."""
         index_path = self.project_root / f"vector_store/{index_type.value}/index.faiss"
         
+        # Fallback: also check flat-file path produced by rebuild script
+        # e.g. vector_store/chemistry.faiss (new IVFPQ compressed format)
+        flat_path = self.project_root / f"vector_store/{index_type.value}.faiss"
+        if not index_path.exists() and flat_path.exists():
+            logger.info(f"Using flat-file index: {flat_path}")
+            index_path = flat_path
+        
         if not index_path.exists():
             logger.warning(f"Index not found: {index_path}")
             return None
+
         
         logger.info(f"⏳ Lazy Loading: {index_type.value}...")
         try:
@@ -95,6 +108,7 @@ class IndexManager:
             return retriever
         except Exception as e:
             logger.error(f"Failed to load {index_type}: {e}")
+            self.failed_indices.add(index_type)
             return None
 
     def unload_index(self, index_type: IndexType):

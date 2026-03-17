@@ -2,27 +2,29 @@ import os
 import logging
 from typing import Optional
 from .base import LLMClient
-from .ollama_client import OllamaClient
-from .llama_cpp_client import LlamaCppClient
 from backend.model_registry import get_model_spec
 
 logger = logging.getLogger(__name__)
 
+# Global cache for LLM clients to prevent VRAM leaks (singleton pattern)
+LLM_CACHE = {}
+
 class LLMFactory:
-    """Factory to create LLM clients based on registry configuration"""
+    """Factory to create LLM clients, now enforced to local-only execution."""
     
     @staticmethod
     def create_client(agent_name: str, model_name: Optional[str] = None) -> LLMClient:
-        # 🟢 Enforce Registry Lookup
-        spec = get_model_spec(agent_name, model_name)
+        # Check cache first
+        cache_key = f"local_llama:{model_name or 'default'}"
+        if cache_key in LLM_CACHE:
+            logger.info(f"Reusing cached LLM client for {cache_key}")
+            return LLM_CACHE[cache_key]
         
-        logger.info(f"LLM Factory initializing model '{spec.name}' for agent '{agent_name}' via {spec.provider}")
+        logger.info(f"LLM Factory initializing LOCAL model for agent '{agent_name}'")
         
-        if spec.provider == "llama_cpp":
-            return LlamaCppClient(model_name=spec.name)
-        elif spec.provider == "ollama":
-            return OllamaClient(spec.name)
-        else:
-            error_msg = f"❌ [FACTORY] Unknown provider '{spec.provider}' in registry spec."
-            logger.critical(error_msg)
-            raise RuntimeError(error_msg)
+        from .local_llama_client import LocalLlamaClient
+        client = LocalLlamaClient(model_name=model_name or "qwen3-4b")
+        
+        # Store in cache and return
+        LLM_CACHE[cache_key] = client
+        return client

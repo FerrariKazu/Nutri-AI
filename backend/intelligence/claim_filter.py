@@ -52,20 +52,7 @@ def is_mechanistic(claim: Dict[str, Any]) -> bool:
 
     return False
 
-COMPOUND_ALIASES = {
-    "msg": "monosodium_glutamate",
-    "salt": "sodium_chloride",
-    "sugar": "sucrose",
-    "vinegar": "acetic_acid",
-    "lemon": "citric_acid",
-    "lime": "citric_acid",
-    "chili": "capsaicin",
-    "pepper": "piperine",
-    "mint": "menthol",
-    "chocolate": "theobromine",
-    "coffee": "caffeine",
-    "tea": "caffeine",
-}
+from backend.verification.compound_aliases import COMPOUND_ALIASES
 
 def create_fallback_claim(text: str) -> Dict[str, Any]:
     """

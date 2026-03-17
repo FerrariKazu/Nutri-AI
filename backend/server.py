@@ -4,6 +4,7 @@ import asyncio
 import json
 import time # Added for trace
 from fastapi import FastAPI, Request, HTTPException, Response, Query
+from backend.auth import get_authenticated_user, create_dev_token, DEV_MODE
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -66,18 +67,7 @@ class ChatRequest(BaseModel):
     execution_mode: Optional[str] = None
 
 
-def get_current_user(request: Request) -> str:
-    """
-    Extracts strict user identity from headers.
-    In a real app, this would verify a JWT.
-    Here, we trust the client-generated UUID per the low-friction auth goal.
-    Fallback to query param 'x_user_id' for EventSource (which can't set headers).
-    """
-    user_id = request.headers.get("X-User-Id") or request.query_params.get("x_user_id")
-    if not user_id:
-        logger.warning(f"AUTH FAILED: Missing user_id for {request.url.path}")
-        raise HTTPException(status_code=401, detail="Missing X-User-Id header or param")
-    return user_id
+# Auth is now handled by backend.auth — JWT-based, no client-provided identity
 
 # Components are initialized at startup
 
@@ -86,17 +76,16 @@ async def get_conversation(request: Request, session_id: Optional[str] = Query(N
     """
     Returns the canonical conversation history and state for hydration.
     """
-    user_id = get_current_user(request)
+    user_id = get_authenticated_user(request)
     logger.debug(f"GET /api/conversation?session_id={session_id} [user={user_id}]")
     
     if not session_id:
         return JSONResponse({"messages": [], "status": "new_session"})
         
     # Security Gate
-    if not memory_store.check_ownership(session_id, user_id):
-        # Fallback: Check if session exists at all? 
-        # For now, uniform 403 to prevent enumeration
-        raise HTTPException(status_code=403, detail="Access denied or session not found")
+    if memory_store.exists(session_id) and not memory_store.check_ownership(session_id, user_id, dev_mode=DEV_MODE):
+        # Only 403 if session EXISTS but doesn't belong to player
+        raise HTTPException(status_code=403, detail="Access denied")
 
     try:
         data = memory_store.get_conversation(session_id)
@@ -110,7 +99,7 @@ async def list_conversations(request: Request):
     """
     List all available conversation sessions for the authenticated user.
     """
-    user_id = get_current_user(request)
+    user_id = get_authenticated_user(request)
     try:
         # 🔒 Filter by user_id
         data = memory_store.list_sessions(user_id=user_id)
@@ -124,7 +113,7 @@ async def create_conversation(request: Request):
     """
     Explicitly create a new session ID bound to the user.
     """
-    user_id = get_current_user(request)
+    user_id = get_authenticated_user(request)
     new_id = f"sess_{uuid.uuid4().hex[:12]}_{int(uuid.uuid1().time)}"
     
     # Pre-warm the session in DB
@@ -135,6 +124,25 @@ async def create_conversation(request: Request):
     logger.info(f"Created session {new_id} for user {user_id}")
     
     return JSONResponse({"session_id": new_id, "status": "created"})
+
+@app.post("/api/dev-login")
+async def dev_login(request: Request):
+    """
+    DEV-ONLY: Issues a signed JWT. Gated behind NUTRI_DEV_MODE.
+    Accepts optional { user_id } body. Auto-generates if absent.
+    """
+    if not DEV_MODE:
+        raise HTTPException(status_code=403, detail="Forbidden - Dev mode only")
+    
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    
+    user_id = body.get("user_id", None)
+    result = create_dev_token(user_id)
+    logger.info(f"[DEV-LOGIN] Token issued for {result['user_id']}")
+    return JSONResponse(result)
 
 @app.get("/api/chat/stream")
 async def chat_stream(
@@ -150,7 +158,7 @@ async def chat_stream(
     """
     GET-based SSE endpoint for EventSource compatibility. Eliminates preflight.
     """
-    user_id = get_current_user(request)
+    user_id = get_authenticated_user(request)
     
     if not session_id:
         # If no session provided for stream, we can't really "create" one easily in GET SSE 
@@ -159,7 +167,7 @@ async def chat_stream(
         raise HTTPException(status_code=400, detail="session_id is required")
 
     # Security Gate & Lazy Creation
-    if not memory_store.ensure_session(session_id, user_id):
+    if not memory_store.ensure_session(session_id, user_id, dev_mode=DEV_MODE):
         logger.warning(f"AUTH FAILED - Access violation: user_id={user_id}, session_id={session_id}")
         raise HTTPException(status_code=403, detail="Access denied")
         
@@ -174,13 +182,13 @@ async def chat_stream(
 @app.post("/api/chat")
 async def chat_post(request: Request, payload: ChatRequest):
     """Standard POST endpoint for rich payloads"""
-    user_id = get_current_user(request)
+    user_id = get_authenticated_user(request)
     
     if not payload.session_id:
         raise HTTPException(status_code=400, detail="session_id is required")
 
     # Security Gate & Lazy Creation
-    if not memory_store.ensure_session(payload.session_id, user_id):
+    if not memory_store.ensure_session(payload.session_id, user_id, dev_mode=DEV_MODE):
         raise HTTPException(status_code=403, detail="Access denied")
         
     pref_dict = payload.preferences.dict() if payload.preferences else {}
@@ -265,13 +273,16 @@ async def handle_chat_execution(
     async def event_generator():
         nonlocal first_token_sent, done_sent
         try:
+            # 🟢 Immediate READY event for connection verification
+            yield format_sse_event("ready", {"content": "ok", "stream_id": session_id})
+            
             while True:
                 item = await queue.get()
                 if item is None:
                     logger.info("[SSE] Sentinel received from orchestrator.")
                     if not done_sent:
                         logger.warning("[SSE] Forcing DONE emission before exit.")
-                        yield format_sse_event("done", {"stream_id": session_id})
+                        yield format_sse_event("done", {"content": {"status": "forced_exit"}, "stream_id": session_id})
                         done_sent = True
                     break
                 
@@ -294,7 +305,8 @@ async def handle_chat_execution(
                 
                 # MANDATORY DEBUG LOGGING
                 data_len = len(str(item.get("content", "")))
-                logger.debug(f"[SSE] Yielding {event_type} event (len={data_len})")
+                if event_type != "token":
+                    logger.debug(f"[SSE] Yielding {event_type} event (len={data_len})")
                 
                 yield formatted_chunk
 
@@ -305,8 +317,7 @@ async def handle_chat_execution(
             if not done_sent:
                 logger.warning("[SSE] Emitting explicit ABORTED terminal event.")
                 yield format_sse_event("done", {
-                    "status": "aborted",
-                    "reason": "client_disconnect",
+                    "content": {"status": "aborted", "reason": "client_disconnect"},
                     "stream_id": session_id
                 })
                 done_sent = True
@@ -316,9 +327,7 @@ async def handle_chat_execution(
             yield format_sse_event("error_event", {"message": str(e), "stream_id": session_id})
             if not done_sent:
                 yield format_sse_event("done", {
-                    "status": "error",
-                    "reason": "exception",
-                    "message": str(e),
+                    "content": {"status": "error", "reason": "exception", "message": str(e)},
                     "stream_id": session_id
                 })
                 done_sent = True
@@ -329,8 +338,7 @@ async def handle_chat_execution(
                 logger.error("[SSE] Loop finished without DONE! This is a regression.")
                 try:
                     yield format_sse_event("done", {
-                        "status": "forced",
-                        "reason": "sentinel_without_done",
+                        "content": {"status": "forced", "reason": "sentinel_without_done"},
                         "stream_id": session_id
                     })
                     done_sent = True
@@ -342,13 +350,31 @@ async def handle_chat_execution(
                 logger.error("🚨 CRITICAL: SSE stream closed without sending any terminal event!")
             
             logger.info("[SSE] Stream closing. Cleaning up tasks...")
+            
+            # Explicit Drain Guard: Ensure background tasks are dead before closing
             o_task.cancel()
             h_task.cancel()
+            
             try:
-                await asyncio.gather(o_task, h_task, return_exceptions=True)
+                # Wait for internal cleanup to finish
+                await asyncio.wait_for(
+                    asyncio.gather(o_task, h_task, return_exceptions=True),
+                    timeout=2.0
+                )
+            except asyncio.TimeoutError:
+                logger.warning("[SSE] Tasks failed to finalize within timeout. Forced close.")
             except Exception as e:
                 logger.debug(f"Cleanup error (expected): {e}")
-            logger.info("[SSE] All background tasks finalized.")
+
+            # Final Queue Drain
+            while not queue.empty():
+                try:
+                    queue.get_nowait()
+                    queue.task_done()
+                except asyncio.QueueEmpty:
+                    break
+
+            logger.info("[SSE] All background tasks finalized and queue drained.")
 
     response = StreamingResponse(
         event_generator(),
@@ -363,7 +389,6 @@ async def handle_chat_execution(
     
     return response
 
-    return response
 
 @app.get("/api/health")
 async def health_check(request: Request):
@@ -402,6 +427,16 @@ async def debug_intelligence_schema():
         },
         "min_render_requirements": MIN_RENDER_REQUIREMENTS
     })
+
+@app.get("/api/debug/last-trace")
+async def debug_last_trace():
+    """
+    Returns the absolute last trace emitted by the orchestrator.
+    Useful for strict contract verification v1.2.
+    """
+    if not orchestrator.last_emitted_trace:
+        return JSONResponse({"status": "empty", "message": "No trace emitted in this server session yet."})
+    return JSONResponse(orchestrator.last_emitted_trace)
 
 
 if __name__ == "__main__":

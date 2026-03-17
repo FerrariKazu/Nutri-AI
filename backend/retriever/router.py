@@ -67,8 +67,16 @@ class RetrievalRouter:
         self.project_root = Path(project_root)
         self.index_paths = index_paths or DEFAULT_INDEX_PATHS
         self.retrievers: Dict[IndexType, FaissRetriever] = {}
+        self._allowed_indices: Optional[List[IndexType]] = None
+        self._blocked_count: int = 0
         
         logger.info(f"RetrievalRouter initialized at {self.project_root}")
+
+    def set_allowed_indices(self, indices: List[IndexType]):
+        """Restricts search to a specific set of indices (Phase 2 Firewall)."""
+        self._allowed_indices = indices
+        self._blocked_count = 0  # Reset counter on new lock
+        logger.info(f"🛡️ [RETRIEVER_LOCK] Allowed indices restricted to: {[i.value for i in indices]}")
     
     def load_index(self, index_type: IndexType) -> bool:
         """
@@ -145,6 +153,12 @@ class RetrievalRouter:
         all_results = []
         
         for index_type in index_types:
+            # 🛡️ Phase 2 Firewall Enforcement — graceful skip with metrics
+            if self._allowed_indices is not None and index_type not in self._allowed_indices:
+                logger.warning(f"⚠️ [BLOCKED_INDEX] '{index_type.value}' not in allowed set. Skipping.")
+                self._blocked_count += 1
+                continue
+
             if index_type not in self.retrievers:
                 if not self.load_index(index_type):
                     continue
@@ -167,7 +181,7 @@ class RetrievalRouter:
         # Sort by score descending and limit total results
         all_results.sort(key=lambda x: x['score'], reverse=True)
         
-        return all_results[:top_k]
+        return all_results[:int(top_k)]
     
     def detect_index_type(self, query: str) -> List[IndexType]:
         """
@@ -180,6 +194,7 @@ class RetrievalRouter:
             List of relevant IndexTypes
         """
         query_lower = query.lower()
+        relevant = []
         
         # Chemistry keywords
         chemistry_keywords = [

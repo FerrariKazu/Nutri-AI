@@ -68,6 +68,7 @@ class PolicyEngine:
 
         # ── Execute each rule in declared order ──
         for rule in policy.get_rules():
+            pre_score = score
             contribution = 0.0
             fired = False
             input_value = None
@@ -89,9 +90,14 @@ class PolicyEngine:
                     score = rule.get_params()["penalty_score"]
                     firings.append(RuleFiring(
                         rule_id=rule.rule_id,
+                        label=rule.description,
                         category=rule.category,
+                        source="policy",
+                        effect_type="multiplicative",
                         input_value=input_value,
                         contribution=contribution,
+                        pre_value=pre_score,
+                        post_value=score,
                         fired=True
                     ))
                     # Skip remaining rules — retraction is terminal
@@ -112,9 +118,14 @@ class PolicyEngine:
 
             firings.append(RuleFiring(
                 rule_id=rule.rule_id,
+                label=rule.description,
                 category=rule.category,
+                source="evidence" if rule.category != "baseline" else "policy",
+                effect_type="additive",
                 input_value=input_value,
                 contribution=contribution if fired else 0.0,
+                pre_value=pre_score,
+                post_value=score,
                 fired=fired
             ))
 

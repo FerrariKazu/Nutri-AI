@@ -176,7 +176,7 @@ If constraints conflict with feasibility, explain why."""
 @dataclass
 class IntentOutput:
     """Output schema for Agent 1 (Intent Extractor)"""
-    goal: str = "invent_meal"  # invent_meal | explain | optimize
+    goal: str = "general_explanation"  # invent_meal | explain | optimize | scientific_query | general_explanation
     ingredients: List[str] = field(default_factory=list)
     equipment: List[str] = field(default_factory=list)
     dietary_constraints: Dict[str, Any] = field(default_factory=dict)
@@ -291,7 +291,7 @@ class FoodSynthesisRetriever:
         phase: int,
         query: str,
         top_k: int = 10,
-        min_score: float = 0.3
+        min_score: float = 0.6
     ) -> List[RetrievedDocument]:
         """
         Retrieve documents relevant for a specific pipeline phase.
@@ -312,7 +312,7 @@ class FoodSynthesisRetriever:
         self,
         query: str,
         top_k: int = 10,
-        min_score: float = 0.3,
+        min_score: float = 0.6,
         target_indices: Optional[List[IndexType]] = None
     ) -> List[RetrievedDocument]:
         """
@@ -370,7 +370,7 @@ class FoodSynthesisRetriever:
         for i, doc in enumerate(all_results[:5]):
             logger.debug(f"  [{i+1}] {doc.doc_type}: {doc.text[:100]}... (score: {doc.score:.3f})")
         
-        return all_results[:top_k * 2]  # Return more for synthesis
+        return all_results[:int(top_k) * 2]  # Return more for synthesis
 
 
 # =============================================================================
@@ -434,7 +434,7 @@ class IntentAgent:
             logger.error(f"Intent extraction failed: {e}")
             # Return default intent on failure
             return IntentOutput(
-                goal="invent_meal",
+                goal="general_explanation",
                 ingredients=self._extract_ingredients_fallback(user_input),
                 explanation_depth="scientific"
             )
@@ -452,7 +452,7 @@ class IntentAgent:
                 data = json.loads(json_str)
                 
                 return IntentOutput(
-                    goal=data.get('goal', 'invent_meal'),
+                    goal=data.get('goal', 'general_explanation'),
                     ingredients=data.get('ingredients', []),
                     equipment=data.get('equipment', []),
                     dietary_constraints=data.get('dietary_constraints', {}),
@@ -463,7 +463,7 @@ class IntentAgent:
         except json.JSONDecodeError as e:
             logger.warning(f"JSON parse failed: {e}")
         
-        return IntentOutput()
+        return IntentOutput(goal="general_explanation")
     
     def _extract_ingredients_fallback(self, text: str) -> List[str]:
         """Simple fallback ingredient extraction."""
@@ -502,20 +502,8 @@ class FoodSynthesisEngine:
         self.compound_resolver = CompoundResolver()
         self.enforcement_mode = enforcement_mode
         
-        # 📋 PHASE 1-3 Intelligence Hardening Components
-        from backend.claim_parser import ClaimParser
-        from backend.claim_verifier import ClaimVerifier
-        from backend.nutrition_uncertainty import UncertaintyCalculator
-        from backend.usda_client import USDAClient
-        
-        self.claim_parser = ClaimParser(llm_engine=self.llm)
-        self.usda_client = USDAClient()
-        self.claim_verifier = ClaimVerifier(
-            pubchem_client=self.compound_resolver.client,
-            usda_client=self.usda_client,
-            rag_engine=None # Will be connected via orchestrator if needed
-        )
-        self.uncertainty_calculator = UncertaintyCalculator()
+        # 📋 Phase 2 cleanup: internal agents removed. 
+        # All intelligence tasks are now routed via Orchestrator.
         
         logger.info(f"FoodSynthesisEngine initialized (enforcement={enforcement_mode.value})")
     
@@ -633,42 +621,9 @@ class FoodSynthesisEngine:
             # Log final reasoning output (LOGGING REQUIREMENT)
             logger.info(f"Synthesis output length: {len(response)} chars")
             
-            # 📋 TIER 1 INTELLIGENCE HARDENING (PHASE 4)
-            # 1. Atomic Claim Extraction
-            claims = self.claim_parser.parse(response)
-            
-            # 2. Claim Verification
-            verifications = self.claim_verifier.verify_claims(claims)
-            
-            # 3. Uncertainty Modeling
-            # Detect active variance drivers (Heuristic for now)
-            active_drivers = []
-            if "optional" in response.lower() or "substitution" in response.lower():
-                active_drivers.append("ingredient_substitution")
-            if "serving" not in response.lower() and "portion" not in response.lower():
-                active_drivers.append("portion_ambiguity")
-            if str(enforcement_meta.get("confidence_score", 1.0)) < "1.0":
-                active_drivers.append("incomplete_resolution")
-            
-            uncertainty_report = self.uncertainty_calculator.calculate(
-                claims=verifications,
-                global_drivers=active_drivers
-            )
-            
-            # 4. Integrate into enforcement metadata
-            enforcement_meta.update({
-                "claims": [v.__dict__ for v in verifications],
-                "final_confidence": uncertainty_report.response_confidence,
-                "variance_drivers": uncertainty_report.variance_drivers,
-                "uncertainty_explanation": uncertainty_report.explanation,
-                "weakest_link_id": uncertainty_report.weakest_link_id,
-                "verification_summary": {
-                    "verified_claims": sum(1 for v in verifications if v.verified),
-                    "unverified_claims": sum(1 for v in verifications if not v.verified),
-                    "total_claims": len(verifications),
-                    "conflicts_detected": any(v.metadata.get("has_conflict", False) for v in verifications)
-                }
-            })
+            # 🛡️ Phase 2 Firewall: Side-channel verification removed.
+            # Returning raw response + pubchem-only meta.
+            return (response, enforcement_meta)
             
             # Return response with hardened enforcement metadata
             return (response, enforcement_meta)

@@ -36,5 +36,9 @@ MIN_RENDER_REQUIREMENTS = {
     "confidence": {"required_keys": ["current", "tier", "policy_id", "policy_version"]}
 }
 
+# 🧪 Phase 2.2: Grounding and Precision Thresholds
+MIN_MECHANISTIC_SIMILARITY = 0.65
+MIN_SCIENTIFIC_SCORE = 0.60
+
 ONTOLOGY_VERSION = "1.3"
 REGISTRY_SOURCE_DEFAULT = "Derived from Nutri Core Ontology"

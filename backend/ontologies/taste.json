@@ -1,0 +1,6 @@
+{
+  "bitter": ["alkaloid", "tannin", "polyphenol"],
+  "sweet": ["glucose", "fructose", "sucrose"],
+  "sour": ["citric acid", "lactic acid"],
+  "umami": ["glutamate", "inosinate"]
+}

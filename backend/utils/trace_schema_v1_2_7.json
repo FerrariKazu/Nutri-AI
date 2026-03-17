@@ -1,0 +1,363 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Nutri Execution Trace v1.2.7",
+    "type": "object",
+    "required": [
+        "trace_id",
+        "session_id",
+        "run_id",
+        "trace_schema_version",
+        "decision",
+        "confidence",
+        "execution_profile",
+        "scientific_layer"
+    ],
+    "properties": {
+        "id": {
+            "type": "string"
+        },
+        "trace_id": {
+            "type": "string"
+        },
+        "session_id": {
+            "type": "string"
+        },
+        "run_id": {
+            "type": "string"
+        },
+        "trace_schema_version": {
+            "const": "1.2.7"
+        },
+        "pipeline": {
+            "type": "string"
+        },
+        "decision": {
+            "type": "string"
+        },
+        "confidence": {
+            "type": "object",
+            "required": [
+                "current",
+                "tier",
+                "breakdown"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "current": {
+                    "type": "number"
+                },
+                "tier": {
+                    "type": "string",
+                    "enum": [
+                        "speculative",
+                        "moderate",
+                        "strong",
+                        "verified",
+                        "theoretical",
+                        "mechanistic"
+                    ]
+                },
+                "breakdown": {
+                    "type": "object",
+                    "required": [
+                        "final_score",
+                        "baseline_used",
+                        "rule_firings"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                        "final_score": {
+                            "type": "number"
+                        },
+                        "baseline_used": {
+                            "type": "number"
+                        },
+                        "rule_firings": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "required": [
+                                    "rule_id",
+                                    "label",
+                                    "category",
+                                    "source",
+                                    "effect_type",
+                                    "input",
+                                    "contribution",
+                                    "pre_value",
+                                    "post_value",
+                                    "fired"
+                                ],
+                                "additionalProperties": false,
+                                "properties": {
+                                    "rule_id": {
+                                        "type": "string"
+                                    },
+                                    "label": {
+                                        "type": "string"
+                                    },
+                                    "category": {
+                                        "type": "string"
+                                    },
+                                    "source": {
+                                        "type": "string"
+                                    },
+                                    "effect_type": {
+                                        "type": "string"
+                                    },
+                                    "input": {},
+                                    "contribution": {
+                                        "type": "number"
+                                    },
+                                    "pre_value": {
+                                        "type": "number"
+                                    },
+                                    "post_value": {
+                                        "type": "number"
+                                    },
+                                    "fired": {
+                                        "type": "boolean"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "execution_profile": {
+            "type": "object",
+            "required": [
+                "id",
+                "mode"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "mode": {
+                    "enum": [
+                        "scientific_explanation",
+                        "conversation",
+                        "moderation",
+                        "standard"
+                    ]
+                },
+                "epistemic_status": {
+                    "type": "string"
+                },
+                "confidence": {
+                    "type": "number"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "scientific_layer": {
+            "type": "object",
+            "required": [
+                "claims"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "claims": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "id",
+                            "confidence"
+                        ],
+                        "additionalProperties": true,
+                        "properties": {
+                            "id": {
+                                "type": "string"
+                            },
+                            "confidence": {
+                                "type": "object",
+                                "required": [
+                                    "current",
+                                    "tier",
+                                    "breakdown"
+                                ],
+                                "additionalProperties": false,
+                                "properties": {
+                                    "current": {
+                                        "type": "number"
+                                    },
+                                    "tier": {
+                                        "enum": [
+                                            "speculative",
+                                            "moderate",
+                                            "strong",
+                                            "verified"
+                                        ]
+                                    },
+                                    "breakdown": {
+                                        "type": "object",
+                                        "required": [
+                                            "final_score",
+                                            "baseline_used",
+                                            "rule_firings"
+                                        ],
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "final_score": {
+                                                "type": "number"
+                                            },
+                                            "baseline_used": {
+                                                "type": "number"
+                                            },
+                                            "rule_firings": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "object",
+                                                    "required": [
+                                                        "rule_id",
+                                                        "label",
+                                                        "category",
+                                                        "source",
+                                                        "effect_type",
+                                                        "input",
+                                                        "contribution",
+                                                        "pre_value",
+                                                        "post_value",
+                                                        "fired"
+                                                    ],
+                                                    "additionalProperties": false,
+                                                    "properties": {
+                                                        "rule_id": {
+                                                            "type": "string"
+                                                        },
+                                                        "label": {
+                                                            "type": "string"
+                                                        },
+                                                        "category": {
+                                                            "type": "string"
+                                                        },
+                                                        "source": {
+                                                            "type": "string"
+                                                        },
+                                                        "effect_type": {
+                                                            "type": "string"
+                                                        },
+                                                        "input": {},
+                                                        "contribution": {
+                                                            "type": "number"
+                                                        },
+                                                        "pre_value": {
+                                                            "type": "number"
+                                                        },
+                                                        "post_value": {
+                                                            "type": "number"
+                                                        },
+                                                        "fired": {
+                                                            "type": "boolean"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "compounds": {
+                    "type": "array"
+                },
+                "moa_coverage": {
+                    "type": "number"
+                },
+                "evidence_coverage": {
+                    "type": "number"
+                },
+                "contradiction_ratio": {
+                    "type": "number"
+                },
+                "registry_snapshot": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "version": {
+                            "type": "string"
+                        },
+                        "registry_hash": {
+                            "type": "string"
+                        },
+                        "ontology_version": {
+                            "type": "string"
+                        },
+                        "locked": {
+                            "type": "boolean"
+                        },
+                        "scope": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "causality": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "chain": {
+                    "type": "array"
+                },
+                "applicability": {
+                    "type": "number"
+                },
+                "riskCount": {
+                    "type": "integer"
+                }
+            }
+        },
+        "epistemic_status": {
+            "type": "string"
+        },
+        "execution_mode": {
+            "type": "string"
+        },
+        "domain_type": {
+            "type": "string"
+        },
+        "trace_metrics": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "substance_state": {
+                    "type": "string"
+                },
+                "biological_claim_count": {
+                    "type": "integer"
+                },
+                "anchor_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "temporal_layer": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "session_age": {
+                    "type": "number"
+                },
+                "belief_revisions": {
+                    "type": "integer"
+                }
+            }
+        },
+        "system_audit": {
+            "type": "object"
+        },
+        "graph": {
+            "type": "object"
+        }
+    },
+    "additionalProperties": false
+}

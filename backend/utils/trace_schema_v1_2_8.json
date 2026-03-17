@@ -1,0 +1,448 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Nutri Execution Trace v1.2.8",
+    "type": "object",
+    "required": [
+        "trace_id",
+        "session_id",
+        "run_id",
+        "trace_schema_version",
+        "decision",
+        "confidence",
+        "execution_profile",
+        "scientific_layer"
+    ],
+    "properties": {
+        "id": {
+            "type": "string"
+        },
+        "trace_id": {
+            "type": "string"
+        },
+        "session_id": {
+            "type": "string"
+        },
+        "run_id": {
+            "type": "string"
+        },
+        "trace_schema_version": {
+            "const": "1.2.8"
+        },
+        "pipeline": {
+            "type": "string"
+        },
+        "decision": {
+            "type": "string"
+        },
+        "confidence": {
+            "type": "object",
+            "required": [
+                "current",
+                "tier",
+                "breakdown"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "current": {
+                    "type": "number"
+                },
+                "tier": {
+                    "type": "string",
+                    "enum": [
+                        "speculative",
+                        "moderate",
+                        "strong",
+                        "verified",
+                        "theoretical",
+                        "mechanistic"
+                    ]
+                },
+                "breakdown": {
+                    "type": "object",
+                    "required": [
+                        "final_score",
+                        "baseline_used",
+                        "rule_firings"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                        "final_score": {
+                            "type": "number"
+                        },
+                        "baseline_used": {
+                            "type": "number"
+                        },
+                        "rule_firings": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "required": [
+                                    "rule_id",
+                                    "label",
+                                    "category",
+                                    "source",
+                                    "effect_type",
+                                    "input",
+                                    "contribution",
+                                    "pre_value",
+                                    "post_value",
+                                    "fired"
+                                ],
+                                "additionalProperties": false,
+                                "properties": {
+                                    "rule_id": {
+                                        "type": "string"
+                                    },
+                                    "label": {
+                                        "type": "string"
+                                    },
+                                    "category": {
+                                        "type": "string"
+                                    },
+                                    "source": {
+                                        "type": "string"
+                                    },
+                                    "effect_type": {
+                                        "type": "string"
+                                    },
+                                    "input": {},
+                                    "contribution": {
+                                        "type": "number"
+                                    },
+                                    "pre_value": {
+                                        "type": "number"
+                                    },
+                                    "post_value": {
+                                        "type": "number"
+                                    },
+                                    "fired": {
+                                        "type": "boolean"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "execution_profile": {
+            "type": "object",
+            "required": [
+                "id",
+                "mode"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "mode": {
+                    "enum": [
+                        "scientific_explanation",
+                        "conversation",
+                        "moderation",
+                        "standard",
+                        "pending_serialization"
+                    ]
+                },
+                "epistemic_status": {
+                    "type": "string"
+                },
+                "confidence": {
+                    "type": "number"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "scientific_layer": {
+            "type": "object",
+            "required": [
+                "claims"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "claims": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "id",
+                            "confidence"
+                        ],
+                        "additionalProperties": true,
+                        "properties": {
+                            "id": {
+                                "type": "string"
+                            },
+                            "confidence": {
+                                "type": "object",
+                                "required": [
+                                    "current",
+                                    "tier",
+                                    "breakdown"
+                                ],
+                                "additionalProperties": false,
+                                "properties": {
+                                    "current": {
+                                        "type": "number"
+                                    },
+                                    "tier": {
+                                        "enum": [
+                                            "speculative",
+                                            "moderate",
+                                            "strong",
+                                            "verified",
+                                            "theoretical",
+                                            "mechanistic"
+                                        ]
+                                    },
+                                    "breakdown": {
+                                        "type": "object",
+                                        "required": [
+                                            "final_score",
+                                            "baseline_used",
+                                            "rule_firings"
+                                        ],
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "final_score": {
+                                                "type": "number"
+                                            },
+                                            "baseline_used": {
+                                                "type": "number"
+                                            },
+                                            "rule_firings": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "object",
+                                                    "required": [
+                                                        "rule_id",
+                                                        "label",
+                                                        "category",
+                                                        "source",
+                                                        "effect_type",
+                                                        "input",
+                                                        "contribution",
+                                                        "pre_value",
+                                                        "post_value",
+                                                        "fired"
+                                                    ],
+                                                    "additionalProperties": false,
+                                                    "properties": {
+                                                        "rule_id": {
+                                                            "type": "string"
+                                                        },
+                                                        "label": {
+                                                            "type": "string"
+                                                        },
+                                                        "category": {
+                                                            "type": "string"
+                                                        },
+                                                        "source": {
+                                                            "type": "string"
+                                                        },
+                                                        "effect_type": {
+                                                            "type": "string"
+                                                        },
+                                                        "input": {},
+                                                        "contribution": {
+                                                            "type": "number"
+                                                        },
+                                                        "pre_value": {
+                                                            "type": "number"
+                                                        },
+                                                        "post_value": {
+                                                            "type": "number"
+                                                        },
+                                                        "fired": {
+                                                            "type": "boolean"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "compounds": {
+                    "type": "array"
+                },
+                "moa_coverage": {
+                    "type": "number"
+                },
+                "evidence_coverage": {
+                    "type": "number"
+                },
+                "contradiction_ratio": {
+                    "type": "number"
+                },
+                "registry_snapshot": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "version": {
+                            "type": "string"
+                        },
+                        "registry_hash": {
+                            "type": "string"
+                        },
+                        "ontology_version": {
+                            "type": "string"
+                        },
+                        "locked": {
+                            "type": "boolean"
+                        },
+                        "scope": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "causality": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "chain": {
+                    "type": "array"
+                },
+                "applicability": {
+                    "type": "number"
+                },
+                "riskCount": {
+                    "type": "integer"
+                }
+            }
+        },
+        "governance": {
+            "type": "object",
+            "required": [
+                "policy_id",
+                "ontology_version",
+                "enrichment_version",
+                "registry_lookup_status",
+                "policy_signature_present"
+            ],
+            "properties": {
+                "policy_id": {
+                    "type": "string"
+                },
+                "ontology_version": {
+                    "type": "string"
+                },
+                "enrichment_version": {
+                    "type": "string"
+                },
+                "registry_lookup_status": {
+                    "enum": [
+                        "matched",
+                        "not_found",
+                        "error",
+                        "not_applicable"
+                    ]
+                },
+                "ontology_consistency": {
+                    "type": "boolean"
+                },
+                "unique_ontologies": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "policy_signature_present": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "baseline_evidence_summary": {
+            "type": "object",
+            "required": [
+                "total_claims",
+                "total_evidence_entries",
+                "highest_study_type",
+                "empirical_support_present"
+            ],
+            "properties": {
+                "total_claims": {
+                    "type": "integer"
+                },
+                "total_evidence_entries": {
+                    "type": "integer"
+                },
+                "highest_study_type": {
+                    "type": "string"
+                },
+                "empirical_support_present": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "epistemic_status": {
+            "type": "string"
+        },
+        "execution_mode": {
+            "type": "string"
+        },
+        "domain_type": {
+            "type": "string"
+        },
+        "domain_original": {
+            "type": "string"
+        },
+        "domain_effective": {
+            "type": "string"
+        },
+        "trace_metrics": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "substance_state": {
+                    "type": "string"
+                },
+                "biological_claim_count": {
+                    "type": "integer"
+                },
+                "anchor_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "temporal_layer": {
+            "type": "object",
+            "required": [
+                "session_age",
+                "belief_revisions",
+                "decision_state",
+                "resolved_deltas"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "session_age": {
+                    "type": "number"
+                },
+                "belief_revisions": {
+                    "type": "integer"
+                },
+                "decision_state": {
+                    "type": "string"
+                },
+                "resolved_deltas": {
+                    "type": "integer"
+                }
+            }
+        },
+        "system_audit": {
+            "type": "object"
+        },
+        "graph": {
+            "type": "object"
+        }
+    },
+    "additionalProperties": false
+}

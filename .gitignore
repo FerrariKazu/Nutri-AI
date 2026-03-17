@@ -7,65 +7,67 @@ __pycache__/
 env/
 venv/
 .venv/
-pip-log.txt
-pip-delete-this-directory.txt
 .cache/
 
-# Data & Models (Large files)
-*.bin
-*.pkl
-*.sqlite
-*.sqlite3
-*.jsonl
-*.parquet
-*.tar.gz
-data/
-processed/
-**/data/
-**/processed/
-**/models/
-**/checkpoints/
-**/models_cache/
+# Env
+.env
+nutri_env.sh
+*.env
+*.env.local
+
+# Models
+models/
+backend/models_cache/
+
+# Vector stores
+vector_store/
+backend/indexes/
 
 # Logs
 *.log
 logs/
 
-# Node / Frontend
-node_modules/
-dist/
-.env*
-
 # OS
 .DS_Store
 Thumbs.db
 
-# Project specific large/unnecessary files
-Modelfile.*
-ngrok-v3-stable-linux-amd64.tgz
-test_system_prompt_leakage*.py
-rebuild_faiss.log
-server.log
-api.log
+# Project specific
 backend_restart*.log
-ollama.log
-.orchids/
+api.log
 nutri_sessions.db
-benchmark_4b.json
 llama-server
 llama_build_temp/
-examples/
 tmp/
 build/
-
-# Nested git repos
-.git/
-!/.git/
-nutri-deploy/
-
-# Indices
-backend/indexes/
-vector_store/
-data_sources/
+dist/
+node_modules/
 .vercel
-.env*.local
+
+# Test Outputs & Scratchpad
+*.txt
+*.png
+*.db
+!README.md
+!NUTRI_README.md
+!NUTRI_SUMMARY.md
+!NUTRI_ARCHITECTURE.md
+
+# Intermediate Data
+*.jsonl
+*.pkl
+*.parquet
+*.faiss
+data/
+data_sources/
+processed/
+scripts/*.jsonl
+scripts/*.pkl
+scripts/*.txt
+benchmark_*.json
+dummy.*
+eggs_output.txt
+umami_output.txt
+verification_results.txt
+test_phase_*.txt
+test_routing_*.txt
+verify_*.py.bak

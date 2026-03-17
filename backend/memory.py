@@ -6,8 +6,10 @@ Handles SQLite-backed persistence for user-assistant interaction history.
 import sqlite3
 import json
 import logging
+import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+from backend.utils.title_generator import generate_title
 
 logger = logging.getLogger(__name__)
 
@@ -160,15 +162,9 @@ class SessionMemoryStore:
             conv_id = row[0] if row else session_id
             current_title = row[1] if row else None
             
-            # Simple Deterministic Title Generation
-            if not current_title and role == 'user':
-                # First 7 words
-                words = content.split()
-                new_title = " ".join(words[:7])
-                if len(words) > 7:
-                    new_title += "..."
-                
-                # Update title
+            # Auto-Title Generation: fire on first user message if no real title yet
+            if role == 'user' and (not current_title or current_title == "New Conversation"):
+                new_title = generate_title(content)
                 cursor.execute("UPDATE sessions SET title = ? WHERE session_id = ?", (new_title, session_id))
 
             cursor.execute(
@@ -238,8 +234,15 @@ class SessionMemoryStore:
                 for row in rows
             ]
 
-    def check_ownership(self, session_id: str, user_id: str) -> bool:
-        """Verifies that a session belongs to the given user. Allows 'claiming' unowned sessions."""
+    def exists(self, session_id: str) -> bool:
+        """Checks if a session exists in the database."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM sessions WHERE session_id = ?", (session_id,))
+            return cursor.fetchone() is not None
+
+    def check_ownership(self, session_id: str, user_id: str, dev_mode: bool = False) -> bool:
+        """Verifies that a session belongs to the given user. Allows 'claiming' sessions in DEV_MODE or if unowned."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT user_id FROM sessions WHERE session_id = ?", (session_id,))
@@ -250,19 +253,30 @@ class SessionMemoryStore:
             owner = row[0]
             if not owner:
                 # FIRST-CLAIM POLICY: If session is unowned, the requester claims it.
-                # This fixes 403 errors for legacy sessions after the production integrity upgrade.
                 logger.info(f"Session {session_id} is unowned. Claimed by user {user_id}")
                 cursor.execute("UPDATE sessions SET user_id = ? WHERE session_id = ?", (user_id, session_id))
                 conn.commit()
                 return True
+            
+            # 🛡️ Legacy Guard: Only migrate if the current owner is a legacy guest ID
+            is_legacy = owner.startswith("user_")
+            
+            if owner != user_id and dev_mode and is_legacy:
+                # 🛠️ DEV-MODE LEGACY MIGRATION
+                logger.warning(f"⚠️ [AUTH] Legacy session {session_id} migrated to new JWT user: {user_id} (previous owner: {owner})")
+                cursor.execute("UPDATE sessions SET user_id = ? WHERE session_id = ?", (user_id, session_id))
+                conn.commit()
+                return True
+            elif owner != user_id and dev_mode:
+                logger.warning(f"🚫 [AUTH] Non-legacy session {session_id} access blocked (owner={owner}, request={user_id})")
                 
             return owner == user_id
 
-    def ensure_session(self, session_id: str, user_id: str) -> bool:
+    def ensure_session(self, session_id: str, user_id: str, dev_mode: bool = False) -> bool:
         """
         Ensures a session exists and belongs to the user.
         - If missing: Creates it and binds to user.
-        - If exists: Checks ownership.
+        - If exists: Checks ownership (with dev migration).
         Returns True if accessible, False (or raises) if access denied.
         """
         with sqlite3.connect(self.db_path) as conn:
@@ -279,6 +293,19 @@ class SessionMemoryStore:
                     cursor.execute("UPDATE sessions SET user_id = ? WHERE session_id = ?", (user_id, session_id))
                     conn.commit()
                     return True
+                
+                # 🛡️ Legacy Guard: Only migrate if the current owner is a legacy guest ID
+                is_legacy = owner.startswith("user_")
+                
+                if owner != user_id and dev_mode and is_legacy:
+                    # 🛠️ DEV-MODE MIGRATION
+                    logger.warning(f"⚠️ [AUTH] Legacy session {session_id} migrated to new JWT user in stream: {user_id} (previous owner: {owner})")
+                    cursor.execute("UPDATE sessions SET user_id = ? WHERE session_id = ?", (user_id, session_id))
+                    conn.commit()
+                    return True
+                elif owner != user_id and dev_mode:
+                    logger.warning(f"🚫 [AUTH] Non-legacy session {session_id} stream access blocked (owner={owner}, request={user_id})")
+                    
                 return owner == user_id
             else:
                 # Missing - Create and Claim
@@ -327,17 +354,27 @@ class SessionMemoryStore:
         return "\n".join(context_parts)
 
     def get_conversation(self, session_id: str) -> Dict[str, Any]:
-        """Returns the canonical state of a conversation."""
+        """Returns the canonical state of a conversation, including title."""
         self.check_and_reset_decay(session_id)
         history = self.get_history(session_id)
         mode = self.get_response_mode(session_id)
+        title = self._get_title(session_id)
         
         return {
             "session_id": session_id,
+            "title": title,
             "messages": history,
             "current_mode": mode.value if hasattr(mode, 'value') else mode,
             "memory_scope": "session"
         }
+
+    def _get_title(self, session_id: str) -> str:
+        """Get the title for a session."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT title FROM sessions WHERE session_id = ?", (session_id,))
+            row = cursor.fetchone()
+            return row[0] if row and row[0] else "New Conversation"
 
     def clear_session(self, session_id: str):
         """Deletes all messages for a session and resets metadata."""

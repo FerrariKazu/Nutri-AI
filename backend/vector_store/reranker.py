@@ -6,12 +6,10 @@ Falls back to twin-encoder (dot product) if cross-encoder fails on Windows.
 """
 
 import os
-os.environ["TOKEN
-
-IZERS_PARALLELISM"] = "false"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 logger = logging.getLogger(__name__)
 
@@ -19,14 +17,14 @@ logger = logging.getLogger(__name__)
 RERANKER_MODE = "crossencoder"
 
 try:
-    from sentence_transformers import CrossEncoder
+    from sentence_transformers import CrossEncoder  # type: ignore
     CROSS_ENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     logger.info(f"✓ Cross-encoder available: {CROSS_ENCODER_MODEL}")
 except ImportError as e:
     logger.warning(f"Cross-encoder import failed: {e}. Falling back to twin-encoder.")
     RERANKER_MODE = "twinencoder"
-    from sentence_transformers import SentenceTransformer
-    import numpy as np
+    from sentence_transformers import SentenceTransformer  # type: ignore
+    import numpy as np  # type: ignore
 
 
 class Reranker:
@@ -34,7 +32,7 @@ class Reranker:
     
     def __init__(self):
         self.mode = RERANKER_MODE
-        self.model = None
+        self.model: Any = None
         self._initialize_model()
     
     def _initialize_model(self):
@@ -56,9 +54,9 @@ class Reranker:
     def rerank(
         self,
         query: str,
-        candidates: List[Dict],
+        candidates: List[Dict[str, Any]],
         top_n: int = 5
-    ) -> List[Dict]:
+    ) -> List[Dict[str, Any]]:
         """
         Rerank candidates based on relevance to query.
         
@@ -81,9 +79,9 @@ class Reranker:
     def _rerank_crossencoder(
         self,
         query: str,
-        candidates: List[Dict],
+        candidates: List[Dict[str, Any]],
         top_n: int
-    ) -> List[Dict]:
+    ) -> List[Dict[str, Any]]:
         """Rerank using cross-encoder (query, doc) pairs."""
         # Prepare pairs for cross-encoder
         pairs = [[query, cand['text']] for cand in candidates]
@@ -98,16 +96,16 @@ class Reranker:
         # Sort by rerank score (descending)
         ranked = sorted(candidates, key=lambda x: x['rerank_score'], reverse=True)
         
-        return ranked[:top_n]
+        return ranked[:top_n]  # type: ignore
     
     def _rerank_twinencoder(
         self,
         query: str,
-        candidates: List[Dict],
+        candidates: List[Dict[str, Any]],
         top_n: int
-    ) -> List[Dict]:
+    ) -> List[Dict[str, Any]]:
         """Fallback reranking using twin-encoder dot product."""
-        import numpy as np
+        import numpy as np  # type: ignore
         
         # Encode query
         query_emb = self.model.encode([query], convert_to_numpy=True)[0]
@@ -126,7 +124,7 @@ class Reranker:
         # Sort and return top_n
         ranked = sorted(candidates, key=lambda x: x['rerank_score'], reverse=True)
         
-        return ranked[:top_n]
+        return ranked[:top_n]  # type: ignore
 
 
 # Global reranker instance (lazy loaded)
@@ -141,7 +139,7 @@ def get_reranker() -> Reranker:
     return _reranker
 
 
-def rerank(query: str, candidates: List[Dict], top_n: int = 5) -> List[Dict]:
+def rerank(query: str, candidates: List[Dict[str, Any]], top_n: int = 5) -> List[Dict[str, Any]]:
     """
     Convenience function for reranking.
     

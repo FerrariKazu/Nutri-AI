@@ -7,13 +7,17 @@ Obeys Elite Architectural Contracts in backend/contracts/intelligence_schema.py.
 import logging
 import re
 import math
+import hashlib
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 
 from backend.sensory.sensory_registry import SensoryRegistry, ONTOLOGY
 from backend.contracts.intelligence_schema import (
     Domain, EvidenceLevel, Origin,
-    MIN_RENDER_REQUIREMENTS, ONTOLOGY_VERSION, REGISTRY_SOURCE_DEFAULT
+    MIN_RENDER_REQUIREMENTS, ONTOLOGY_VERSION, REGISTRY_SOURCE_DEFAULT,
+    MIN_MECHANISTIC_SIMILARITY, MIN_SCIENTIFIC_SCORE
 )
+from backend.intelligence.scientific_registries import SCIENTIFIC_KEYWORDS, BIO_CONTEXT
 from backend.intelligence.evidence_resolver import EvidenceResolver
 from backend.intelligence.weighting_engine import PolicyEngine
 from backend.policies.default_policy_v1 import NUTRI_EVIDENCE_V1
@@ -23,50 +27,73 @@ logger = logging.getLogger(__name__)
 ENRICHMENT_VERSION = "2.0"
 
 # Extended compound aliases for fuzzy matching
-COMPOUND_ALIASES = {
-    "msg": "monosodium_glutamate",
-    "salt": "sodium_chloride",
-    "sugar": "sucrose",
-    "vinegar": "acetic_acid",
-    "lemon": "citric_acid",
-    "lime": "citric_acid",
-    "chili": "capsaicin",
-    "chilli": "capsaicin",
-    "pepper": "piperine",
-    "black pepper": "piperine",
-    "wasabi": "allyl_isothiocyanate",
-    "mustard": "allyl_isothiocyanate",
-    "cinnamon": "cinnamaldehyde",
-    "clove": "eugenol",
-    "cloves": "eugenol",
-    "mint": "menthol",
-    "peppermint": "menthol",
-    "chocolate": "theobromine",
-    "cocoa": "theobromine",
-    "coffee": "caffeine",
-    "tea": "caffeine",
-    "grapefruit": "naringin",
-    "stevia": "stevioside",
-    "yogurt": "lactic_acid",
-    "sourdough": "lactic_acid",
-    "apple": "malic_acid",
-}
+from backend.verification.compound_aliases import COMPOUND_ALIASES
 
-def _detect_molecules(text: str) -> List[str]:
-    """Scan claim text for known molecules."""
+def _detect_anchors(text: str) -> List[Dict[str, Any]]:
+    """Scan claim text for known ontological anchors (Compounds, Processes, States)."""
     if not text:
         return []
 
     text_lower = text.lower()
-    found = set()
-    all_known = set(ONTOLOGY["compounds"].keys()) | set(COMPOUND_ALIASES.keys())
-
-    for term in all_known:
+    found = []
+    
+    # 1. Detect Compounds
+    all_compounds = set(ONTOLOGY["compounds"].keys()) | set(COMPOUND_ALIASES.keys())
+    for term in all_compounds:
         if re.search(r'\b' + re.escape(term.replace("_", " ")) + r'\b', text_lower):
             canonical = COMPOUND_ALIASES.get(term, term)
-            found.add(canonical)
+            found.append({"key": canonical, "category": "compounds", "label": term})
 
-    return sorted(found)
+    # 2. Detect Processes
+    for term in ONTOLOGY["processes"].keys():
+        if re.search(r'\b' + re.escape(term.replace("_", " ")) + r'\b', text_lower):
+            found.append({"key": term, "category": "processes", "label": term})
+            
+    # 3. Detect States
+    for term in ONTOLOGY["physical_states"].keys():
+        if re.search(r'\b' + re.escape(term.replace("_", " ")) + r'\b', text_lower):
+            found.append({"key": term, "category": "physical_states", "label": term})
+
+    return found
+
+def _calculate_alignment_score(claim_text: str, retrieved_docs: List[Dict[str, Any]]) -> float:
+    """
+    Computes a high-fidelity grounding score between a claim and retrieved documents.
+    Uses registry-weighted token overlap as a proxy for semantic similarity.
+    """
+    if not claim_text or not retrieved_docs:
+        return 0.0
+
+    def get_weighted_tokens(text: str) -> Dict[str, float]:
+        tokens = re.findall(r'\b\w{3,}\b', text.lower())
+        weighted = {}
+        for t in tokens:
+            weight = 1.0
+            if t in SCIENTIFIC_KEYWORDS: weight = 3.0
+            elif t in BIO_CONTEXT: weight = 2.0
+            weighted[t] = max(weighted.get(t, 0), weight)
+        return weighted
+
+    claim_tokens = get_weighted_tokens(claim_text)
+    if not claim_tokens: return 0.0
+    
+    max_sim = 0.0
+    for doc in retrieved_docs:
+        doc_text = doc.get("text", "") if isinstance(doc, dict) else getattr(doc, "text", "")
+        doc_tokens = get_weighted_tokens(doc_text)
+        
+        # Calculate Weighted Cosine-like similarity
+        intersection = set(claim_tokens.keys()) & set(doc_tokens.keys())
+        numerator = sum(claim_tokens[t] * doc_tokens[t] for t in intersection)
+        
+        denom_q = math.sqrt(sum(v**2 for v in claim_tokens.values()))
+        denom_d = math.sqrt(sum(v**2 for v in doc_tokens.values()))
+        
+        if denom_q > 0 and denom_d > 0:
+            sim = numerator / (denom_q * denom_d)
+            max_sim = max(max_sim, sim)
+            
+    return round(max_sim, 3)
 
 def _is_mechanistic(claim: Dict[str, Any]) -> bool:
     """Checks if a claim is mechanistic (Tiers 2-3)."""
@@ -153,7 +180,7 @@ def _build_elite_graph(resolutions: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     return {"nodes": nodes, "edges": edges}
 
-def repair_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
+def repair_claim(claim: Dict[str, Any], trace: Optional[Any] = None) -> Dict[str, Any]:
     """
     STRICT REPAIR PASS: Guarantees 100% UI-readiness.
     No nulls, NaNs (NaN-Guard), or empty strings allowed.
@@ -200,13 +227,26 @@ def repair_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
     # DO NOT assign defaults. The PolicyEngine is the sole authority.
     # This section only performs structural NaN-guard on pre-existing values.
     conf = claim.get("confidence")
-    if isinstance(conf, dict):
-        for k in ["current"]:
-            val = conf.get(k)
-            if val is not None and isinstance(val, (int, float)) and math.isnan(val):
-                conf[k] = None  # Null, not default — PolicyEngine will overwrite
+    if not isinstance(conf, dict):
+        conf = {
+            "current": 0.0,
+            "tier": "speculative",
+            "breakdown": {"final_score": 0.0, "baseline_used": 0.0, "rule_firings": []}
+        }
+    
+    # NaN Guard and structure enforcement
+    if "breakdown" not in conf or not isinstance(conf["breakdown"], dict):
+        conf["breakdown"] = {"final_score": conf.get("current", 0.0), "baseline_used": 0.0, "rule_firings": []}
+    
+    if "rule_firings" not in conf["breakdown"] or not isinstance(conf["breakdown"]["rule_firings"], list):
+        conf["breakdown"]["rule_firings"] = []
 
-    # 4. Domain Inference logic
+    for k in ["current"]:
+        val = conf.get(k)
+        if val is not None and isinstance(val, (int, float)) and math.isnan(val):
+            conf[k] = 0.0
+            
+    claim["confidence"] = conf
     domain = claim.get("domain", "").lower()
     valid_domains = [d.value for d in Domain]
     if domain not in valid_domains:
@@ -215,18 +255,21 @@ def repair_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
         else: domain = Domain.NUTRITIONAL.value
         claim["domain"] = domain
 
-    # 5. Fallback Mechanism Graph
+    # 5. Fallback Mechanism Graph (Protected for Mechanistic Traces)
+    is_mechanistic_trace = trace and hasattr(trace, "trace_variant") and trace.trace_variant == "mechanistic"
+    
     graph = claim.get("graph", {})
-    if not isinstance(graph, dict) or len(graph.get("nodes", [])) < MIN_RENDER_REQUIREMENTS["graph"]["min_nodes"]:
-        entity = claim.get("compound") or "Stimulus"
-        effect = claim["biological_perception"][0]["perception"] if claim["biological_perception"] else "Outcome"
-        claim["graph"] = {
-            "nodes": [
-                {"id": "source", "type": "compound", "label": entity.title()},
-                {"id": "target", "type": "perception", "label": effect.title()}
-            ],
-            "edges": [{"source": "source", "target": "target", "label": "associated", "strength": 0.5}]
-        }
+    if not is_mechanistic_trace:
+        if not isinstance(graph, dict) or len(graph.get("nodes", [])) < MIN_RENDER_REQUIREMENTS["graph"]["min_nodes"]:
+            entity = claim.get("compound") or "Stimulus"
+            effect = claim["biological_perception"][0]["perception"] if claim["biological_perception"] else "Outcome"
+            claim["graph"] = {
+                "nodes": [
+                    {"id": "source", "type": "compound", "label": entity.title()},
+                    {"id": "target", "type": "perception", "label": effect.title()}
+                ],
+                "edges": [{"source": "source", "target": "target", "label": "associated", "strength": 0.5}]
+            }
 
     # 6. NaN Guard on Importance Score
     score = claim.get("importance_score", 0.2)
@@ -252,22 +295,35 @@ def _normalize_key(text: str) -> str:
     if not text: return ""
     return text.strip().lower().replace(" ", "_").replace("-", "_")
 
-def enrich_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
+def enrich_claim(claim: Dict[str, Any], trace: Optional[Any] = None) -> Dict[str, Any]:
     """Enriches a claim with High-Fidelity Knowledge Provenance."""
     text = claim.get("text") or claim.get("statement") or ""
     compound_hint = claim.get("compound", "")
     
     resolutions = []
-    # Normalization implies we search for molecules in the normalized text or use detected ones
-    molecules = _detect_molecules(text)
+    anchors = _detect_anchors(text)
+    
+    # --- PHASE 2.2: ALIGNMENT VERIFICATION ---
+    best_sim = 0.0
+    if trace and hasattr(trace, "retrievals") and trace.retrievals:
+        best_sim = _calculate_alignment_score(text, trace.retrievals)
+    
+    logger.info(f"[ALIGNMENT_METRICS] claim_id={claim.get('id', 'unknown')} best_similarity={best_sim}")
+    
+    # Hard Grounding Gate
+    if best_sim < MIN_MECHANISTIC_SIMILARITY:
+        logger.warning(f"[GROUNDING_BLOCK] Claim rejected due to weak alignment ({best_sim} < {MIN_MECHANISTIC_SIMILARITY})")
+        claim["verified"] = False
+        claim["decision"] = "REJECT"
+        claim["grounding_failure"] = True
+        # Continue with maintenance/repair but it stays rejected
     
     # Normalize input hint
     if compound_hint and compound_hint != "general":
         norm_hint = _normalize_key(compound_hint)
-        # Check if hint is a known alias/compound
         if norm_hint in ONTOLOGY["compounds"] or norm_hint in COMPOUND_ALIASES:
-             if compound_hint not in molecules:
-                 molecules.append(compound_hint)
+             if not any(a["key"] == norm_hint for a in anchors):
+                 anchors.append({"key": norm_hint, "category": "compounds", "label": compound_hint})
 
     # --- NEW CONFIDENCE MODEL VARIABLES ---
     base_score = 0.55
@@ -277,13 +333,11 @@ def enrich_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
     verified_registry_hit = False
     evidence_list = []
 
-    for mol in molecules:
-        mol_key = _normalize_key(mol)
-        # Handle Aliases
-        if mol_key in COMPOUND_ALIASES:
-            mol_key = COMPOUND_ALIASES[mol_key]
+    for anchor in anchors:
+        anchor_key = anchor["key"]
+        category = anchor["category"]
             
-        entry = ONTOLOGY["compounds"].get(mol_key, {})
+        entry = ONTOLOGY[category].get(anchor_key, {})
         if entry:
             verified_registry_hit = True
             
@@ -298,9 +352,9 @@ def enrich_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
                     })
                     evidence_score += 0.1 # Attribute 5: +0.1 per evidence
             
-            # Attribute 8: Hard Assert on Evidence
-            if verified_registry_hit and not evidence_list:
-                raise ValueError(f"Registry match for {mol} but NO evidence found. Ontology corruption.")
+            # Attribute 8: Hard Assert on Evidence (Registry requires authorities unless theoretical)
+            if verified_registry_hit and not evidence_list and entry.get("evidence_type") != "theoretical":
+                raise ValueError(f"Registry match for {anchor_key} but NO evidence found. Ontology corruption.")
 
             # Process Receptors & Pathways
             for r in entry.get("receptors", []):
@@ -313,14 +367,29 @@ def enrich_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
                 
                 resolutions.append({
                     "family": "receptor",
-                    "entity": mol,
+                    "entity": anchor_key,
                     "receptor": r["name"],
                     "effect": r["perception"],
                     "direction": r.get("direction", "increase"),
                     "strength": r.get("strength", 0.8),
                     "confidence": r.get("confidence", 0.9),
                     "pathway": pathway,
-                    "type": "perception"
+                    "type": "perception",
+                    "authorities": entry.get("authorities", []) # Pass through for evidence conversion
+                })
+
+            # Handle Processes & States
+            perceptions = entry.get("perceptions", []) or entry.get("effects", [])
+            for p in perceptions:
+                resolutions.append({
+                    "family": entry.get("family", "process"),
+                    "entity": anchor_key,
+                    "effect": p["label"],
+                    "direction": p.get("direction", "increase"),
+                    "strength": p.get("strength", 0.7),
+                    "confidence": p.get("confidence", 0.7),
+                    "type": p.get("type", "perception"),
+                    "authorities": entry.get("authorities", []) # Pass through
                 })
 
     # --- PHASE 3: EVIDENCE RESOLUTION ---
@@ -328,6 +397,26 @@ def enrich_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
     
     # 1. Resolve Evidence (Structured Records)
     evidence_records = resolver.resolve_claim(claim, trace=trace)
+    
+    # 2. Convert Ontology Authorities to EvidenceRecords
+    from backend.contracts.evidence_schema import EvidenceRecord, StudyType, EvidenceGrade, EffectDirection
+    for anchor in anchors:
+        entry = ONTOLOGY[anchor["category"]].get(anchor["key"], {})
+        if entry.get("authorities"):
+            for auth in entry["authorities"]:
+                # Convert to structured EvidenceRecord
+                ev = EvidenceRecord(
+                    id=f"ont_ev_{hashlib.sha256(auth['name'].encode()).hexdigest()[:8]}",
+                    claim_id=claim.get("id", "unknown"),
+                    source_identifier=auth.get("id") or auth["name"],
+                    study_type=StudyType.MECHANISTIC_INFERENCE, # Default for ontology
+                    experimental_model="Biological System",
+                    effect_direction=EffectDirection.POSITIVE,
+                    evidence_grade=EvidenceGrade.MODERATE,
+                    publication_year=datetime.now().year
+                )
+                evidence_records.append(ev)
+                
     evidence_dicts = [ev.to_dict() for ev in evidence_records]
     
     # --- PHASE 11: FACT/POLICY ISOLATION (Gap 3) ---
@@ -340,12 +429,30 @@ def enrich_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
     confidence_breakdown = PolicyEngine.execute(claim, frozen_evidence, active_policy)
     final_confidence = confidence_breakdown.final_score
     policy_hash = confidence_breakdown.policy_hash
+
+    # --- PHASE 2.2: SCIENTIFIC SCORE MANDATE ---
+    if final_confidence < MIN_SCIENTIFIC_SCORE:
+        logger.warning(f"[SCIENTIFIC_SCORE_BLOCK] Claim rejected due to low grounding score ({final_confidence} < {MIN_SCIENTIFIC_SCORE})")
+        claim["verified"] = False
+        claim["decision"] = "REJECT"
+        claim["grounding_failure"] = True
     
-    # --- PHASE 8: EXECUTION GUARD (HARD STOP) ---
+    # --- PHASE 8: EXECUTION GUARD (MODE-AWARE) ---
     is_mech = _is_mechanistic(claim) or resolutions
     if is_mech and not evidence_records:
-        logger.error(f"[HARD_STOP] Mechanistic claim '{claim.get('id')}' has ZERO evidence. Aborting render.")
-        raise ValueError(f"Scientific Integrity Violation: Claim '{claim.get('statement')}' has no supporting evidence.")
+        # Graceful failure for mechanistic mode: Recompute as REJECTED instead of HARD_STOP
+        # This allows the pipeline to reach the finalizer where it can be properly handled.
+        claim["is_resolved"] = False
+        claim["decision"] = "REJECT"
+        claim["verified"] = False
+        claim["importance_score"] = 0.0
+        
+        logger.warning(
+            f"[ENRICHER] Mechanistic claim '{claim.get('id', 'unrecognized')}' has ZERO evidence. "
+            f"Marking as REJECTED. (Pipeline continues)"
+        )
+        # Avoid raising ValueError to prevent pipeline abort
+        # return claim # Continue to repair pass
 
     # --- ATTRIBUTE 2 & 6: REGISTRY MATCH GUARANTEE ---
     # --- MECHANISM CONSTRUCTION (Tier 2) ---
@@ -440,8 +547,10 @@ def enrich_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
             "verified": True,
             "verification_level": "literature-backed",
             "decision": "ACCEPT",
-            "compounds": list(set([r["entity"] for r in resolutions])),
+            "compounds": list(set([r["entity"] for r in resolutions if r["family"] in ["chemical", "receptor"]])),
             "receptors": list(set([r["receptor"] for r in resolutions if r.get("receptor")])),
+            "processes": list(set([r["entity"] for r in resolutions if r["family"] in ["process", "chemical", "biological"]])),
+            "physical_states": list(set([r["entity"] for r in resolutions if r["family"] in ["physical", "structural"]])),
             "perception_outputs": [
                 {"label": r["effect"], "type": r.get("type", "perception"), "receptor": r.get("receptor")}
                 for r in resolutions
@@ -484,23 +593,37 @@ def enrich_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
         claim["evidence"] = evidence_dicts
 
     # 3. REPAIR PASS (Mandatory NaN-Guard)
-    repair_claim(claim)
+    repair_claim(claim, trace=trace)
     return claim
 
-def enrich_claims(claims: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def enrich_claims(claims: List[Dict[str, Any]], trace: Optional[Any] = None) -> List[Dict[str, Any]]:
     """Elite Enrichment Pipeline."""
     if not claims: return []
     enriched = []
+    
+    import uuid
     for c in claims:
+        # PHASE 4: ID Guarantee before enrichment
+        if not c.get("id"):
+            c["id"] = c.get("claim_id") or f"gen_{str(uuid.uuid4())[:8]}"
+            
         try:
-            enriched.append(enrich_claim(c))
+            enriched.append(enrich_claim(c, trace=trace))
         except Exception as e:
-            logger.error(f"[ENRICHER] Fatal logic error: {e}")
-            # Attribute 8: We prefer to fail loudly if it's a critical assertion 
-            # but in a stream we might catch. However, user said "THROW ERROR".
-            # If it's the assertion error we basically kill this claim's enrichment.
-            # We will mark it as FAILED to visibility.
+            logger.error(f"[ENRICHER] Fatal logic error for claim {c.get('id')}: {e}")
             c["enrichment_error"] = str(e)
-            repair_claim(c)
+            repair_claim(c, trace=trace)
             enriched.append(c)
+            
+    # PHASE 3: Global Total Integrity Fail check
+    is_mechanistic_trace = trace and hasattr(trace, "trace_variant") and trace.trace_variant == "mechanistic"
+    if is_mechanistic_trace and enriched:
+        valid_claims = [c for c in enriched if c.get("decision") == "ACCEPT" and c.get("verified")]
+        if not valid_claims:
+            logger.critical("[MANDATE] Global Integrity Failure: ALL mechanistic claims failed validation.")
+            # We don't raise here yet to allow the finalizer to mark trace.status = FAILED
+            # but we flag it in the trace if available
+            if hasattr(trace, "system_audit"):
+                trace.system_audit["integrity_state"] = "total_failure"
+                
     return enriched

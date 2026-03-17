@@ -25,8 +25,9 @@ if str(current_dir) not in sys.path:
 if str(parent_dir) not in sys.path:
     sys.path.insert(1, str(parent_dir))
 
-from tools.database_tools import DatabaseTools
+from backend.tools.database_tools import DatabaseTools
 from backend.llm.factory import LLMFactory
+from backend.governance_types import EscalationLevel
 from utils.logging_config import setup_logging, get_logger
 from utils.error_handling import retry_with_backoff, ErrorMessageFormatter
 from utils.context_optimizer import ContextOptimizer
@@ -53,6 +54,9 @@ class AgenticRAG:
         model_name: Optional[str] = None,
         embedding_model: str = "BAAI/bge-m3",
         max_iterations: int = 3,  # Optimized for speed (down from 6)
+        allowed_tools: Optional[List[str]] = None,
+        current_intent: Optional[str] = None,
+        escalation_tier: EscalationLevel = EscalationLevel.TIER_0
     ):
         """
         Initialize agentic RAG system with all advanced features
@@ -61,12 +65,19 @@ class AgenticRAG:
             max_iterations: Max tool calls before forcing final answer (default: 3)
             model_name: Optional model override
             embedding_model: Embedding model to use for RAG
+            allowed_tools: List of tool names to enable
+            current_intent: Current conversation intent
         """
-        logger.info("🚀 Initializing Advanced Agentic RAG System")
+        logger.info(f"🚀 Initializing Agentic RAG System at {escalation_tier.name}")
         
         # Core components
-        self.tools = DatabaseTools()
+        self.tools = DatabaseTools(
+            allowed_tools=allowed_tools, 
+            current_intent=current_intent,
+            escalation_tier=escalation_tier
+        )
         self.max_iterations = max_iterations
+        self.escalation_tier = escalation_tier
         
         # 🟢 Enforce Registry Usage
         self.client = LLMFactory.create_client(agent_name="rag_agent", model_name=model_name)
@@ -236,7 +247,18 @@ Final Answer: [your answer]
                     result = self._align_rag_result(tool_name, params.get("query", ""), result)
                 
                 # 🟢 RAG Hard Proof Logging
-                logger.info(f"[RAG_PROOF] Tool: {tool_name} | Params: {params} | Results: {len(result) if isinstance(result, list) else 'text'}")
+                chunk_count = len(result) if isinstance(result, list) else 0
+                logger.info(f"[RAG_PROOF] Tool: {tool_name} | Params: {params} | Results: {chunk_count if chunk_count > 0 else 'text'}")
+                
+                # Capture retrieved chunks for evidence anchoring
+                if isinstance(result, list):
+                    if not hasattr(self, '_current_retrieved_chunks'):
+                        self._current_retrieved_chunks = []
+                    # Filter and add significant chunks
+                    for r in result:
+                        if isinstance(r, dict) and r.get('score', 0) >= 0.35:
+                            self._current_retrieved_chunks.append(r)
+                            
                 if "search" in tool_name and not result:
                      logger.warning(f"[RAG_PROOF] ⚠️ Zero chunks retrieved from {tool_name}")
                 
@@ -305,21 +327,28 @@ Final Answer: [your answer]
 
     def stream_query(self, user_query: str):
         """
-        Simplified streaming query with reduced complexity and better error handling.
-        
-        Uses a single LLM call with comprehensive prompt to reduce failure points.
-        
-        Yields:
-            Dict events: 'type' (thinking, token, error) and 'content'/'stage'
+        Simplified streaming query with Tier-based security floor.
         """
+        # 🛡️ Phase 2 Firewall: RAG requires TIER_1 minimum
+        if self.escalation_tier.value == 0:
+            logger.warning("⚠️ [FIREWALL] stream_query blocked at TIER_0")
+            yield {"type": "error", "content": "Search is restricted in lightweight mode. Escalation required."}
+            return
+
+        logger.info(f"🔍 AgenticRAG streaming query: {user_query}")
         history = []
         
         # Single comprehensive prompt approach
         yield {"type": "thinking", "stage": "start", "content": "🧠 Analyzing your request..."}
         
         try:
-            # Build comprehensive prompt with all context
-            messages = self._build_react_prompt(user_query, history)
+            available_tools = self.tools.get_available_tools()
+            if not available_tools:
+                logger.info("[AGENT] No tools available. Skipping ReAct loop.")
+                messages = [{"role": "system", "content": "You are a helpful culinary assistant. Please provide a direct answer from your knowledge base."}, {"role": "user", "content": user_query}]
+            else:
+                # Build comprehensive prompt with all context
+                messages = self._build_react_prompt(user_query, history)
             
             yield {"type": "thinking", "stage": "reasoning", "content": "🤔 Generating response..."}
             
@@ -501,15 +530,18 @@ Final Answer: [your answer]
 
     def query(self, user_query: str, mode: str = None) -> Dict:
         """
-        Process query and return structured response
-        
-        Returns:
-        {
-            'answer': 'Final answer text',
-            'reasoning': [list of reasoning steps],
-            'metadata': { ... }
-        }
+        Main RAG entry point with Tier-based security floor.
         """
+        # 🛡️ Phase 2 Firewall: RAG requires TIER_1 minimum (Recipes)
+        if self.escalation_tier.value == 0:
+            logger.warning("⚠️ [FIREWALL] AgenticRAG blocked at TIER_0")
+            return {
+                'answer': "I'm currently in lightweight mode. Search is restricted unless escalated.", 
+                'reasoning': [{"type": "thought", "content": "[FIREWALL_BLOCK] RAG restricted at TIER_0"}], 
+                'metadata': {"blocked": True}
+            }
+
+        logger.info(f"🔍 AgenticRAG processing query: {user_query}")
         import time
         start_time = time.time()
         
@@ -587,6 +619,22 @@ Final Answer: [your answer]
             
         reasoning_steps = []
         final_answer_text = ""
+        self._current_retrieved_chunks = [] # Reset retrieval buffer
+        
+        available_tools = self.tools.get_available_tools()
+        if not available_tools:
+            logger.info("[AGENT] No tools available. Skipping ReAct loop.")
+            reasoning_steps.append({'type': 'thought', 'content': 'No tools available for this intent. Providing direct answer.'})
+            messages = [{"role": "system", "content": "You are a helpful culinary assistant. Provide a direct answer from your knowledge base."}, {"role": "user", "content": user_query}]
+            try:
+                llm_output = self.client.generate_text(messages=messages, max_new_tokens=2048)
+                return {
+                    'answer': llm_output,
+                    'reasoning': reasoning_steps,
+                    'metadata': {'rag_active': False, 'chunks_retrieved': False, 'mode': mode or 'standard', 'tools_used': []}
+                }
+            except Exception as e:
+                return {'answer': f"Error: {e}", 'reasoning': reasoning_steps, 'metadata': {}}
         
         for iteration in range(self.max_iterations):
             messages = self._build_react_prompt(user_query, history)
@@ -675,6 +723,11 @@ Final Answer: [your answer]
             'num_reasoning_steps': len(reasoning_steps)
         })
 
+        # Calculate max score from retrieved chunks
+        max_score = 0.0
+        if self._current_retrieved_chunks:
+            max_score = max(c.get('score', 0.0) for c in self._current_retrieved_chunks)
+
         return {
             'answer': final_answer_text,
             'reasoning': reasoning_steps,
@@ -682,7 +735,9 @@ Final Answer: [your answer]
                 'mode': mode or 'standard',
                 'tools_used': list(tools_used),
                 'time_taken': time.time() - start_time,
-                'num_reasoning_steps': len(reasoning_steps)
+                'num_reasoning_steps': len(reasoning_steps),
+                'retrieved_chunks': self._current_retrieved_chunks,
+                'max_score': max_score
             }
         }
 

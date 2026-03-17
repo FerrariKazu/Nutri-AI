@@ -132,10 +132,29 @@ class EvidencePolicy:
 class RuleFiring:
     """Record of a single rule execution within a confidence computation."""
     rule_id: str
+    label: str  # Human readable label (e.g. "RCT Sample Size Bonus")
     category: str
+    source: str  # "evidence" | "rule" | "policy"
+    effect_type: str  # "multiplicative" | "additive"
     input_value: Any  # What the rule evaluated
     contribution: float  # Score delta from this rule
+    pre_value: float  # Score BEFORE this rule fired
+    post_value: float  # Score AFTER this rule fired
     fired: bool  # Whether the rule actually contributed
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "rule_id": self.rule_id,
+            "label": self.label,
+            "category": self.category,
+            "source": self.source,
+            "effect_type": self.effect_type,
+            "input": self.input_value,
+            "contribution": self.contribution,
+            "pre_value": self.pre_value,
+            "post_value": self.post_value,
+            "fired": self.fired
+        }
 
 
 @dataclass
@@ -160,14 +179,5 @@ class ConfidenceBreakdown:
             "final_score": self.final_score,
             "tier": self.tier,
             "baseline_used": self.baseline_used,
-            "rule_firings": [
-                {
-                    "rule_id": rf.rule_id,
-                    "category": rf.category,
-                    "input": rf.input_value,
-                    "contribution": rf.contribution,
-                    "fired": rf.fired
-                }
-                for rf in self.rule_firings
-            ]
+            "rule_firings": [rf.to_dict() for rf in self.rule_firings]
         }

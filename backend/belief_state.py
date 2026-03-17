@@ -41,6 +41,10 @@ class BeliefState:
     # SATURATION: Prevent clarification loops
     saturation_triggered: bool = False
     saturation_turn: Optional[int] = None
+
+    # ESCALATION TIER (Phase 2)
+    current_tier: int = 1  # TIER_1 (Standard) by default
+    previous_tier: int = 1
     
     def update_field(self, field_name: str, value: Any, turn: int):
         """Update a field and track when it was learned."""

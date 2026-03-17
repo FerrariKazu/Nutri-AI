@@ -71,13 +71,12 @@ class MechanismParser:
     def parse(self, text: str) -> List[Dict[str, Any]]:
         """
         Extract mechanisms from text.
-        Returns a list of structured claim objects.
+        Returns a single primary claim containing all identified structural nodes.
         """
         if not text:
             return []
 
         text_lower = text.lower()
-        claims = []
         
         # 1. Detect Entities
         found_compounds = self._find_matches(text_lower, self.compound_patterns, self.COMPOUNDS)
@@ -87,53 +86,38 @@ class MechanismParser:
         found_physical = self._find_matches(text_lower, self.physical_patterns, self.PHYSICAL_STATES)
         found_structures = self._find_matches(text_lower, self.structure_patterns, self.STRUCTURES)
 
-        # 2. Heuristic Construction
-        if found_compounds or found_receptors or found_processes or found_physical or found_structures:
-            if found_compounds:
-                for compound in found_compounds:
-                    claim = {
-                        "claim_id": f"parsed_{compound}_{len(claims)}",
-                        "text": text[:300] + "...",
-                        "compound": compound,
-                        "receptor": found_receptors[0] if found_receptors else "unknown",
-                        "mechanism": {
-                            "label": found_processes[0] if found_processes else "associated with",
-                            "steps": [{"type": "compound", "description": compound}] 
-                                     + ([{"type": "receptor", "description": r} for r in found_receptors])
-                                     + ([{"type": "process", "description": p} for p in found_processes])
-                                     + ([{"type": "physical", "description": ph} for ph in found_physical])
-                                     + ([{"type": "structure", "description": s} for s in found_structures])
-                        },
-                        "perception_outputs": found_perceptions,
-                        "physical_states": found_physical,
-                        "structures": found_structures,
-                        "evidence_level": "heuristic",
-                        "source": "mechanism_parser"
-                    }
-                    claims.append(claim)
-            
-            elif found_receptors or found_processes or found_physical or found_structures:
-                 claim = {
-                        "claim_id": f"parsed_general_{len(claims)}",
-                        "text": text[:300] + "...",
-                        "compound": "general",
-                        "receptor": found_receptors[0] if found_receptors else "unknown",
-                        "mechanism": {
-                            "label": "general mechanism",
-                            "steps": ([{"type": "receptor", "description": r} for r in found_receptors])
-                                     + ([{"type": "process", "description": p} for p in found_processes])
-                                     + ([{"type": "physical", "description": ph} for ph in found_physical])
-                                     + ([{"type": "structure", "description": s} for s in found_structures])
-                        },
-                        "perception_outputs": found_perceptions,
-                        "physical_states": found_physical,
-                        "structures": found_structures,
-                        "evidence_level": "heuristic",
-                         "source": "mechanism_parser"
-                 }
-                 claims.append(claim)
+        # 2. Heuristic Construction (Single Primary Claim)
+        if any([found_compounds, found_receptors, found_processes, found_physical, found_structures]):
+            # Build unified mechanism nodes
+            nodes = []
+            for c in found_compounds: nodes.append({"id": f"node_{c}", "type": "compound", "label": c.title()})
+            for r in found_receptors: nodes.append({"id": f"node_{r}", "type": "receptor", "label": r.title()})
+            for p in found_processes: nodes.append({"id": f"node_{p}", "type": "process", "label": p.title()})
+            for ph in found_physical: nodes.append({"id": f"node_{ph}", "type": "physical", "label": ph.title()})
+            for s in found_structures: nodes.append({"id": f"node_{s}", "type": "structure", "label": s.title()})
 
-        return claims
+            # The entire text is the primary statement
+            primary_claim = {
+                "claim_id": f"parsed_statement_{hash(text) % 10000}",
+                "text": text[:300] + ("..." if len(text) > 300 else ""),
+                "statement": text[:300],
+                "compound": found_compounds[0] if found_compounds else "general",
+                "receptor": found_receptors[0] if found_receptors else "unknown",
+                "mechanism": {
+                    "label": found_processes[0] if found_processes else "scientific mechanism",
+                    "nodes": nodes,
+                    "edges": [] # To be filled by enricher topology if possible
+                },
+                "perception_outputs": found_perceptions,
+                "physical_states": found_physical,
+                "structures": found_structures,
+                "evidence_level": "heuristic",
+                "importance_score": 0.8,
+                "source": "mechanism_parser"
+            }
+            return [primary_claim]
+
+        return []
 
     def _find_matches(self, text: str, patterns: List[Any], original_terms: Set[str]) -> List[str]:
         """Find unique terms in text."""
