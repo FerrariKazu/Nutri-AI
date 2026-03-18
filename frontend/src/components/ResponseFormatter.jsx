@@ -31,32 +31,29 @@ function renderMarkdown(content) {
 function renderScientificNarrative(narrative) {
   if (!narrative) return null;
 
-  // We want to detect markers exactly as they appear in the markdown output:
-  // e.g., "**What happens:**", "**How it works:**" etc.
-  const sections = narrative.split(/(?=\*\*(?:What happens|How it works|At the molecular level|Causal chain|Why this matters):?\*\*)/i);
+  // Split by the new 7-section markers
+  const sections = narrative.split(/(?=\*\*(?:Core Insight|Explanation|Most Important Driver|Secondary Factors|Why This Matters|Nuance & Exceptions|Confidence):?\*\*)/i);
 
   return sections.map((section, idx) => {
     const match = section.match(/^\*\*(.*?):?\*\*/);
     if (match) {
       const title = match[1].trim();
-      // Skip the duplicate causal chain narrative since we render a structured one below
-      if (title.toLowerCase().includes('causal chain')) {
-          return null;
-      }
-
       const content = section.replace(/^\*\*(.*?):?\*\*/, '').trim();
+      
+      const isCoreInsight = title.toLowerCase().includes('core insight');
+      const isConfidence = title.toLowerCase().includes('confidence');
+
       return (
-        <div key={idx} className="mb-4">
-          <h3 className="text-md sm:text-lg font-bold mb-2 text-blue-400 dark:text-blue-300">
+        <div key={idx} className={`mb-4 ${isCoreInsight ? 'p-3 bg-blue-900/20 border border-blue-800/30 rounded-lg' : ''}`}>
+          <h3 className={`text-md sm:text-lg font-bold mb-2 ${isCoreInsight ? 'text-blue-300' : isConfidence ? 'text-neutral-400' : 'text-blue-400 dark:text-blue-300'}`}>
             {title}
           </h3>
-          <div className="prose prose-sm prose-invert text-neutral-300">
+          <div className={`prose prose-sm prose-invert ${isCoreInsight ? 'text-neutral-200 font-medium' : 'text-neutral-300'}`}>
             {renderMarkdown(content)}
           </div>
         </div>
       );
     }
-    // Fallback if no specific marker was found at start
     return (
       <div key={idx} className="mb-4 prose prose-sm prose-invert text-neutral-300">
         {renderMarkdown(section.trim())}
