@@ -92,6 +92,43 @@
         scrollbar-width: thin;
         scrollbar-color: rgba(255, 255, 255, 0.05) transparent;
     }
+
+    /* Fix text selection visibility */
+    ::selection {
+        background: #fbbf24; /* softer amber */
+        color: #000000;      /* force black text */
+    }
+
+    ::-moz-selection {
+        background: #fbbf24;
+        color: #000000;
+    }
+
+    /* Polish spacing hierarchy */
+    h2 {
+        margin-bottom: 12px;
+    }
+
+    h3 {
+        margin-top: 16px;
+        margin-bottom: 6px;
+    }
+
+    p {
+        margin-bottom: 10px;
+    }
+
+    /* Show reasoning button hover UX */
+    details summary {
+        cursor: pointer;
+        opacity: 0.8;
+        transition: opacity 0.2s ease;
+    }
+
+    details[open] summary,
+    details summary:hover {
+        opacity: 1;
+    }
 }
 
 
