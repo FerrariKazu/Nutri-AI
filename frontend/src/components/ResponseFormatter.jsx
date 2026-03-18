@@ -2,9 +2,18 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+function stripMarkdownJson(text) {
+  if (!text) return "";
+  let clean = text.trim();
+  if (clean.startsWith("```json")) clean = clean.substring(7);
+  else if (clean.startsWith("```")) clean = clean.substring(3);
+  if (clean.endsWith("```")) clean = clean.substring(0, clean.length - 3);
+  return clean.trim();
+}
+
 function isCompleteJSON(text) {
   if (!text) return false;
-  const trimmed = text.trim();
+  const trimmed = stripMarkdownJson(text);
   return trimmed.startsWith("{") && trimmed.endsWith("}");
 }
 
@@ -69,6 +78,8 @@ function extractMacros(answerText) {
 const ResponseFormatter = ({ text, isStreaming }) => {
   if (!text) return null;
 
+  console.log("RAW TEXT:", text);
+
   // STEP 1: Streaming + JSON Parse Safety
   if (isStreaming || !isCompleteJSON(text)) {
     return (
@@ -81,11 +92,26 @@ const ResponseFormatter = ({ text, isStreaming }) => {
   // STEP 2: Safe parsing
   let data;
   try {
-    data = JSON.parse(text);
+    const cleanJson = stripMarkdownJson(text);
+    data = JSON.parse(cleanJson);
+    console.log("PARSED JSON:", data);
   } catch (e) {
+    console.log("JSON PARSE FAILED");
     // Failsafe: if looks complete but fails to parse
     return (
       <div className="prose prose-sm dark:prose-invert">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+      </div> 
+    );
+  }
+
+  const { scientific_response, nutritional_response, confidence } = data;
+
+  // TASK 7: FAIL-SAFE
+  if (!scientific_response && !nutritional_response) {
+    console.log("FAIL-SAFE: No structured responses found, falling back to markdown");
+    return (
+      <div className="prose prose-sm dark:prose-invert animate-fade-in">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
       </div> 
     );
