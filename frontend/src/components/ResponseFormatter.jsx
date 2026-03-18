@@ -33,7 +33,7 @@ function renderScientificNarrative(narrative) {
 
   // We want to detect markers exactly as they appear in the markdown output:
   // e.g., "**What happens:**", "**How it works:**" etc.
-  const sections = narrative.split(/(?=\*\*(?:What happens|How it works|At the molecular level|Causal chain):?\*\*)/i);
+  const sections = narrative.split(/(?=\*\*(?:What happens|How it works|At the molecular level|Causal chain|Why this matters):?\*\*)/i);
 
   return sections.map((section, idx) => {
     const match = section.match(/^\*\*(.*?):?\*\*/);
