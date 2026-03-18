@@ -50,7 +50,7 @@ function renderScientificNarrative(narrative) {
           <h3 className="text-md sm:text-lg font-bold mb-2 text-blue-400 dark:text-blue-300">
             {title}
           </h3>
-          <div className="prose prose-sm dark:prose-invert">
+          <div className="prose prose-sm prose-invert text-neutral-300">
             {renderMarkdown(content)}
           </div>
         </div>
@@ -58,7 +58,7 @@ function renderScientificNarrative(narrative) {
     }
     // Fallback if no specific marker was found at start
     return (
-      <div key={idx} className="mb-4 prose prose-sm dark:prose-invert">
+      <div key={idx} className="mb-4 prose prose-sm prose-invert text-neutral-300">
         {renderMarkdown(section.trim())}
       </div>
     );
@@ -75,7 +75,7 @@ const ResponseFormatter = ({ text, isStreaming }) => {
   // STEP 1: Streaming + JSON Parse Safety
   if (isStreaming || !isCompleteJSON(text)) {
     return (
-      <div className="prose prose-sm dark:prose-invert animate-fade-in">
+      <div className="prose prose-sm prose-invert text-neutral-300 animate-fade-in">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
       </div> // Fallback when incomplete
     );
@@ -91,7 +91,7 @@ const ResponseFormatter = ({ text, isStreaming }) => {
     console.log("JSON PARSE FAILED");
     // Failsafe: if looks complete but fails to parse
     return (
-      <div className="prose prose-sm dark:prose-invert">
+      <div className="prose prose-sm prose-invert text-neutral-300">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
       </div> 
     );
@@ -103,7 +103,7 @@ const ResponseFormatter = ({ text, isStreaming }) => {
   if (!scientific_response && !nutritional_response) {
     console.log("FAIL-SAFE: No structured responses found, falling back to markdown");
     return (
-      <div className="prose prose-sm dark:prose-invert animate-fade-in">
+      <div className="prose prose-sm prose-invert text-neutral-300 animate-fade-in">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
       </div> 
     );
@@ -176,7 +176,7 @@ const ResponseFormatter = ({ text, isStreaming }) => {
             <span>🥚</span> Macronutrients
           </h2>
 
-          <div className="prose prose-sm dark:prose-invert mb-4 text-orange-100/90 whitespace-pre-line">
+          <div className="prose prose-sm prose-invert text-neutral-300 mb-4 text-orange-100/90 whitespace-pre-line">
              {/* Clean up any backend bleed-through */}
              {renderMarkdown(nutritional_response.answer?.replace(/⚠️ \[RAG_FAILED_NO_CHUNKS\]\s*/g, ''))}
           </div>
