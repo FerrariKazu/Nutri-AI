@@ -144,9 +144,28 @@ const ResponseFormatter = ({ text, isStreaming }) => {
                 Causal chain
               </h3>
               <ol className="list-decimal pl-6 space-y-2 text-sm sm:text-base text-neutral-300">
-                {scientific_response.causal_chain.map((step, i) => (
-                  <li key={i}>{step}</li>
-                ))}
+                {scientific_response.causal_chain.map((step, i) => {
+                  let content = null;
+                  if (typeof step === 'string') {
+                    content = step;
+                  } else if (typeof step === 'object' && step !== null) {
+                    if (step.cause && step.effect) {
+                      content = (
+                        <span>
+                          <strong className="text-blue-300 dark:text-blue-200">{step.cause}</strong> 
+                          <span className="text-neutral-500 mx-1">→</span> 
+                          <span>{step.effect}</span>
+                        </span>
+                      );
+                    } else {
+                      content = JSON.stringify(step);
+                    }
+                  } else {
+                    content = String(step);
+                  }
+                  
+                  return <li key={i}>{content}</li>;
+                })}
               </ol>
             </div>
           )}
