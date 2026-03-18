@@ -36,10 +36,14 @@ function renderScientificNarrative(narrative) {
   const sections = narrative.split(/(?=\*\*(?:What happens|How it works|At the molecular level|Causal chain):?\*\*)/i);
 
   return sections.map((section, idx) => {
-    // Extract the header part if it exists
     const match = section.match(/^\*\*(.*?):?\*\*/);
     if (match) {
       const title = match[1].trim();
+      // Skip the duplicate causal chain narrative since we render a structured one below
+      if (title.toLowerCase().includes('causal chain')) {
+          return null;
+      }
+
       const content = section.replace(/^\*\*(.*?):?\*\*/, '').trim();
       return (
         <div key={idx} className="mb-4">
@@ -61,19 +65,7 @@ function renderScientificNarrative(narrative) {
   });
 }
 
-function extractMacros(answerText) {
-  // Simple regex fallback to extract macros if nutritional_response doesn't have a structured .macros field
-  // Looking for things like 18g protein, 13.5g fat, etc.
-  const proteinMatch = answerText.match(/(\d+(?:\.\d+)?g?)\s*protein/i);
-  const fatMatch = answerText.match(/(\d+(?:\.\d+)?g?)\s*fat/i);
-  const carbMatch = answerText.match(/(\d+(?:\.\d+)?g?)\s*carbs?/i);
-
-  return {
-    protein: proteinMatch ? proteinMatch[1] : 'Unknown',
-    fat: fatMatch ? fatMatch[1] : 'Unknown',
-    carbs: carbMatch ? carbMatch[1] : 'Unknown',
-  };
-}
+// extractMacros function removed to rely solely on structured LLM answer text
 
 const ResponseFormatter = ({ text, isStreaming }) => {
   if (!text) return null;
@@ -132,9 +124,14 @@ const ResponseFormatter = ({ text, isStreaming }) => {
       {/* --- Scientific Section --- */}
       {scientific_response && (
         <div className="scientific-section bg-neutral-900/40 p-4 sm:p-5 rounded-xl border border-neutral-800">
-          <h2 className="text-xl sm:text-2xl font-serif text-neutral-200 mb-4 pb-2 border-b border-neutral-700/50">
-            Scientific Explanation
-          </h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-2 border-b border-neutral-700/50">
+            <h2 className="text-xl sm:text-2xl font-serif text-neutral-200 m-0 flex items-center gap-2">
+              <span>🧪</span> Scientific Explanation
+            </h2>
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-mono font-medium bg-neutral-800 text-neutral-400 border border-neutral-700/50 whitespace-nowrap self-start sm:self-auto">
+              Mechanistic Model
+            </span>
+          </div>
           
           {renderScientificNarrative(scientific_response.narrative)}
 
@@ -175,27 +172,14 @@ const ResponseFormatter = ({ text, isStreaming }) => {
       {/* --- Nutritional Section --- */}
       {nutritional_response && (
         <div className="nutritional-section bg-orange-950/20 p-4 sm:p-5 rounded-xl border border-orange-900/30">
-          <h2 className="text-xl sm:text-2xl font-serif text-orange-200 mb-4 pb-2 border-b border-orange-900/50">
-            Macronutrients
+          <h2 className="text-xl sm:text-2xl font-serif text-orange-200 mb-4 pb-2 border-b border-orange-900/50 flex items-center gap-2">
+            <span>🥚</span> Macronutrients
           </h2>
 
-          <div className="prose prose-sm dark:prose-invert mb-4 text-orange-100/90">
+          <div className="prose prose-sm dark:prose-invert mb-4 text-orange-100/90 whitespace-pre-line">
              {/* Clean up any backend bleed-through */}
              {renderMarkdown(nutritional_response.answer?.replace(/⚠️ \[RAG_FAILED_NO_CHUNKS\]\s*/g, ''))}
           </div>
-
-          {/* Structured macro display - favor explicit structure else extract */}
-          {(() => {
-             const answerCleaner = nutritional_response.answer || "";
-             const macros = nutritional_response.macros || extractMacros(answerCleaner);
-             return (
-               <ul className="list-disc pl-6 space-y-1 mb-4 text-sm sm:text-base text-orange-200 font-medium">
-                 <li>Protein: {macros.protein}</li>
-                 <li>Fat: {macros.fat}</li>
-                 <li>Carbs: {macros.carbs}</li>
-               </ul>
-             );
-          })()}
 
           {/* Hidden Reasoning block */}
           {nutritional_response.agentic_reasoning && (
