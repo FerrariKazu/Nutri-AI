@@ -14,11 +14,19 @@ PROXIMITY_WINDOW = 5
 
 # Contextual Semantic Normalization Map
 SEMANTIC_NORMALIZATION = {
-    "bind": ["bind mechanism", "bind transport", "transport", "absorption"],
-    "binds": ["bind mechanism", "bind transport", "transport", "absorption"],
+    "bind": [
+        "bind mechanism", "bind transport", "transport", "absorption",
+        "ion transporter", "membrane potential", "Na+ channel",
+        "electrochemical gradient", "receptor binding", "active transport"
+    ],
+    "binds": [
+        "bind mechanism", "bind transport", "transport", "absorption",
+        "ion transporter", "membrane potential", "Na+ channel",
+        "electrochemical gradient", "receptor binding", "active transport"
+    ],
     "inhibit": ["inhibit mTORC1 signaling", "inhibit"], 
     "regulate": ["regulate", "modulate"],
-    "absorb": ["absorb", "transport"]
+    "absorb": ["absorb", "transport", "bioavailability", "intestinal uptake"]
 }
 
 def _match_registry(word: str, registry: Set[str], fuzzy: bool = False) -> Optional[str]:

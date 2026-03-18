@@ -309,6 +309,31 @@ def _recompute_final_metrics(trace: AgentExecutionTrace):
         contradictions = sum(1 for e in all_ev if e.get("effect_direction") == "contradictory")
         trace.contradiction_ratio = round(contradictions / len(all_ev), 2)
 
+    # Task 4: Evidence binding telemetry
+    cited_claims = sum(1 for c in trace.claims if c.get("chunk_ids"))
+    inferred_claims = sum(1 for c in trace.claims if c.get("type") == "inferred")
+    evidence_entries = [
+        {
+            "claim": c.get("text", c.get("statement", "")),
+            "chunk_ids": c.get("chunk_ids", []),
+            "type": c.get("type", "retrieved"),
+            "confidence": c.get("confidence", {}).get("current", 0.0) if isinstance(c.get("confidence"), dict) else c.get("confidence", 0.0)
+        }
+        for c in trace.claims
+    ]
+
+    # Store evidence telemetry in trace metrics
+    if not hasattr(trace, "trace_metrics") or trace.trace_metrics is None:
+        trace.trace_metrics = {}
+    trace.trace_metrics["evidence_binding"] = {
+        "cited_claims": cited_claims,
+        "inferred_claims": inferred_claims,
+        "total_evidence_entries": len(evidence_entries),
+        "evidence_mode": "retrieval" if cited_claims > 0 else "fallback",
+        "evidence_count": cited_claims,
+        "fallback_used": inferred_claims == total_claims
+    }
+
 def _enrich_v1_2_8_rigor(trace: AgentExecutionTrace):
     """
     Implements v1.2.8 Architectural Refinements:

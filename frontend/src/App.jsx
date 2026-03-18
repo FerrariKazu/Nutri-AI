@@ -1,6 +1,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { streamNutriChat, getSessionId, clearSession, getConversation, getConversationsList, createNewSession, getPerformanceMode, getHealth } from './api/apiClient';
+import { saveMessages, loadMessages, clearMessages } from './utils/chatStorage';
 
 
 import SystemStatus from './components/SystemStatus';
@@ -17,7 +18,12 @@ function App() {
         console.log("%c NUTRI SYSTEM %c Build ID: " + import.meta.env.VITE_GIT_SHA, "background: #22c55e; color: white; font-weight: bold; padding: 2px 4px; border-radius: 4px;", "color: #22c55e; font-weight: bold;");
     }, []);
 
-    const [messages, setMessages] = useState([]);
+    const [messages, setMessages] = useState(() => loadMessages());
+
+    // Autosave messages to localStorage whenever they change
+    useEffect(() => {
+        saveMessages(messages);
+    }, [messages]);
 
     // State Machine: 'IDLE' | 'HYDRATING' | 'STREAMING' | 'DONE' | 'ERROR'
     const [streamStatus, setStreamStatus] = useState('HYDRATING'); // Start hydrating
@@ -204,6 +210,7 @@ function App() {
 
         // Lazy: Just clear state
         clearSession();
+        clearMessages();
         setSessionId(null);
         setMessages([]);
         setTurnCount(0);
@@ -495,6 +502,7 @@ function App() {
 
     const handleNewSession = () => {
         clearSession();
+        clearMessages();
         const sid = getSessionId();
         setSessionId(sid);
         setMessages([]);

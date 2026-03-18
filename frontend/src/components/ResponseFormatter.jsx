@@ -1,0 +1,174 @@
+import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
+function isCompleteJSON(text) {
+  if (!text) return false;
+  const trimmed = text.trim();
+  return trimmed.startsWith("{") && trimmed.endsWith("}");
+}
+
+// Helper to convert structured sections into JSX using ReactMarkdown
+function renderMarkdown(content) {
+  if (!content) return null;
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+      {content}
+    </ReactMarkdown>
+  );
+}
+
+// Split narrative by specified markers and wrap in headers
+function renderScientificNarrative(narrative) {
+  if (!narrative) return null;
+
+  // We want to detect markers exactly as they appear in the markdown output:
+  // e.g., "**What happens:**", "**How it works:**" etc.
+  const sections = narrative.split(/(?=\*\*(?:What happens|How it works|At the molecular level|Causal chain):?\*\*)/i);
+
+  return sections.map((section, idx) => {
+    // Extract the header part if it exists
+    const match = section.match(/^\*\*(.*?):?\*\*/);
+    if (match) {
+      const title = match[1].trim();
+      const content = section.replace(/^\*\*(.*?):?\*\*/, '').trim();
+      return (
+        <div key={idx} className="mb-4">
+          <h3 className="text-md sm:text-lg font-bold mb-2 text-blue-400 dark:text-blue-300">
+            {title}
+          </h3>
+          <div className="prose prose-sm dark:prose-invert">
+            {renderMarkdown(content)}
+          </div>
+        </div>
+      );
+    }
+    // Fallback if no specific marker was found at start
+    return (
+      <div key={idx} className="mb-4 prose prose-sm dark:prose-invert">
+        {renderMarkdown(section.trim())}
+      </div>
+    );
+  });
+}
+
+function extractMacros(answerText) {
+  // Simple regex fallback to extract macros if nutritional_response doesn't have a structured .macros field
+  // Looking for things like 18g protein, 13.5g fat, etc.
+  const proteinMatch = answerText.match(/(\d+(?:\.\d+)?g?)\s*protein/i);
+  const fatMatch = answerText.match(/(\d+(?:\.\d+)?g?)\s*fat/i);
+  const carbMatch = answerText.match(/(\d+(?:\.\d+)?g?)\s*carbs?/i);
+
+  return {
+    protein: proteinMatch ? proteinMatch[1] : 'Unknown',
+    fat: fatMatch ? fatMatch[1] : 'Unknown',
+    carbs: carbMatch ? carbMatch[1] : 'Unknown',
+  };
+}
+
+const ResponseFormatter = ({ text, isStreaming }) => {
+  if (!text) return null;
+
+  // STEP 1: Streaming + JSON Parse Safety
+  if (isStreaming || !isCompleteJSON(text)) {
+    return (
+      <div className="prose prose-sm dark:prose-invert animate-fade-in">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+      </div> // Fallback when incomplete
+    );
+  }
+
+  // STEP 2: Safe parsing
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    // Failsafe: if looks complete but fails to parse
+    return (
+      <div className="prose prose-sm dark:prose-invert">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+      </div> 
+    );
+  }
+
+  const { scientific_response, nutritional_response, confidence } = data;
+  const isLowConfidence = confidence !== undefined && confidence < 0.6;
+
+  return (
+    <div className="nutri-structured-response flex flex-col gap-6 w-full animate-fade-in">
+      
+      {/* --- Low Evidence Warning --- */}
+      {isLowConfidence && (
+        <div className="flex items-center gap-2 p-3 bg-red-950/40 border border-red-900/50 rounded-lg text-red-400 text-sm font-medium">
+          <span className="text-xl">⚠️</span> Low Evidence: This explanation relies on inferred heuristics rather than direct retrieval.
+        </div>
+      )}
+
+      {/* --- Scientific Section --- */}
+      {scientific_response && (
+        <div className="scientific-section bg-neutral-900/40 p-4 sm:p-5 rounded-xl border border-neutral-800">
+          <h2 className="text-xl sm:text-2xl font-serif text-neutral-200 mb-4 pb-2 border-b border-neutral-700/50">
+            Scientific Explanation
+          </h2>
+          
+          {renderScientificNarrative(scientific_response.narrative)}
+
+          {scientific_response.causal_chain && scientific_response.causal_chain.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-md sm:text-lg font-bold mb-3 text-blue-400 dark:text-blue-300">
+                Causal chain
+              </h3>
+              <ol className="list-decimal pl-6 space-y-2 text-sm sm:text-base text-neutral-300">
+                {scientific_response.causal_chain.map((step, i) => (
+                  <li key={i}>{step}</li>
+                ))}
+              </ol>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* --- Nutritional Section --- */}
+      {nutritional_response && (
+        <div className="nutritional-section bg-orange-950/20 p-4 sm:p-5 rounded-xl border border-orange-900/30">
+          <h2 className="text-xl sm:text-2xl font-serif text-orange-200 mb-4 pb-2 border-b border-orange-900/50">
+            Macronutrients
+          </h2>
+
+          <div className="prose prose-sm dark:prose-invert mb-4 text-orange-100/90">
+             {/* Clean up any backend bleed-through */}
+             {renderMarkdown(nutritional_response.answer?.replace(/⚠️ \[RAG_FAILED_NO_CHUNKS\]\s*/g, ''))}
+          </div>
+
+          {/* Structured macro display - favor explicit structure else extract */}
+          {(() => {
+             const answerCleaner = nutritional_response.answer || "";
+             const macros = nutritional_response.macros || extractMacros(answerCleaner);
+             return (
+               <ul className="list-disc pl-6 space-y-1 mb-4 text-sm sm:text-base text-orange-200 font-medium">
+                 <li>Protein: {macros.protein}</li>
+                 <li>Fat: {macros.fat}</li>
+                 <li>Carbs: {macros.carbs}</li>
+               </ul>
+             );
+          })()}
+
+          {/* Hidden Reasoning block */}
+          {nutritional_response.agentic_reasoning && (
+            <details className="mt-4 border border-orange-900/20 rounded-md bg-black/20 overflow-hidden group">
+              <summary className="cursor-pointer text-xs font-mono text-orange-500/70 uppercase tracking-wider p-3 bg-black/40 hover:bg-black/60 transition-colors select-none">
+                Show Reasoning
+              </summary>
+              <div className="p-4 prose prose-xs dark:prose-invert max-w-none text-neutral-400">
+                {renderMarkdown(nutritional_response.agentic_reasoning)}
+              </div>
+            </details>
+          )}
+
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ResponseFormatter;

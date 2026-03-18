@@ -154,6 +154,11 @@ You must identify:
 - Desired explanation depth (casual or scientific)
 - Goal type (invent, explain, optimize)
 
+Handling Multi-Query Prompts:
+- If the user provides multiple unrelated queries (e.g., a scientific explanation AND a nutritional calculation), you should extract the primary nutritional/culinary goal or combine them into a single focused query. DO NOT refuse the request; instead, prioritize the most relevant culinary/nutritional aspect.
+- Prioritize the primary goal (e.g., if they ask for a recipe with macros, focus on the meal synthesis while using the scientific query as context).
+- DO NOT refuse the request. Extract whatever constraints are present across all parts of the input.
+
 You must NOT:
 - Suggest recipes
 - Add ingredients
@@ -432,9 +437,9 @@ class IntentAgent:
             
         except Exception as e:
             logger.error(f"Intent extraction failed: {e}")
-            # Return default intent on failure
+            # Return default intent on failure with smart goal inference
             return IntentOutput(
-                goal="general_explanation",
+                goal=self._infer_goal_from_query(user_input),
                 ingredients=self._extract_ingredients_fallback(user_input),
                 explanation_depth="scientific"
             )
@@ -451,8 +456,10 @@ class IntentAgent:
                 json_str = response[start:end]
                 data = json.loads(json_str)
                 
+                goal = data.get('goal', 'general_explanation')
+                
                 return IntentOutput(
-                    goal=data.get('goal', 'general_explanation'),
+                    goal=goal,
                     ingredients=data.get('ingredients', []),
                     equipment=data.get('equipment', []),
                     dietary_constraints=data.get('dietary_constraints', {}),
@@ -464,6 +471,20 @@ class IntentAgent:
             logger.warning(f"JSON parse failed: {e}")
         
         return IntentOutput(goal="general_explanation")
+
+    @staticmethod
+    def _infer_goal_from_query(query: str) -> str:
+        """Infer intent goal from query keywords when LLM extraction fails."""
+        q = query.lower()
+        if any(kw in q for kw in ["explain", "why", "how does", "mechanism", "science"]):
+            return "scientific_explanation"
+        if any(kw in q for kw in ["macros", "calories", "nutrition", "protein", "carbs", "fat"]):
+            return "nutrition_analysis"
+        if any(kw in q for kw in ["optimize", "improve", "better", "enhance"]):
+            return "optimize"
+        if any(kw in q for kw in ["make", "cook", "recipe", "create", "invent"]):
+            return "invent_meal"
+        return "general_explanation"
     
     def _extract_ingredients_fallback(self, text: str) -> List[str]:
         """Simple fallback ingredient extraction."""

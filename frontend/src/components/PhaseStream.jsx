@@ -7,6 +7,7 @@ import NutriIntelligencePanel from './IntelligenceTransparency/NutriIntelligence
 import { adaptExecutionTrace } from '../utils/traceAdapter';
 import { SUGGESTION_POOL } from '../api/suggestions';
 import { getUserId } from '../utils/memoryManager';
+import ResponseFormatter from './ResponseFormatter';
 
 /**
  * hashString - Simple DJB2 hash for deterministic seeding.
@@ -122,12 +123,12 @@ const PhaseStream = ({ messages, streamStatus, onPromptSelect }) => {
             ) : (
                 /* 2. Conversation Stream */
                 messages.map((msg, idx) => (
-                    <div key={idx} className="max-w-4xl mx-auto flex flex-col gap-6 animate-fade-in">
+                    <div key={idx} className="max-w-full sm:max-w-4xl mx-auto flex flex-col gap-4 sm:gap-6 animate-fade-in w-full text-[14px] sm:text-[16px]">
                         {/* User Query - Minimalist Header */}
                         {msg.role === 'user' && (
-                            <div className="flex items-start gap-4 py-4 border-b border-neutral-800/50">
-                                <Fingerprint className="w-5 h-5 text-neutral-600 shrink-0" />
-                                <h2 className="text-xl font-serif text-neutral-400 font-normal leading-tight">
+                            <div className="flex items-start gap-3 sm:gap-4 py-3 sm:py-4 border-b border-neutral-800/50">
+                                <Fingerprint className="w-4 h-4 sm:w-5 sm:h-5 text-neutral-600 shrink-0 mt-1" />
+                                <h2 className="text-lg sm:text-xl font-serif text-neutral-400 font-normal leading-tight break-words overflow-hidden" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                                     {msg.content}
                                 </h2>
                             </div>
@@ -180,10 +181,8 @@ const PhaseStream = ({ messages, streamStatus, onPromptSelect }) => {
 
                                 {/* Final Output */}
                                 {msg.content && (
-                                    <div className="prose prose-neutral prose-invert max-w-none font-serif text-lg leading-relaxed text-neutral-200">
-                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                            {msg.content}
-                                        </ReactMarkdown>
+                                    <div className="w-full break-words" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                                        <ResponseFormatter text={msg.content} isStreaming={msg.isStreaming} />
                                     </div>
                                 )}
 

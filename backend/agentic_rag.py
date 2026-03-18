@@ -528,7 +528,7 @@ Final Answer: [your answer]
         
         return '\n'.join(filtered).strip()
 
-    def query(self, user_query: str, mode: str = None) -> Dict:
+    def query(self, user_query: str, mode: str = None, **kwargs) -> Dict:
         """
         Main RAG entry point with Tier-based security floor.
         """
@@ -702,7 +702,8 @@ Final Answer: [your answer]
         
         if not chunks_found and not kwargs.get("rag_disabled", False):
             metadata["rag_status"] = "FAILED_NO_CHUNKS"
-            final_answer_text = f"⚠️ [RAG_FAILED_NO_CHUNKS] {final_answer_text}"
+            metadata["confidence_degraded"] = True
+            logger.warning("[RAG] No chunks retrieved — confidence degraded, using fallback.")
         
         # If it has nutrition claims but ONLY comes from RAG (no hard PubChem/USDA in this context yet)
         # the ClaimVerifier will handle the final status, but we tag it here for tracing.

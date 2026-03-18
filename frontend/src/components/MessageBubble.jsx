@@ -1,4 +1,4 @@
-import React from 'react';
+import ResponseFormatter from './ResponseFormatter';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -9,9 +9,10 @@ const MessageBubble = ({ role, content, isStreaming, isWarmingUp, phase }) => {
     const bgClass = isUser
         ? 'bg-orange-500 text-white'
         : 'bg-white/90 backdrop-blur-sm border border-gray-200 dark:bg-black/60 dark:border-gray-800 dark:text-gray-100';
-    const maxWidth = 'max-w-3xl w-full sm:w-auto';
+    // Mobile fix: max-w-full and text scaling
+    const maxWidth = 'max-w-full sm:max-w-4xl w-full';
 
-    // Markdown components customization
+    // Markdown components customization (Fallback for non-structured / user messages)
     const components = {
         h1: ({ node, ...props }) => <h1 className="text-lg sm:text-xl font-bold mb-2 mt-4" {...props} />,
         h2: ({ node, ...props }) => <h2 className="text-md sm:text-lg font-bold mb-2 mt-3" {...props} />,
@@ -21,29 +22,30 @@ const MessageBubble = ({ role, content, isStreaming, isWarmingUp, phase }) => {
         code: ({ node, inline, className, children, ...props }) => {
             const match = /language-(\w+)/.exec(className || '');
             return !inline ? (
-                <div className="rounded-md bg-gray-100 dark:bg-gray-900 p-2 sm:p-3 my-2 overflow-x-auto text-xs sm:text-sm">
+                <div className="rounded-md bg-gray-100 dark:bg-gray-900 p-2 sm:p-3 my-2 overflow-x-auto text-xs sm:text-sm max-w-full">
                     <code className={className} {...props}>
                         {children}
                     </code>
                 </div>
             ) : (
-                <code className="bg-gray-100 dark:bg-gray-800 rounded px-1 py-0.5 text-xs sm:text-sm font-mono text-gray-800 dark:text-gray-200" {...props}>
+                <code className="bg-gray-100 dark:bg-gray-800 rounded px-1 py-0.5 text-xs sm:text-sm font-mono text-gray-800 dark:text-gray-200 break-words" {...props}>
                     {children}
                 </code>
             );
         },
         a: ({ node, ...props }) => <a className="text-blue-500 hover:underline break-words" target="_blank" rel="noopener noreferrer" {...props} />,
-        p: ({ node, ...props }) => <p className="mb-2 last:mb-0 leading-relaxed break-words text-sm sm:text-base" {...props} />,
+        p: ({ node, ...props }) => <p className="mb-2 last:mb-0 leading-relaxed break-words text-sm sm:text-base" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }} {...props} />,
     };
 
     return (
         <div className={`flex flex-col ${alignClass} gap-1 w-full`}>
             <div
                 className={`
-                    ${maxWidth} rounded-xl p-3 sm:p-4 
+                    ${maxWidth} rounded-xl p-3 sm:p-6 
                     ${bgClass} 
                     shadow-sm overflow-hidden break-words
                 `}
+                style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
             >
                 {/* Phase Status Indicator */}
                 {isStreaming && phase && phase.message && phase.message.trim() && (
@@ -58,28 +60,30 @@ const MessageBubble = ({ role, content, isStreaming, isWarmingUp, phase }) => {
                 )}
 
                 {/* Streaming Indicator if empty content and no phase */}
-                {isStreaming && !content && !phase && role === 'assistant' && (
+                {isStreaming && !content && !phase && !isUser && (
                     <div className="flex space-x-1 items-center h-6">
                         <div className="w-2 h-2 bg-orange-500/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
                         <div className="w-2 h-2 bg-orange-500/50 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
                         <div className="w-2 h-2 bg-orange-500/50 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                        <span className="ml-2 text-xs text-orange-500/70 font-mono tracking-wider animate-pulse">THINKING...</span>
                     </div>
                 )}
 
                 {/* Content */}
                 {content && typeof content === 'string' && (
-                    <div className={`prose prose-sm dark:prose-invert max-w-none ${!isUser ? 'font-serif' : ''} ${isWarmingUp ? 'italic opacity-70 animate-pulse' : ''}`}>
-                        <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={components}
-                        >
-                            {content}
-                        </ReactMarkdown>
+                    <div className={`prose prose-sm dark:prose-invert max-w-none w-full ${!isUser ? 'font-serif' : ''} ${isWarmingUp ? 'italic opacity-70 animate-pulse' : ''} text-[14px] sm:text-[16px]`}>
+                        {isUser ? (
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+                                {content}
+                            </ReactMarkdown>
+                        ) : (
+                            <ResponseFormatter text={content} isStreaming={isStreaming} />
+                        )}
                     </div>
                 )}
 
                 {/* Cursor */}
-                {isStreaming && content && role === 'assistant' && (
+                {isStreaming && content && !isUser && (
                     <span className="inline-block w-1.5 h-4 bg-orange-500/50 animate-pulse ml-1 align-middle" />
                 )}
             </div>

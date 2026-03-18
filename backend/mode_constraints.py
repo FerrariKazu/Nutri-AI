@@ -57,6 +57,12 @@ MODE: MECHANISTIC EXPLANATION
 ──────────────────────────────
 You are generating a structured scientific explanation of a food science mechanism.
 
+STRICT RULES:
+- Every claim MUST reference at least one chunk_id from the provided context
+- Use the chunk_ids given in square brackets [CHK-XX-XXXXXX] in the context
+- Do NOT make unsupported claims without referencing evidence
+- If insufficient evidence exists, say so and set confidence low
+
 STRICT OUTPUT FORMAT — You MUST respond with valid JSON matching this schema:
 ```json
 {
@@ -72,7 +78,9 @@ STRICT OUTPUT FORMAT — You MUST respond with valid JSON matching this schema:
       "statement": "<one scientific claim>",
       "mechanism": "<mechanistic description>",
       "compounds": ["<compound or enzyme name>"],
-      "anchors": ["<biological or chemical entity>"]
+      "anchors": ["<biological or chemical entity>"],
+      "chunk_ids": ["<chunk_id referenced>"],
+      "confidence": 0.0
     }
   ]
 }
@@ -84,7 +92,8 @@ RULES:
 - tier_2_process: Process-level causality (biochemical + physical processes)
 - tier_3_molecular: Molecular detail (specific enzymes, pathways, temperatures, structures)
 - causal_chain: Each step's effect MUST connect to the next step's cause (continuity)
-- claims: At least 2 claims with non-empty mechanism, compounds, and anchors
+- claims: At least 2 claims with non-empty mechanism, compounds, anchors, and chunk_ids
+- confidence: Float 0.0-1.0 based on how well the evidence supports the claim
 - DO NOT provide recipes, ingredient lists, or nutrition numbers
 - DO NOT use placeholder text — every field must contain real scientific content
 """

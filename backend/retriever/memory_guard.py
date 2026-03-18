@@ -41,8 +41,10 @@ def estimate_index_memory(index_path=None, index_obj=None) -> float:
     Supports file path (pre-load) or loaded index object.
     """
     # Case 1: File path available
-    if index_path and isinstance(index_path, (str, os.PathLike)):
-        if os.path.exists(index_path):
+    if index_path is not None:
+        if not isinstance(index_path, (str, os.PathLike)):
+            logger.warning(f"[MEMORY_GUARD] index_path is {type(index_path).__name__}, expected str. Skipping getsize.")
+        elif os.path.exists(index_path):
             return float(os.path.getsize(index_path))
 
     # Case 2: Index already loaded

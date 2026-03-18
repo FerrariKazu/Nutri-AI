@@ -11,8 +11,11 @@ from typing import List, Dict, Any, Optional
 from enum import Enum
 
 from .faiss_retriever import FaissRetriever
+from backend.retrieval.domain_classifier import DomainClassifier, CONTAMINATION_BLOCKLIST
 
 logger = logging.getLogger(__name__)
+
+_domain_classifier = DomainClassifier()
 
 
 class IndexType(Enum):
@@ -181,7 +184,10 @@ class RetrievalRouter:
         # Sort by score descending and limit total results
         all_results.sort(key=lambda x: x['score'], reverse=True)
         
-        return all_results[:int(top_k)]
+        # Apply contamination filter (Fix 2)
+        filtered = self._filter_contamination(all_results)
+        
+        return filtered[:int(top_k)]
     
     def detect_index_type(self, query: str) -> List[IndexType]:
         """
@@ -195,6 +201,29 @@ class RetrievalRouter:
         """
         query_lower = query.lower()
         relevant = []
+        
+        # Domain classification (Fix 1 — biological vs chemical)
+        domain_result = _domain_classifier.classify(query)
+        domain = domain_result["domain"]
+        suppress = domain_result.get("suppress_indices", [])
+        
+        logger.info(f"[DOMAIN_ROUTE] domain={domain} suppress={suppress} for: {query[:60]}")
+        
+        # Biology domain: prioritize SCIENCE, skip CHEMISTRY
+        if domain == "biology":
+            relevant.append(IndexType.SCIENCE)
+            if "chemistry" not in suppress:
+                relevant.append(IndexType.CHEMISTRY)
+            return relevant
+        
+        # Nutrition domain: route to USDA
+        if domain == "nutrition":
+            if 'raw' in query_lower or 'fresh' in query_lower:
+                relevant.append(IndexType.USDA_FOUNDATION)
+            else:
+                relevant.append(IndexType.USDA_BRANDED)
+            relevant.append(IndexType.USDA_FOUNDATION)
+            return relevant
         
         # Chemistry keywords
         chemistry_keywords = [
@@ -228,7 +257,6 @@ class RetrievalRouter:
             relevant.append(IndexType.SCIENCE)
         
         if any(kw in query_lower for kw in nutrition_keywords):
-            # For nutrition, we prioritize Branded but check Foundation if it's "raw"
             if 'raw' in query_lower or 'fresh' in query_lower:
                 relevant.append(IndexType.USDA_FOUNDATION)
             else:
@@ -245,6 +273,26 @@ class RetrievalRouter:
             logger.warning(f"No specific index detected for query: {query}. Agent must decide.")
         
         return relevant
+    
+    def _filter_contamination(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Remove contaminated results (chromatography, industrial, CAS numbers)."""
+        filtered = []
+        removed = 0
+        for r in results:
+            text = r.get("text", "")
+            if _domain_classifier.is_contaminated(text):
+                removed += 1
+                continue
+            # Also remove very low score + generic results
+            if r.get("score", 0) < 0.25 and r.get("index_type") == "chemistry":
+                removed += 1
+                continue
+            filtered.append(r)
+        
+        if removed > 0:
+            logger.info(f"[CONTAMINATION_FILTER] Removed {removed} junk results.")
+        
+        return filtered
     
     def smart_search(
         self,

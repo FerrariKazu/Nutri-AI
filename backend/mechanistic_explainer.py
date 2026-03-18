@@ -39,6 +39,10 @@ class MechanisticOutput:
     validation_errors: List[str] = field(default_factory=list)
     narrative: str = ""  # Human-readable narrative built from tiers
     graph: Dict[str, Any] = field(default_factory=dict) # { "nodes": [], "edges": [] }
+    # Telemetry (Task 8)
+    evidence_mode: str = "unknown"     # "retrieval" | "fallback"
+    evidence_count: int = 0
+    fallback_used: bool = False
 
 
 class MechanisticExplainer:
@@ -58,7 +62,9 @@ class MechanisticExplainer:
         """
         self.llm = llm_client
         self.retriever = retriever
-        logger.info("[MECHANISTIC_EXPLAINER] Initialized")
+        from backend.retrieval.evidence_binder import EvidenceBinder
+        self.evidence_binder = EvidenceBinder()
+        logger.info("[MECHANISTIC_EXPLAINER] Initialized (with EvidenceBinder)")
 
     async def execute(
         self,
@@ -76,24 +82,29 @@ class MechanisticExplainer:
         """
         logger.info(f"[MECHANISTIC_EXPLAINER] Processing: {user_query[:80]}...")
 
-        # 1. Build context from retrieved documents
-        context = self._build_rag_context(retrieved_docs)
+        # 1. Bind evidence (Task 1 — EvidenceBinder)
+        binder_output = self.evidence_binder.bind(user_query, retrieved_docs)
+        evidence_mode = binder_output["mode"]
+        evidence_count = binder_output.get("evidence_count", 0)
+        evidence_strength = binder_output.get("evidence_strength", 0.0)
 
-        # 2. Build messages
+        # 2. FALLBACK MODE (Task 3)
+        if evidence_mode == "fallback":
+            logger.warning("[MECHANISTIC_EXPLAINER] Fallback mode — no retrieval evidence.")
+            fallback_output = self._generate_fallback(user_query, stream_callback)
+            return fallback_output
+
+        context = binder_output["context"]
+
+        # 3. Build messages
         base_prompt = get_system_prompt_for_state(GovernanceState.ALLOW_QUALITATIVE)
         system_prompt = base_prompt + "\n\n" + MECHANISTIC_CONSTRAINTS
         
-        if context:
-            user_content = (
-                f"Scientific context from knowledge base:\n{context}\n\n"
-                f"User question: {user_query}\n\n"
-                "Generate the structured JSON explanation."
-            )
-        else:
-            user_content = (
-                f"User question: {user_query}\n\n"
-                "Generate the structured JSON explanation."
-            )
+        user_content = (
+            f"Scientific context from knowledge base:\n{context}\n\n"
+            f"User question: {user_query}\n\n"
+            "Generate the structured JSON explanation."
+        )
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -140,33 +151,95 @@ class MechanisticExplainer:
         else:
             logger.error(f"[MECHANISTIC_EXPLAINER] ❌ Validation failed: {output.validation_errors}")
 
-        # 6. Build human-readable narrative from tiers
+        # 6. Apply confidence logic (Task 7)
+        for claim in output.claims:
+            if evidence_mode == "retrieval" and claim.get("chunk_ids"):
+                claim["confidence"] = 0.7 + (0.3 * evidence_strength)
+                claim["type"] = "retrieved"
+            else:
+                claim["confidence"] = 0.3
+                claim["type"] = "inferred"
+
+        # 7. Telemetry (Task 8)
+        output.evidence_mode = evidence_mode
+        output.evidence_count = evidence_count
+        output.fallback_used = False
+
+        # 8. Build human-readable narrative from tiers
         output.narrative = self._build_narrative(output)
         
-        # 7. STREAM NARRATIVE SAFELY
-        # Now that we have valid JSON and a narrative, we stream the narrative text to the user.
+        # 9. STREAM NARRATIVE SAFELY
         if stream_callback and output.narrative:
-            # Chunk the narrative to simulate streaming for better UX
             chunk_size = 4
             for i in range(0, len(output.narrative), chunk_size):
                 chunk = output.narrative[i:i+chunk_size]
                 stream_callback(chunk)
-                await asyncio.sleep(0.01)  # Micro-sleep to prevent event loop blocking
+                await asyncio.sleep(0.01)
 
         return output
 
-    def _build_rag_context(self, docs: Optional[List[Any]]) -> str:
-        """Build context string from retrieved documents."""
-        if not docs:
-            return ""
-        
-        parts = []
-        for doc in docs[:5]:
-            text = getattr(doc, 'text', str(doc)) if not isinstance(doc, dict) else doc.get('text', '')
-            if text:
-                parts.append(text[:500])
-        
-        return "\n---\n".join(parts) if parts else ""
+    async def _generate_fallback(self, user_query: str, stream_callback=None) -> MechanisticOutput:
+        """Generate a fallback output when no retrieval evidence is available (Task 3)."""
+        logger.info("[MECHANISTIC_EXPLAINER] Generating fallback (inferred) response.")
+
+        # Still attempt LLM generation but mark as inferred
+        base_prompt = get_system_prompt_for_state(GovernanceState.ALLOW_QUALITATIVE)
+        system_prompt = base_prompt + "\n\n" + MECHANISTIC_CONSTRAINTS
+        user_content = (
+            f"User question: {user_query}\n\n"
+            "Note: No retrieval evidence is available. Generate best-effort explanation "
+            "and set all claim confidence values to 0.4 or below.\n"
+            "Generate the structured JSON explanation."
+        )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content}
+        ]
+
+        try:
+            loop = asyncio.get_event_loop()
+            raw_response = await asyncio.wait_for(
+                loop.run_in_executor(None, lambda: self.llm.generate_text(
+                    messages, max_new_tokens=4096, temperature=0.3, stream_callback=None
+                )),
+                timeout=60.0
+            )
+        except Exception as e:
+            logger.error(f"[MECHANISTIC_EXPLAINER] Fallback LLM failed: {e}")
+            output = self._failure_output(f"Fallback LLM failed: {e}")
+            output.evidence_mode = "fallback"
+            output.fallback_used = True
+            return output
+
+        parsed = self._parse_json_response(raw_response)
+        if parsed is None:
+            output = self._failure_output("Fallback JSON parse failed")
+            output.evidence_mode = "fallback"
+            output.fallback_used = True
+            return output
+
+        output = self._build_output(parsed)
+        output.validation_passed, output.validation_errors = self._validate(output)
+
+        # Force inferred confidence (Task 3 + Task 7)
+        for claim in output.claims:
+            claim["confidence"] = 0.4
+            claim["type"] = "inferred"
+            claim["chunk_ids"] = []
+
+        output.evidence_mode = "fallback"
+        output.evidence_count = 0
+        output.fallback_used = True
+        output.narrative = self._build_narrative(output)
+
+        if stream_callback and output.narrative:
+            chunk_size = 4
+            for i in range(0, len(output.narrative), chunk_size):
+                stream_callback(output.narrative[i:i+chunk_size])
+                await asyncio.sleep(0.01)
+
+        logger.info(f"[MECHANISTIC_EXPLAINER] Fallback complete. Claims={len(output.claims)}")
+        return output
 
     def _parse_json_response(self, response: str) -> Optional[Dict]:
         """Extract JSON from LLM response, handling markdown fences."""
@@ -281,6 +354,9 @@ class MechanisticExplainer:
                 "receptors": receptors if i == 0 else [], # Primary claim gets the full graph
                 "perception_outputs": perception_outputs if i == 0 else [],
                 "anchors": c.get("anchors", []),
+                "chunk_ids": c.get("chunk_ids", []),
+                "confidence": c.get("confidence", 0.5),
+                "type": c.get("type", "retrieved"),
                 "domain": "biological",
                 "verified": False,
                 "origin": "mechanistic_pipeline",
