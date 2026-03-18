@@ -117,7 +117,6 @@ const ResponseFormatter = ({ text, isStreaming }) => {
     );
   }
 
-  const { scientific_response, nutritional_response, confidence } = data;
   const isLowConfidence = confidence !== undefined && confidence < 0.6;
 
   return (
