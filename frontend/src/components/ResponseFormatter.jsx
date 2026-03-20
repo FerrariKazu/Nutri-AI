@@ -94,7 +94,7 @@ const ResponseFormatter = ({ text, isStreaming }) => {
     );
   }
 
-  const { scientific_response, nutritional_response, confidence } = data;
+  const { scientific_response, nutritional_response, confidence, pipeline_failure, epistemic_state } = data;
 
   // TASK 7: FAIL-SAFE
   if (!scientific_response && !nutritional_response) {
@@ -112,9 +112,25 @@ const ResponseFormatter = ({ text, isStreaming }) => {
     <div className="nutri-structured-response flex flex-col gap-6 w-full animate-fade-in">
       
       {/* --- Low Evidence Warning --- */}
-      {isLowConfidence && (
+      {isLowConfidence && !pipeline_failure && (
         <div className="flex items-center gap-2 p-3 bg-red-950/40 border border-red-900/50 rounded-lg text-red-400 text-sm font-medium">
           <span className="text-xl">⚠️</span> Low Evidence: This explanation relies on inferred heuristics rather than direct retrieval.
+        </div>
+      )}
+
+      {/* --- Pipeline Failure / Epistemic State Banner --- */}
+      {(pipeline_failure || (epistemic_state && epistemic_state !== "RESOLVED")) && (
+        <div className={`flex flex-col gap-1 p-3 border rounded-lg text-sm ${
+          epistemic_state === 'CONTRADICTED' ? 'bg-red-950/40 border-red-900/50 text-red-400' :
+          epistemic_state === 'INSUFFICIENT_EVIDENCE' ? 'bg-amber-950/40 border-amber-900/50 text-amber-400' :
+          'bg-blue-950/40 border-blue-900/50 text-blue-300'
+        }`}>
+          <div className="flex items-center gap-2 font-bold uppercase tracking-wider text-[10px]">
+             <span>🔍</span> Pipeline State: {epistemic_state || "UNCERTAIN"}
+          </div>
+          <div className="opacity-90">
+            {pipeline_failure ? "Reasoning pipeline was unable to reach high-confidence consensus." : "System operating at reduced epistemic certainty."}
+          </div>
         </div>
       )}
 
@@ -125,8 +141,11 @@ const ResponseFormatter = ({ text, isStreaming }) => {
             <h2 className="text-xl sm:text-2xl font-serif text-neutral-200 m-0 flex items-center gap-2">
               <span>🧪</span> Scientific Explanation
             </h2>
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-mono font-medium bg-neutral-800 text-neutral-400 border border-neutral-700/50 whitespace-nowrap self-start sm:self-auto">
-              Mechanistic Model
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-mono font-medium border border-neutral-700/50 whitespace-nowrap self-start sm:self-auto ${
+              scientific_response.mechanistic_grounding === 'RESOLVED' ? 'bg-green-900/20 text-green-400' : 
+              'bg-neutral-800 text-neutral-400'
+            }`}>
+              {scientific_response.mechanistic_grounding || "Mechanistic Model"}
             </span>
           </div>
           
