@@ -80,7 +80,7 @@ const ResponseFormatter = ({ text, isStreaming }) => {
   // Since we don't have easy access to theme context here, we'll use a safer approach:
   // Only use prose-invert if we are sure we are on a dark background.
   // For now, let's make it more robust.
-  const proseClass = "prose prose-sm dark:prose-invert text-neutral-800 dark:text-neutral-300 animate-fade-in";
+  const proseClass = "prose prose-sm prose-invert text-neutral-200 animate-fade-in";
 
   // STEP 1: Streaming + JSON Parse Safety
   if (isStreaming || !isCompleteJSON(text)) {
@@ -101,7 +101,7 @@ const ResponseFormatter = ({ text, isStreaming }) => {
     console.log('[TOKEN_PARSE_FAILED]', e.message, 'raw=', text.substring(0, 200));
     // Failsafe: if looks complete but fails to parse
     return (
-      <div className="prose prose-sm dark:prose-invert text-neutral-800 dark:text-neutral-300">
+      <div className="prose prose-sm prose-invert text-neutral-200 animate-fade-in">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
       </div> 
     );
