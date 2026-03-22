@@ -759,7 +759,17 @@ export function streamNutriChat(
 
             eventSource.addEventListener('token', (e) => {
                 processSSE(e, 'token', (data) => {
-                    let token = data.content || data.token || e.data;
+                    let token = data.content !== undefined ? data.content : (data.token !== undefined ? data.token : '');
+                    
+                    if (typeof token !== 'string') {
+                        console.warn('[TOKEN_GUARD] Non-string token rejected:', token);
+                        return;
+                    }
+                    if (token.includes('"type"') && token.includes('"seq"')) {
+                        console.warn('[TOKEN_GUARD] Raw SSE event object rejected');
+                        return;
+                    }
+
                     onToken(token);
                 });
             });

@@ -341,7 +341,7 @@ function App() {
                 resetStallIndicator();
                 setMessages(prev => prev.map(m =>
                     m.id === assistantId
-                        ? { ...m, content: m.content + token }
+                        ? { ...m, content: m.content + (m.content && !token.startsWith(' ') && !/^[.,!?;:]/.test(token) ? ' ' : '') + token }
                         : m
                 ));
             },
