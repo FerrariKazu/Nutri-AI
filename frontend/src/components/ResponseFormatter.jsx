@@ -275,6 +275,7 @@ const ResponseFormatter = React.memo(({ text, isStreaming }) => {
 
         </div>
       )}
+    </div>
   );
 });
 
