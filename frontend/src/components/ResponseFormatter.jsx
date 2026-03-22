@@ -70,7 +70,7 @@ function renderScientificNarrative(narrative) {
 
 // extractMacros function removed to rely solely on structured LLM answer text
 
-const ResponseFormatter = ({ text, isStreaming }) => {
+const ResponseFormatter = React.memo(({ text, isStreaming }) => {
   if (!text) return null;
 
   // 2. DIAGNOSTIC LOGGING (REQUESTED)
@@ -80,7 +80,7 @@ const ResponseFormatter = ({ text, isStreaming }) => {
   // Since we don't have easy access to theme context here, we'll use a safer approach:
   // Only use prose-invert if we are sure we are on a dark background.
   // For now, let's make it more robust.
-  const proseClass = "prose prose-sm prose-invert text-neutral-200 animate-fade-in";
+  const proseClass = "prose prose-sm prose-invert max-w-none text-neutral-200 animate-fade-in leading-relaxed";
 
   // STEP 1: Streaming + JSON Parse Safety
   if (isStreaming || !isCompleteJSON(text)) {
@@ -278,5 +278,8 @@ const ResponseFormatter = ({ text, isStreaming }) => {
     </div>
   );
 };
+
+  );
+});
 
 export default ResponseFormatter;
