@@ -70,11 +70,22 @@ export const validateTrace = (trace, isDevMode = false) => {
     const effectiveMode = trace.execution_profile?.mode || '';
     const isConversational = effectiveMode === 'conversation' || trace.domain_type === 'contextual';
 
-    if (!isConversational) {
+    // 🛡️ PERMISSIVE MODE: If pipeline_failure is false, we allow missing claims
+    const pipelineFailure = trace.pipeline_failure === true;
+
+    if (!isConversational && !pipelineFailure) {
         const scientific = trace.scientific_layer || {};
-        if (!scientific.claims || !Array.isArray(scientific.claims)) {
-            errors.push('Scientific trace missing claims array');
+        // Only error if claims array is entirely MISSING, not if it's empty
+        if (scientific.claims === undefined || scientific.claims === null) {
+            errors.push('Scientific trace missing claims block');
+        } else if (!Array.isArray(scientific.claims)) {
+            errors.push('Scientific trace claims must be an array');
         }
+    }
+
+    // Explicit Policy: If pipeline_failure is TRUE, it's an integrity violation
+    if (pipelineFailure) {
+        errors.push('PIPELINE_FAILURE: The backend reported a terminal pipeline collapse.');
     }
 
     const isValid = errors.length === 0;

@@ -16,8 +16,9 @@ export const renderPermissions = {
      */
     canRenderTier1: (trace) => {
         const reasons = [];
-        if (!trace || !trace.claims) return { allowed: false, reasons: ["No data"] };
-        // Even 0 claims should render the container
+        if (!trace) return { allowed: false, reasons: ["No data"] };
+        // Allow rendering as long as we don't have a terminal failure reported in the trace root
+        if (trace.pipeline_failure === true) return { allowed: false, reasons: ["Pipeline Failure"] };
         return { allowed: true, reasons };
     },
 

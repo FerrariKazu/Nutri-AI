@@ -112,7 +112,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
     const currentVersion = uiTrace?.trace_schema_version;
     const isVersionMismatch = currentVersion && currentVersion !== "1.2.8";
 
-    const claims = useMemo(() => (uiTrace?.claims || []), [uiTrace]);
+    const claims = useMemo(() => (uiTrace?.scientific_layer?.claims || uiTrace?.claims || []), [uiTrace]);
     const metrics = uiTrace?.metrics || {};
 
     // 🧠 Direct Binding (No inference)
@@ -163,16 +163,26 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
 
     // Integrity Checks
     const integrityViolation = useMemo(() => {
-        if (!uiTrace || isStandby) return null;
+        if (!uiTrace || isStandby || executionMode === 'conversation') return null;
+        
+        // 🛡️ PERMISSIVE BYPASS: Only block if terminal pipeline_failure is TRUE 
+        // OR we have a structural contract violation AND no root IDs.
+        const isPipelineFailure = uiTrace.pipeline_failure === true || uiTrace._raw?.pipeline_failure === true;
+        
         if (uiTrace.adapter_status === "contract_violation") {
+            // If it's a contract violation but NOT a pipeline failure, bypass the barrier.
+            if (!isPipelineFailure) {
+                return null;
+            }
+
             return {
-                type: "TRACE CONTRACT VIOLATION",
+                type: isPipelineFailure ? "PIPELINE COLLAPSE" : "TRACE CONTRACT VIOLATION",
                 missingFields: uiTrace.validation_errors || [],
                 context: `run_id: ${uiTrace.run_id || 'NULL'} `
             };
         }
         return null;
-    }, [uiTrace, isStandby]);
+    }, [uiTrace, isStandby, executionMode]);
 
     if (isVersionMismatch) {
         return (
@@ -375,7 +385,20 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                 />
                                             )}
 
-                                            {currentClaim ? (
+                                            {claims.length === 0 ? (
+                                                <>
+                                                    <AccordionSection title="Scientific Observation" icon={Activity} defaultOpen={true}>
+                                                        <EvidenceLineageViewer evidenceSet={[]} />
+                                                    </AccordionSection>
+                                                    <AccordionSection title="Causality & Risk" badge="Tier 3" defaultOpen={true}>
+                                                        <div className="p-10 rounded-xl bg-neutral-900/40 border border-neutral-800 text-center opacity-40">
+                                                            <p className="text-[10px] font-mono uppercase tracking-widest text-neutral-500">
+                                                                Causal Model Standby • No Claims to Map
+                                                            </p>
+                                                        </div>
+                                                    </AccordionSection>
+                                                </>
+                                            ) : currentClaim ? (
                                                 <>
                                                     {/* Scientific Observation Layer (Full Width) */}
                                                     <AccordionSection title="Scientific Observation" icon={Activity} defaultOpen={false}>

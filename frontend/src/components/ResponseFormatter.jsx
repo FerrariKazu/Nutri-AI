@@ -5,9 +5,15 @@ import remarkGfm from 'remark-gfm';
 function stripMarkdownJson(text) {
   if (!text) return "";
   let clean = text.trim();
-  if (clean.startsWith("```json")) clean = clean.substring(7);
-  else if (clean.startsWith("```")) clean = clean.substring(3);
-  if (clean.endsWith("```")) clean = clean.substring(0, clean.length - 3);
+  if (clean.startsWith("```json")) {
+    clean = clean.substring(7);
+  }
+  if (clean.startsWith("```")) {
+    clean = clean.substring(3);
+  }
+  if (clean.endsWith("```")) {
+    clean = clean.substring(0, clean.length - 3);
+  }
   return clean.trim();
 }
 
@@ -67,12 +73,19 @@ function renderScientificNarrative(narrative) {
 const ResponseFormatter = ({ text, isStreaming }) => {
   if (!text) return null;
 
-  console.log("RAW TEXT:", text);
+  // 2. DIAGNOSTIC LOGGING (REQUESTED)
+  console.log('[TOKEN_RECEIVED] length=', text.length, 'preview=', text.substring(0, 100));
+
+  // Determine if we should use dark mode classes (prose-invert)
+  // Since we don't have easy access to theme context here, we'll use a safer approach:
+  // Only use prose-invert if we are sure we are on a dark background.
+  // For now, let's make it more robust.
+  const proseClass = "prose prose-sm dark:prose-invert text-neutral-800 dark:text-neutral-300 animate-fade-in";
 
   // STEP 1: Streaming + JSON Parse Safety
   if (isStreaming || !isCompleteJSON(text)) {
     return (
-      <div className="prose prose-sm prose-invert text-neutral-300 animate-fade-in">
+      <div className={proseClass}>
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
       </div> // Fallback when incomplete
     );
@@ -83,12 +96,12 @@ const ResponseFormatter = ({ text, isStreaming }) => {
   try {
     const cleanJson = stripMarkdownJson(text);
     data = JSON.parse(cleanJson);
-    console.log("PARSED JSON:", data);
+    console.log('[TOKEN_PARSED]', data);
   } catch (e) {
-    console.log("JSON PARSE FAILED");
+    console.log('[TOKEN_PARSE_FAILED]', e.message, 'raw=', text.substring(0, 200));
     // Failsafe: if looks complete but fails to parse
     return (
-      <div className="prose prose-sm prose-invert text-neutral-300">
+      <div className="prose prose-sm dark:prose-invert text-neutral-800 dark:text-neutral-300">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
       </div> 
     );
@@ -96,11 +109,18 @@ const ResponseFormatter = ({ text, isStreaming }) => {
 
   const { scientific_response, nutritional_response, confidence, pipeline_failure, epistemic_state } = data;
 
+  // 3. SUPPRESSION CHECK (REQUESTED)
+  // Ensure that UNCERTAIN or "failed" core_insight does NOT suppress the entire response.
+  const hasFailedInsight = scientific_response?.core_insight?.toLowerCase().includes("failed");
+  if (epistemic_state === "UNCERTAIN" || hasFailedInsight) {
+    console.log('[EFL_DEBUG] Rendering uncertain/failed response instead of suppressing.', { epistemic_state, hasFailedInsight });
+  }
+
   // TASK 7: FAIL-SAFE
   if (!scientific_response && !nutritional_response) {
     console.log("FAIL-SAFE: No structured responses found, falling back to markdown");
     return (
-      <div className="prose prose-sm prose-invert text-neutral-300 animate-fade-in">
+      <div className={proseClass}>
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
       </div> 
     );
@@ -109,7 +129,7 @@ const ResponseFormatter = ({ text, isStreaming }) => {
   const isLowConfidence = confidence !== undefined && confidence < 0.6;
 
   return (
-    <div className="nutri-structured-response flex flex-col gap-6 w-full animate-fade-in">
+    <div className="nutri-structured-response flex flex-col gap-6 w-full animate-fade-in text-neutral-900 dark:text-neutral-100">
       
       {/* --- Low Evidence Warning --- */}
       {isLowConfidence && !pipeline_failure && (
@@ -123,7 +143,7 @@ const ResponseFormatter = ({ text, isStreaming }) => {
         <div className={`flex flex-col gap-1 p-3 border rounded-lg text-sm ${
           epistemic_state === 'CONTRADICTED' ? 'bg-red-950/40 border-red-900/50 text-red-400' :
           epistemic_state === 'INSUFFICIENT_EVIDENCE' ? 'bg-amber-950/40 border-amber-900/50 text-amber-400' :
-          'bg-blue-950/40 border-blue-900/50 text-blue-300'
+          'bg-blue-950/40 border-blue-900/50 text-blue-800 dark:text-blue-300'
         }`}>
           <div className="flex items-center gap-2 font-bold uppercase tracking-wider text-[10px]">
              <span>🔍</span> Pipeline State: {epistemic_state || "UNCERTAIN"}
@@ -149,7 +169,50 @@ const ResponseFormatter = ({ text, isStreaming }) => {
             </span>
           </div>
           
-          {renderScientificNarrative(scientific_response.narrative)}
+          {(scientific_response.narrative || !scientific_response.core_insight) ? (
+            renderScientificNarrative(scientific_response.narrative || scientific_response.explanation)
+          ) : (
+            <div className="space-y-4">
+              {scientific_response.core_insight && (
+                <div className="p-3 bg-blue-900/20 border border-blue-800/30 rounded-lg">
+                  <h3 className="text-md sm:text-lg font-bold mb-2 text-blue-300">Core Insight</h3>
+                  <div className="prose prose-sm prose-invert text-neutral-200 font-medium">
+                    {renderMarkdown(scientific_response.core_insight)}
+                  </div>
+                </div>
+              )}
+              {scientific_response.explanation && (
+                <div className="mb-4 prose prose-sm prose-invert text-neutral-300">
+                  <h3 className="text-md sm:text-lg font-bold mb-2 text-blue-400 dark:text-blue-300">Explanation</h3>
+                  {renderMarkdown(scientific_response.explanation)}
+                </div>
+              )}
+              {scientific_response.important_driver && (
+                <div className="mb-4 prose prose-sm prose-invert text-neutral-300">
+                  <h3 className="text-md sm:text-lg font-bold mb-2 text-blue-400 dark:text-blue-300">Most Important Driver</h3>
+                  {renderMarkdown(scientific_response.important_driver)}
+                </div>
+              )}
+              {scientific_response.secondary_factors && (
+                <div className="mb-4 prose prose-sm prose-invert text-neutral-300">
+                  <h3 className="text-md sm:text-lg font-bold mb-2 text-blue-400 dark:text-blue-300">Secondary Factors</h3>
+                  {renderMarkdown(scientific_response.secondary_factors)}
+                </div>
+              )}
+              {scientific_response.why_matters && (
+                <div className="mb-4 prose prose-sm prose-invert text-neutral-300">
+                  <h3 className="text-md sm:text-lg font-bold mb-2 text-blue-400 dark:text-blue-300">Why This Matters</h3>
+                  {renderMarkdown(scientific_response.why_matters)}
+                </div>
+              )}
+              {scientific_response.nuance_exceptions && (
+                <div className="mb-4 prose prose-sm prose-invert text-neutral-300">
+                  <h3 className="text-md sm:text-lg font-bold mb-2 text-blue-400 dark:text-blue-300">Nuance & Exceptions</h3>
+                  {renderMarkdown(scientific_response.nuance_exceptions)}
+                </div>
+              )}
+            </div>
+          )}
 
           {scientific_response.causal_chain && scientific_response.causal_chain.length > 0 && (
             <div className="mt-6">

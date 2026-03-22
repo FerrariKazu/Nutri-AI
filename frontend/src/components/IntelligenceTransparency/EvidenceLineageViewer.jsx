@@ -12,11 +12,18 @@ import { Microscope, Users, History, AlertCircle, ExternalLink, Link2, FileSearc
 const EvidenceLineageViewer = ({ evidenceSet }) => {
     if (!evidenceSet || evidenceSet.length === 0) {
         return (
-            <div className="p-4 rounded-lg bg-neutral-900/50 border border-neutral-800 flex items-center gap-3">
-                <FileSearch className="w-4 h-4 text-neutral-500" />
-                <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-widest">
-                    No Empirical Grounding Available
-                </p>
+            <div className="p-6 rounded-xl bg-amber-500/5 border border-amber-500/10 flex flex-col items-center text-center gap-3">
+                <div className="p-2 rounded-full bg-amber-500/10">
+                    <FileSearch className="w-5 h-5 text-amber-500/60" />
+                </div>
+                <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-amber-500/80 uppercase tracking-widest">
+                        Missing Empirical Grounding
+                    </p>
+                    <p className="text-[9px] text-neutral-500 max-w-[240px] leading-relaxed mx-auto italic">
+                        This claim was processed via mechanistic inference only. No direct empirical records were retrieved from the Registry in this window.
+                    </p>
+                </div>
             </div>
         );
     }

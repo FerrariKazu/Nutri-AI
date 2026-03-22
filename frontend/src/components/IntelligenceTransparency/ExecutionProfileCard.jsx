@@ -201,7 +201,20 @@ const ExecutionProfileCard = ({ metrics, epistemicStatus, executionMode, baselin
                 </div>
             </div>
 
-            {/* Primary Limitation Info */}
+            {/* 🔍 Primary Limitation Info */}
+            {epistemicStatus === 'theoretical' && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 flex items-start gap-3">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                        <p className="text-[10px] font-bold text-amber-500 uppercase">Epistemic Uncertainty</p>
+                        <p className="text-[10px] text-neutral-400 leading-relaxed uppercase tracking-tighter">
+                            System operating at reduced certainty. Mechanistic inference active with partial empirical grounding. 
+                            Results should be viewed as hypothesis-generation rather than clinical fact.
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {epistemicStatus === 'insufficient_evidence' && (
                 <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-3 flex items-start gap-3">
                     <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
