@@ -126,46 +126,32 @@ const ResponseFormatter = ({ text, isStreaming }) => {
     );
   }
 
-  const isLowConfidence = confidence !== undefined && confidence < 0.6;
+  const isLowConfidence = confidence !== undefined && confidence < 0.4;
 
   return (
     <div className="nutri-structured-response flex flex-col gap-6 w-full animate-fade-in text-neutral-900 dark:text-neutral-100">
-      
-      {/* --- Low Evidence Warning --- */}
-      {isLowConfidence && !pipeline_failure && (
-        <div className="flex items-center gap-2 p-3 bg-red-950/40 border border-red-900/50 rounded-lg text-red-400 text-sm font-medium">
-          <span className="text-xl">⚠️</span> Low Evidence: This explanation relies on inferred heuristics rather than direct retrieval.
-        </div>
-      )}
 
-      {/* --- Pipeline Failure / Epistemic State Banner --- */}
-      {(pipeline_failure || (epistemic_state && epistemic_state !== "RESOLVED")) && (
-        <div className={`flex flex-col gap-1 p-3 border rounded-lg text-sm ${
-          epistemic_state === 'CONTRADICTED' ? 'bg-red-950/40 border-red-900/50 text-red-400' :
-          epistemic_state === 'INSUFFICIENT_EVIDENCE' ? 'bg-amber-950/40 border-amber-900/50 text-amber-400' :
-          'bg-blue-950/40 border-blue-900/50 text-blue-800 dark:text-blue-300'
-        }`}>
+      {/* --- Pipeline Failure Banner --- */}
+      {pipeline_failure && (
+        <div className="flex flex-col gap-1 p-3 border rounded-lg text-sm bg-amber-950/40 border-amber-900/50 text-amber-400">
           <div className="flex items-center gap-2 font-bold uppercase tracking-wider text-[10px]">
-             <span>🔍</span> Pipeline State: {epistemic_state || "UNCERTAIN"}
+             <span>⚠️</span> Pipeline Failure
           </div>
           <div className="opacity-90">
-            {pipeline_failure ? "Reasoning pipeline was unable to reach high-confidence consensus." : "System operating at reduced epistemic certainty."}
+            Reasoning pipeline was unable to reach high-confidence consensus.
           </div>
         </div>
       )}
 
       {/* --- Scientific Section --- */}
       {scientific_response && (
-        <div className="scientific-section bg-neutral-900/40 p-4 sm:p-5 rounded-xl border border-neutral-800">
+        <div className="scientific-section pl-0 border-0 rounded-none bg-transparent">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-2 border-b border-neutral-700/50">
-            <h2 className="text-xl sm:text-2xl font-serif text-neutral-200 m-0 flex items-center gap-2">
-              <span>🧪</span> Scientific Explanation
+            <h2 className="text-lg font-semibold text-neutral-200">
+              Scientific Explanation
             </h2>
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-mono font-medium border border-neutral-700/50 whitespace-nowrap self-start sm:self-auto ${
-              scientific_response.mechanistic_grounding === 'RESOLVED' ? 'bg-green-900/20 text-green-400' : 
-              'bg-neutral-800 text-neutral-400'
-            }`}>
-              {scientific_response.mechanistic_grounding || "Mechanistic Model"}
+            <span className="text-[10px] text-neutral-500 font-mono self-start sm:self-auto uppercase tracking-widest">
+              MECHANISTIC MODEL
             </span>
           </div>
           
@@ -174,40 +160,49 @@ const ResponseFormatter = ({ text, isStreaming }) => {
           ) : (
             <div className="space-y-4">
               {scientific_response.core_insight && (
-                <div className="p-3 bg-blue-900/20 border border-blue-800/30 rounded-lg">
-                  <h3 className="text-md sm:text-lg font-bold mb-2 text-blue-300">Core Insight</h3>
-                  <div className="prose prose-sm prose-invert text-neutral-200 font-medium">
+                <div className="p-4 bg-neutral-800/60 border-l-2 border-neutral-400 rounded-r-lg mb-4">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-neutral-500 mb-1 mt-4">Core Insight</p>
+                  <div className="prose prose-sm prose-invert text-neutral-100 font-medium text-base">
                     {renderMarkdown(scientific_response.core_insight)}
                   </div>
                 </div>
               )}
+              {scientific_response.core_insight && (scientific_response.explanation || scientific_response.important_driver) && <hr className="border-neutral-800 my-1" />}
               {scientific_response.explanation && (
                 <div className="mb-4 prose prose-sm prose-invert text-neutral-300">
-                  <h3 className="text-md sm:text-lg font-bold mb-2 text-blue-400 dark:text-blue-300">Explanation</h3>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-neutral-500 mb-1 mt-4">Explanation</p>
                   {renderMarkdown(scientific_response.explanation)}
                 </div>
               )}
+              {scientific_response.explanation && (scientific_response.important_driver || scientific_response.secondary_factors) && <hr className="border-neutral-800 my-1" />}
               {scientific_response.important_driver && (
                 <div className="mb-4 prose prose-sm prose-invert text-neutral-300">
-                  <h3 className="text-md sm:text-lg font-bold mb-2 text-blue-400 dark:text-blue-300">Most Important Driver</h3>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-neutral-500 mb-1 mt-4">Most Important Driver</p>
                   {renderMarkdown(scientific_response.important_driver)}
                 </div>
               )}
+              {scientific_response.important_driver && (scientific_response.secondary_factors || scientific_response.why_matters) && <hr className="border-neutral-800 my-1" />}
               {scientific_response.secondary_factors && (
                 <div className="mb-4 prose prose-sm prose-invert text-neutral-300">
-                  <h3 className="text-md sm:text-lg font-bold mb-2 text-blue-400 dark:text-blue-300">Secondary Factors</h3>
-                  {renderMarkdown(scientific_response.secondary_factors)}
+                  <p className="text-xs font-semibold uppercase tracking-widest text-neutral-500 mb-1 mt-4">Secondary Factors</p>
+                  {Array.isArray(scientific_response.secondary_factors)
+                    ? <ul className="list-disc pl-4 space-y-1">{scientific_response.secondary_factors.map((f, i) => (
+                        <li key={i} className="text-neutral-300 text-sm">{f}</li>
+                      ))}</ul>
+                    : renderMarkdown(scientific_response.secondary_factors)}
                 </div>
               )}
+              {scientific_response.secondary_factors && (scientific_response.why_matters || scientific_response.nuance_exceptions) && <hr className="border-neutral-800 my-1" />}
               {scientific_response.why_matters && (
                 <div className="mb-4 prose prose-sm prose-invert text-neutral-300">
-                  <h3 className="text-md sm:text-lg font-bold mb-2 text-blue-400 dark:text-blue-300">Why This Matters</h3>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-neutral-500 mb-1 mt-4">Why This Matters</p>
                   {renderMarkdown(scientific_response.why_matters)}
                 </div>
               )}
+              {scientific_response.why_matters && scientific_response.nuance_exceptions && <hr className="border-neutral-800 my-1" />}
               {scientific_response.nuance_exceptions && (
                 <div className="mb-4 prose prose-sm prose-invert text-neutral-300">
-                  <h3 className="text-md sm:text-lg font-bold mb-2 text-blue-400 dark:text-blue-300">Nuance & Exceptions</h3>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-neutral-500 mb-1 mt-4">Nuance & Exceptions</p>
                   {renderMarkdown(scientific_response.nuance_exceptions)}
                 </div>
               )}
@@ -216,9 +211,9 @@ const ResponseFormatter = ({ text, isStreaming }) => {
 
           {scientific_response.causal_chain && scientific_response.causal_chain.length > 0 && (
             <div className="mt-6">
-              <h3 className="text-md sm:text-lg font-bold mb-3 text-blue-400 dark:text-blue-300">
+              <p className="text-xs font-semibold uppercase tracking-widest text-neutral-500 mb-3 mt-4">
                 Causal chain
-              </h3>
+              </p>
               <ol className="list-decimal pl-6 space-y-2 text-sm sm:text-base text-neutral-300">
                 {scientific_response.causal_chain.map((step, i) => {
                   let content = null;
@@ -228,7 +223,7 @@ const ResponseFormatter = ({ text, isStreaming }) => {
                     if (step.cause && step.effect) {
                       content = (
                         <span>
-                          <strong className="text-blue-300 dark:text-blue-200">{step.cause}</strong> 
+                          <strong className="text-neutral-300">{step.cause}</strong> 
                           <span className="text-neutral-500 mx-1">→</span> 
                           <span>{step.effect}</span>
                         </span>
@@ -244,6 +239,12 @@ const ResponseFormatter = ({ text, isStreaming }) => {
                 })}
               </ol>
             </div>
+          )}
+          
+          {isLowConfidence && !pipeline_failure && (
+             <p className="text-xs text-neutral-500 mt-4 pt-3 border-t border-neutral-800">
+               Evidence grounding: inferred — not directly cited from retrieval
+             </p>
           )}
         </div>
       )}
