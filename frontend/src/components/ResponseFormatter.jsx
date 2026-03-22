@@ -83,11 +83,21 @@ const ResponseFormatter = React.memo(({ text, isStreaming }) => {
   const proseClass = "prose prose-sm prose-invert max-w-none text-neutral-200 animate-fade-in leading-relaxed";
 
   // STEP 1: Streaming + JSON Parse Safety
-  if (isStreaming && !isCompleteJSON(text)) {
+  if (isStreaming || !isCompleteJSON(text)) {
     return (
       <div className={proseClass}>
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
       </div> // Fallback when incomplete
+    );
+  }
+
+  // STEP 1.5: If text clearly isn't JSON, skip to markdown
+  const cleanedForCheck = stripMarkdownJson(text).trim();
+  if (!cleanedForCheck.startsWith('{')) {
+    return (
+      <div className={proseClass}>
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+      </div>
     );
   }
 
