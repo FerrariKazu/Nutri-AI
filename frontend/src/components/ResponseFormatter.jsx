@@ -101,7 +101,7 @@ const ResponseFormatter = ({ text, isStreaming }) => {
     console.log('[TOKEN_PARSE_FAILED]', e.message, 'raw=', text.substring(0, 200));
     // Failsafe: if looks complete but fails to parse
     return (
-      <div className="prose prose-sm prose-invert text-neutral-200 animate-fade-in">
+      <div className={proseClass}>
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
       </div> 
     );
