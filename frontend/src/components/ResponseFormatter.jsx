@@ -83,7 +83,7 @@ const ResponseFormatter = React.memo(({ text, isStreaming }) => {
   const proseClass = "prose prose-sm prose-invert max-w-none text-neutral-200 animate-fade-in leading-relaxed";
 
   // STEP 1: Streaming + JSON Parse Safety
-  if (isStreaming || !isCompleteJSON(text)) {
+  if (isStreaming && !isCompleteJSON(text)) {
     return (
       <div className={proseClass}>
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>

@@ -1,8 +1,22 @@
+import React, { useState, useEffect } from 'react';
 import ResponseFormatter from './ResponseFormatter';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 const MessageBubble = ({ role, content, isStreaming, isWarmingUp, phase }) => {
+    // Force re-render when streaming ends so ResponseFormatter re-evaluates JSON
+    const [displayText, setDisplayText] = useState(content);
+    
+    useEffect(() => {
+        setDisplayText(content);
+    }, [content]);
+    
+    useEffect(() => {
+        if (!isStreaming && content && content.length > 0) {
+            setDisplayText(content);
+        }
+    }, [isStreaming]);
+
     // Styling for User vs Assistant
     const isUser = role === 'user';
     const alignClass = isUser ? 'items-end' : 'items-start';
@@ -77,7 +91,7 @@ const MessageBubble = ({ role, content, isStreaming, isWarmingUp, phase }) => {
                                 {content}
                             </ReactMarkdown>
                         ) : (
-                            <ResponseFormatter text={content} isStreaming={isStreaming} />
+                            <ResponseFormatter text={displayText} isStreaming={isStreaming} />
                         )}
                     </div>
                 )}
