@@ -4,16 +4,12 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 const MessageBubble = ({ role, content, isStreaming, isWarmingUp, phase }) => {
-    // Force re-render when streaming ends so ResponseFormatter re-evaluates JSON
-    const [displayText, setDisplayText] = useState(content);
+    // Force full remount of ResponseFormatter when streaming ends
+    const [streamingKey, setStreamingKey] = useState(0);
     
     useEffect(() => {
-        setDisplayText(content);
-    }, [content]);
-    
-    useEffect(() => {
-        if (!isStreaming && content && content.length > 0) {
-            setDisplayText(content);
+        if (!isStreaming) {
+            setStreamingKey(prev => prev + 1);
         }
     }, [isStreaming]);
 
@@ -91,7 +87,7 @@ const MessageBubble = ({ role, content, isStreaming, isWarmingUp, phase }) => {
                                 {content}
                             </ReactMarkdown>
                         ) : (
-                            <ResponseFormatter text={displayText} isStreaming={isStreaming} />
+                            <ResponseFormatter key={streamingKey} text={content} isStreaming={isStreaming} />
                         )}
                     </div>
                 )}
