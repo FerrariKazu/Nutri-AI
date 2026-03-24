@@ -187,14 +187,23 @@ const PhaseStream = ({ messages, streamStatus, onPromptSelect }) => {
                                 )}
 
                                 {/* Live Status Message - NEW */}
-                                {msg.isStreaming && msg.statusMessage && (
-                                    <div className="flex items-center gap-3 ml-2 py-2 px-4 bg-accent/5 border-l-2 border-accent/40 rounded-r animate-fade-in">
-                                        <Binary className="w-4 h-4 text-accent animate-pulse" />
-                                        <span className="text-sm font-mono text-accent/90">
-                                            {msg.statusMessage}
-                                        </span>
-                                    </div>
-                                )}
+                                {msg.isStreaming && msg.statusMessage && (() => {
+                                    const STATUS_LABELS = {
+                                        'reasoning': 'PROCESSOR: REASONING',
+                                        'intent_check': 'PROCESSOR: ANALYZING INTENT',
+                                        'mechanistic_analysis': 'PROCESSOR: CAUSAL MAPPING'
+                                    };
+                                    const displayStatus = STATUS_LABELS[msg.statusMessage] || msg.statusMessage;
+                                    
+                                    return (
+                                        <div className="flex items-center gap-3 ml-2 py-2 px-4 bg-accent/5 border-l-2 border-accent/40 rounded-r animate-fade-in">
+                                            <Binary className="w-4 h-4 text-accent animate-pulse" />
+                                            <span className="text-sm font-mono text-accent/90">
+                                                {displayStatus}
+                                            </span>
+                                        </div>
+                                    );
+                                })()}
 
                                 {/* Minimal Pulse Indicator (if streaming content but no status message) */}
                                 {msg.isStreaming && !msg.statusMessage && (
