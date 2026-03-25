@@ -271,7 +271,20 @@ function App() {
         setStreamStatus(finalStatus);
     };
 
-    const handleSend = async (query) => {
+    const handleSend = async (query, imageFile = null) => {
+        let imageData = null;
+
+        // 📸 [VISION SIDECAR] Prepare image if present
+        if (imageFile) {
+            imageData = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve({
+                    b64: e.target.result,
+                    media_type: imageFile.type
+                });
+                reader.readAsDataURL(imageFile);
+            });
+        }
         // JIT Session Creation
         let currentSid = sessionId;
         if (!currentSid) {
@@ -314,7 +327,12 @@ function App() {
         setTurnCount(prev => prev + 1);
 
         // Add user query
-        setMessages(prev => [...prev, { role: 'user', content: query, id: Date.now() + '-user' }]);
+        setMessages(prev => [...prev, { 
+            role: 'user', 
+            content: query, 
+            id: Date.now() + '-user',
+            image: imageData?.b64 // For display in chat history
+        }]);
 
         // Add assistant placeholder
         const assistantId = Date.now() + '-assistant';
@@ -363,25 +381,6 @@ function App() {
         resetFailsafe();
         resetStallIndicator();
 
-        abortRef.current = streamNutriChat(
-            query,
-            {
-                verbosity: 'standard', // Hardcoded default as ControlRail is removed
-                explanations: true,
-                streaming: true,
-                execution_mode: null,
-                run_id: newRunId
-            },
-            // onReasoning
-            (phaseMessage) => {
-                resetFailsafe();
-                resetStallIndicator();
-                setMessages(prev => prev.map(m =>
-                    m.id === assistantId
-                        ? { ...m, statusMessage: phaseMessage }
-                        : m
-                ));
-            },
             // onToken
             (token) => {
                 resetFailsafe();
