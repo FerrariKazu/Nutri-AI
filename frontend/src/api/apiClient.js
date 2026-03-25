@@ -653,7 +653,8 @@ export function streamNutriChat(
     onStatus = null,
     onNutritionReport = null,
     onTrace = null,
-    onMemoryInsight = null
+    onMemoryInsight = null,
+    image = null // { b64: string, media_type: string }
 ) {
     const sessionId = getSessionId();
     const controller = new AbortController();
@@ -699,6 +700,69 @@ export function streamNutriChat(
 
         try {
             const baseURL = await getBackendURL();
+            const accessToken = await ensureAuth(baseURL);
+
+            // 📸 [VISION SIDECAR] If image present, MUST use POST for streaming
+            if (image && image.b64) {
+                console.log('%c [VISION] Using POST stream for image payload ', 'color: #f97316; font-weight: bold;');
+                
+                const response = await fetch(`${baseURL}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        message: message,
+                        preferences: preferences,
+                        execution_mode: preferences.execution_mode,
+                        image_b64: image.b64,
+                        image_media_type: image.media_type
+                    }),
+                    signal: controller.signal
+                });
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({ detail: 'Network error' }));
+                    throw new Error(err.detail || 'Failed to start chat session');
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // Keep partial line in buffer
+
+                    for (const line of lines) {
+                        if (!line.startsWith('data: ')) continue;
+                        const dataStr = line.replace(/^data: /, '').trim();
+                        if (!dataStr) continue;
+
+                        // Check for standard event markers in simple strings before parsing JSON
+                        if (dataStr === '[DONE]') {
+                            completed = true;
+                            if (onComplete) onComplete();
+                            return;
+                        }
+
+                        const parsed = safeParseJSON(dataStr);
+                        if (!parsed) continue;
+
+                        // Mock processSSE logic for fetch stream
+                        handleIncomingParsedEvent(parsed);
+                    }
+                }
+                return;
+            }
+
+            // Standard GET-based EventSource for text-only queries
             const params = new URLSearchParams({
                 message: message,
                 session_id: sessionId,
@@ -706,7 +770,7 @@ export function streamNutriChat(
                 audience_mode: preferences.audience_mode || 'scientific',
                 optimization_goal: preferences.optimization_goal || 'comfort',
                 verbosity: preferences.verbosity || 'medium',
-                access_token: await ensureAuth(baseURL),
+                access_token: accessToken,
                 run_id: preferences.run_id || ''
             });
 
@@ -728,26 +792,29 @@ export function streamNutriChat(
             };
 
             eventSource.onmessage = (e) => {
-                processSSE(e, 'status', (data) => {
-                    debugLog('SSE', '🧠 [REASONING] received', data);
-                    if (onStatus) onStatus(data);
-                    if (onReasoning) onReasoning(data.message || e.data);
-                });
+                const parsed = safeParseJSON(e.data);
+                if (parsed) handleIncomingParsedEvent(parsed);
             };
 
             eventSource.addEventListener('nutrition_report', (e) => {
-                processSSE(e, 'nutrition_report', (data) => {
-                    debugLog('SSE', '🥗 [NUTRITION_REPORT] received', data);
-                    if (onNutritionReport) onNutritionReport(data);
-                });
+                const parsed = safeParseJSON(e.data);
+                if (parsed) handleIncomingParsedEvent({ ...parsed, type: 'nutrition_report' });
             });
 
             eventSource.addEventListener('execution_trace', (e) => {
-                processSSE(e, 'execution_trace', (data) => {
-                    debugLog('SSE', '🕵️ [EXECUTION_TRACE] received');
+                const parsed = safeParseJSON(e.data);
+                if (parsed) handleIncomingParsedEvent({ ...parsed, type: 'execution_trace' });
+            });
 
-                    // [TRACE_AUDIT] Step 6: Frontend acceptance
-                    // TELEMETRY: RAW PACKET ARRIVAL
+            eventSource.addEventListener('memory_insight', (e) => {
+                const parsed = safeParseJSON(e.data);
+                if (parsed) handleIncomingParsedEvent({ ...parsed, type: 'memory_insight' });
+            });
+
+            eventSource.addEventListener('token', (e) => {
+                const parsed = safeParseJSON(e.data);
+                if (parsed) handleIncomingParsedEvent({ ...parsed, type: 'token' });
+            });
                     console.log("📡 [POINT 1: SSE ARRIVAL] RAW TRACE FROM SERVER", data);
 
                     const rawTrace = data.content || data; // Handle envelope
