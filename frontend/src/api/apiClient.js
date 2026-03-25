@@ -654,43 +654,49 @@ export function streamNutriChat(
     onNutritionReport = null,
     onTrace = null,
     onMemoryInsight = null,
-    image = null // { b64: string, media_type: string }
+    image = null
 ) {
     const sessionId = getSessionId();
     const controller = new AbortController();
-
-    // Restore missing state variables
     let aborted = false;
     let completed = false;
     let eventSource = null;
-
-    // Identity & Sequence Tracking
     let lastSeq = -1;
     let activeStreamId = null;
 
-    const processSSE = (e, type, handler) => {
-        const parsed = safeParseJSON(e.data);
-        if (!parsed) return;
-
-        // Reset tracking on new stream_id detection
+    /**
+     * Unified handler for parsed SSE events
+     */
+    function handleIncomingParsedEvent(parsed) {
+        if (aborted || completed) return;
+        const type = parsed.type || 'status';
+        
+        // Identity & Sequence Tracking
         const streamId = parsed.stream_id;
         if (streamId && streamId !== activeStreamId) {
-            debugLog('SSE', `📡 [NEW] Stream identity detected: ${streamId}`);
             activeStreamId = streamId;
             lastSeq = -1;
         }
 
         const seq = parsed.seq || parsed.seq_id || 0;
-        if (seq > 0 && seq <= lastSeq) {
-            debugLog('SSE', `♻️ [DUP/OLD] Dropping seq ${seq} (last=${lastSeq})`);
-            return;
-        }
-
-        // Update lastSeq
+        if (seq > 0 && seq <= lastSeq) return;
         if (seq > 0) lastSeq = seq;
-
-        handler(parsed, type);
-    };
+        
+        // Dispatch to handlers
+        if (type === 'status' || !type) {
+            if (onStatus) onStatus(parsed);
+            if (onReasoning) onReasoning(parsed.message || '');
+        } else if (type === 'nutrition_report') {
+            if (onNutritionReport) onNutritionReport(parsed);
+        } else if (type === 'execution_trace') {
+            if (onTrace) onTrace(parsed);
+        } else if (type === 'memory_insight') {
+            if (onMemoryInsight) onMemoryInsight(parsed);
+        } else if (type === 'token') {
+            const token = parsed.text || parsed.token || '';
+            if (onToken) onToken(token);
+        }
+    }
 
     let retryCount = 0;
     const MAX_SSE_RETRIES = 5;
@@ -704,8 +710,6 @@ export function streamNutriChat(
 
             // 📸 [VISION SIDECAR] If image present, MUST use POST for streaming
             if (image && image.b64) {
-                console.log('%c [VISION] Using POST stream for image payload ', 'color: #f97316; font-weight: bold;');
-                
                 const response = await fetch(`${baseURL}/api/chat`, {
                     method: 'POST',
                     headers: {
@@ -741,11 +745,11 @@ export function streamNutriChat(
                     buffer = lines.pop(); // Keep partial line in buffer
 
                     for (const line of lines) {
-                        if (!line.startsWith('data: ')) continue;
-                        const dataStr = line.replace(/^data: /, '').trim();
+                        const trimmedLine = line.trim();
+                        if (!trimmedLine.startsWith('data: ')) continue;
+                        const dataStr = trimmedLine.replace(/^data: /, '').trim();
                         if (!dataStr) continue;
 
-                        // Check for standard event markers in simple strings before parsing JSON
                         if (dataStr === '[DONE]') {
                             completed = true;
                             if (onComplete) onComplete();
@@ -753,10 +757,7 @@ export function streamNutriChat(
                         }
 
                         const parsed = safeParseJSON(dataStr);
-                        if (!parsed) continue;
-
-                        // Mock processSSE logic for fetch stream
-                        handleIncomingParsedEvent(parsed);
+                        if (parsed) handleIncomingParsedEvent(parsed);
                     }
                 }
                 return;
@@ -775,17 +776,10 @@ export function streamNutriChat(
             });
 
             const url = `${baseURL}/api/chat/stream?${params.toString()}`;
-
-            // ========== [REQUEST] Telemetry ==========
-            console.log(`%c [REQUEST] type=SSE url=${url} origin=${window.location.origin} resolved_backend=${baseURL || '(Relative)'} `, "color: #94a3b8; font-family: monospace; font-size: 10px;");
-
             eventSource = new EventSource(url);
-
-            console.log(`%c [SSE OPEN] attempt=${retryCount + 1} `, "color: #10b981; font-weight: bold;");
 
             const cleanup = () => {
                 if (eventSource) {
-                    debugLog('SSE', '🔌 [CLOSE] Closing EventSource');
                     eventSource.close();
                     eventSource = null;
                 }
@@ -796,105 +790,43 @@ export function streamNutriChat(
                 if (parsed) handleIncomingParsedEvent(parsed);
             };
 
-            eventSource.addEventListener('nutrition_report', (e) => {
-                const parsed = safeParseJSON(e.data);
-                if (parsed) handleIncomingParsedEvent({ ...parsed, type: 'nutrition_report' });
-            });
-
-            eventSource.addEventListener('execution_trace', (e) => {
-                const parsed = safeParseJSON(e.data);
-                if (parsed) handleIncomingParsedEvent({ ...parsed, type: 'execution_trace' });
-            });
-
-            eventSource.addEventListener('memory_insight', (e) => {
-                const parsed = safeParseJSON(e.data);
-                if (parsed) handleIncomingParsedEvent({ ...parsed, type: 'memory_insight' });
-            });
-
-            eventSource.addEventListener('token', (e) => {
-                const parsed = safeParseJSON(e.data);
-                if (parsed) handleIncomingParsedEvent({ ...parsed, type: 'token' });
-            });
-                    console.log("📡 [POINT 1: SSE ARRIVAL] RAW TRACE FROM SERVER", data);
-
-                    const rawTrace = data.content || data; // Handle envelope
-                    const claimCount = rawTrace.claims ? rawTrace.claims.length : 0;
-                    console.log(`[TRACE_AUDIT] TRACE RECEIVED: ${claimCount} claims`);
-
-                    if (onTrace) onTrace(data);
-                });
-            });
-
-            eventSource.addEventListener('token', (e) => {
-                processSSE(e, 'token', (data) => {
-                    let token = data.content !== undefined ? data.content : (data.token !== undefined ? data.token : '');
-                    
-                    if (typeof token !== 'string') {
-                        console.warn('[TOKEN_GUARD] Non-string token rejected:', token);
+            const eventTypes = ['nutrition_report', 'execution_trace', 'memory_insight', 'token', 'done', 'error_event'];
+            eventTypes.forEach(evt => {
+                eventSource.addEventListener(evt, (e) => {
+                    if (evt === 'done') {
+                        completed = true;
+                        if (onComplete) onComplete();
+                        cleanup();
                         return;
                     }
-                    if (token.includes('"type"') && token.includes('"seq"')) {
-                        console.warn('[TOKEN_GUARD] Raw SSE event object rejected');
+                    if (evt === 'error_event') {
+                        const data = safeParseJSON(e.data);
+                        onError(new Error(data?.message || 'Backend error'));
+                        cleanup();
                         return;
                     }
-
-                    onToken(token);
+                    const parsed = safeParseJSON(e.data);
+                    if (parsed) handleIncomingParsedEvent({ ...parsed, type: evt });
                 });
             });
 
-            eventSource.addEventListener('done', (e) => {
-                if (completed) return; // Ignore double-DONE
-
-                processSSE(e, 'done', (data) => {
-                    debugLog('SSE', '✅ [DONE] Completion signal received');
-                    completed = true;
-                    if (onComplete) onComplete(data || { status: 'success' });
-                    cleanup();
-                });
-            });
-
-            // Explicit backend error event
-            eventSource.addEventListener('error_event', (e) => {
-                processSSE(e, 'error_event', (data) => {
-                    const errorMsg = data.message || e.data || 'Backend execution failed';
-                    debugError('SSE', `❌ [ERROR_EVENT] ${errorMsg}`);
-                    onError(new Error(errorMsg));
-                    completed = true;
-                    cleanup();
-                });
-            });
-
-            // Memory Insight events (STC-005)
-            eventSource.addEventListener('memory_insight', (e) => {
-                processSSE(e, 'memory_insight', (data) => {
-                    debugLog('SSE', '🧠 [MEMORY_INSIGHT] received', data);
-                    if (onMemoryInsight) onMemoryInsight(data);
-                });
-            });
-
-            // Generic EventSource error (usually network/timeout/closure)
             eventSource.onerror = (e) => {
                 if (completed || aborted) return;
-
-                debugError('SSE', `⚠️ [CONNECTION_ERROR] Stream failed. Attempt ${retryCount + 1}/${MAX_SSE_RETRIES}`);
                 cleanup();
 
                 if (retryCount < MAX_SSE_RETRIES) {
                     retryCount++;
-                    const delay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Max 10s
-                    console.log(`%c [SSE RETRY] Reconnecting in ${delay}ms... `, "color: #f59e0b; font-weight: bold;");
+                    const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
                     setTimeout(connect, delay);
                 } else {
-                    onError(new Error('Persistent stream connection failure. Backend may be unreachable.'));
+                    onError(new Error('Persistent stream connection failure.'));
                 }
             };
 
             controller.signal.addEventListener('abort', cleanup);
 
-
         } catch (error) {
             if (!aborted) {
-                console.error('SSE Setup Error:', error);
                 onError(error);
             }
         }
