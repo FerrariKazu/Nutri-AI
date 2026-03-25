@@ -285,14 +285,12 @@ function App() {
                 reader.readAsDataURL(imageFile);
             });
         }
+
         // JIT Session Creation
         let currentSid = sessionId;
         if (!currentSid) {
-            // Generate client-side ID immediately
-            currentSid = getSessionId(); // This updates localStorage
+            currentSid = getSessionId();
             setSessionId(currentSid);
-
-            // Add to list optimistically
             const newConv = {
                 session_id: currentSid,
                 title: query.slice(0, 30) + (query.length > 30 ? '...' : ''),
@@ -302,39 +300,28 @@ function App() {
             setConversations(prev => [newConv, ...prev]);
         }
 
-        // Circuit Breaker: Force-stop any existing stream
         if (abortRef.current) {
-            console.warn('[CIRCUIT BREAKER] Aborting previous stream.');
             abortRef.current();
             abortRef.current = null;
         }
 
-        // Reset to IDLE briefly to ensure clean slate (React 18 automatic batching handles this,
-        // but explicit ordering helps logic clarity)
-        cleanupStream('IDLE');
-        setMemoryInsight(null); // Reset memory insight for new query
-
-        const newRunId = crypto.randomUUID();
-        // CHANGED: Dynamic Pipeline Latching (v2.0)
-        // We do not hardcode 'flavor_explainer' anymore because the backend determines 
-        // the pipeline (flavor vs mechanistic) at runtime.
-        let detectedPipeline = null;
-
-        setActiveRunId(newRunId);
-        setActivePipeline(null); // Will be set by first trace
-
-        setStreamStatus('STREAMING');
+        cleanupStream('STREAMING');
+        setMemoryInsight(null);
         setTurnCount(prev => prev + 1);
 
-        // Add user query
+        const newRunId = crypto.randomUUID();
+        let detectedPipeline = null;
+        setActiveRunId(newRunId);
+        setActivePipeline(null);
+
+        // Add user query with optional image
         setMessages(prev => [...prev, { 
             role: 'user', 
             content: query, 
             id: Date.now() + '-user',
-            image: imageData?.b64 // For display in chat history
+            image: imageData?.b64
         }]);
 
-        // Add assistant placeholder
         const assistantId = Date.now() + '-assistant';
         setMessages(prev => [...prev, {
             id: assistantId,
@@ -345,34 +332,25 @@ function App() {
             statusMessage: ''
         }]);
 
-        // Failsafe: 180s max dead-stream duration
         const FAILSAFE_TIMEOUT = 180000;
         const resetFailsafe = () => {
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
             timeoutRef.current = setTimeout(() => {
-                console.warn('[SSE] Failsafe timeout — forcing unlock');
                 if (abortRef.current) abortRef.current();
-
                 setMessages(prev => prev.map(m =>
-                    m.id === assistantId
-                        ? { ...m, isStreaming: false, statusMessage: 'Connection timed out.' }
-                        : m
+                    m.id === assistantId ? { ...m, isStreaming: false, statusMessage: 'Connection timed out.' } : m
                 ));
                 cleanupStream('IDLE');
             }, FAILSAFE_TIMEOUT);
         };
 
-        // Stall Indicator: 10s of silence after last activity
         const STALL_TIMEOUT = 10000;
         const resetStallIndicator = () => {
             if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
             stallTimeoutRef.current = setTimeout(() => {
                 if (streamStatus === 'STREAMING') {
-                    console.warn('[SSE] Stream stalled — no activity for 10s');
                     setMessages(prev => prev.map(m =>
-                        m.id === assistantId
-                            ? { ...m, statusMessage: 'Stream stalled — retrying...' }
-                            : m
+                        m.id === assistantId ? { ...m, statusMessage: 'Stream stalled — retrying...' } : m
                     ));
                 }
             }, STALL_TIMEOUT);
@@ -381,173 +359,116 @@ function App() {
         resetFailsafe();
         resetStallIndicator();
 
-            // onToken
-            (token) => {
-                resetFailsafe();
-                resetStallIndicator();
-                setMessages(prev => prev.map(m =>
-                    m.id === assistantId
-                        ? { ...m, content: m.content + token }
-                        : m
-                ));
-            },
-            // onComplete — Step 2: MERGE, never replace
-            (statusData) => {
-                console.log(`[SSE] Completed logically via [DONE] with status: ${statusData?.status}`);
+        const onToken = (token) => {
+            resetFailsafe();
+            resetStallIndicator();
+            setMessages(prev => prev.map(m =>
+                m.id === assistantId ? { ...m, content: (m.content || '') + token } : m
+            ));
+        };
 
-                setMessages(prev => {
-                    const updated = prev.map(m => {
-                        if (m.id === assistantId) {
-                            // Step 2: Explicitly preserve executionTrace using the single writer logic
-                            const preserved = {
-                                ...m,
-                                isStreaming: false,
-                                statusMessage: (!m.content || m.content.trim() === '')
-                                    ? 'Response was empty. (Hint: Try a simpler query)'
-                                    : (statusData?.status === 'error' ? `Error: ${statusData.message}` : '')
-                            };
-
-                            // Double Check: Ensure we didn't drop the trace
-                            if (m.executionTrace && !preserved.executionTrace) {
-                                preserved.executionTrace = m.executionTrace;
-                            }
-
-                            return preserved;
-                        }
-                        return m;
-                    });
-
-                    // One-time identity footer after first assistant response
-                    let isFirstResponse = false;
-                    try {
-                        isFirstResponse = !sessionStorage.getItem('nutri_identity_footer_shown');
-                        if (isFirstResponse) {
-                            sessionStorage.setItem('nutri_identity_footer_shown', 'true');
-                        }
-                    } catch (e) {
-                        console.warn('[STORAGE] sessionStorage inaccessible:', e);
+        const onComplete = (statusData) => {
+            setMessages(prev => {
+                const updated = prev.map(m => {
+                    if (m.id === assistantId) {
+                        return {
+                            ...m,
+                            isStreaming: false,
+                            statusMessage: (!m.content || m.content.trim() === '')
+                                ? 'Response was empty. (Hint: Try a simpler query)'
+                                : (statusData?.status === 'error' ? `Error: ${statusData.message}` : '')
+                        };
                     }
-
-                    if (isFirstResponse) {
-                        return [
-                            ...updated,
-                            {
-                                id: Date.now() + '-identity-footer',
-                                role: 'system',
-                                content: 'Nutri answers by modeling cooking as a physical system.'
-                            }
-                        ];
-                    }
-
-                    return updated;
+                    return m;
                 });
 
-                // Transition to IDLE immediately to unlock input
-                setStreamStatus('IDLE');
-                setMemoryScope('session');
+                let isFirstResponse = false;
+                try {
+                    isFirstResponse = !sessionStorage.getItem('nutri_identity_footer_shown');
+                    if (isFirstResponse) sessionStorage.setItem('nutri_identity_footer_shown', 'true');
+                } catch (e) {}
 
-                // Refetch conversation list to pick up backend-generated title
-                getConversationsList().then(list => {
-                    if (list?.length) setConversations(list);
-                }).catch(() => { });
-
-                if (timeoutRef.current) clearTimeout(timeoutRef.current);
-                if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
-            },
-            // onError
-            (err) => {
-                console.error('[SSE] Error detected:', err);
-                setMessages(prev => prev.map(m =>
-                    m.id === assistantId
-                        ? { ...m, content: m.content + `\n\n[System Error: ${err.message}]`, isStreaming: false }
-                        : m
-                ));
-                cleanupStream('IDLE'); // Unlock even on error
-            },
-            (statusData) => {
-                if (!statusData) return;
-
-                // Border Control
-                if (statusData.run_id && statusData.run_id !== newRunId) {
-                    console.warn(`[RUN_GUARD] Rejected foreign status from ${statusData.run_id}`);
-                    return;
+                if (isFirstResponse) {
+                    return [...updated, { id: Date.now() + '-identity-footer', role: 'system', content: 'Nutri answers by modeling cooking as a physical system.' }];
                 }
+                return updated;
+            });
 
-                resetFailsafe();
-                resetStallIndicator();
+            setStreamStatus('IDLE');
+            setMemoryScope('session');
+            getConversationsList().then(list => { if (list?.length) setConversations(list); }).catch(() => {});
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            if (stallTimeoutRef.current) clearTimeout(stallTimeoutRef.current);
+        };
 
-                const { phase, message } = statusData.content || statusData;
-                if (phase === 'reset') {
-                    setMemoryScope('decayed');
-                    setMessages(prev => [
-                        ...prev,
-                        {
-                            id: Date.now() + '-sys',
-                            role: 'system',
-                            content: 'Session expired due to inactivity. Memory has been reset.'
-                        }
-                    ]);
-                    setTurnCount(0);
+        const onError = (err) => {
+            setMessages(prev => prev.map(m =>
+                m.id === assistantId ? { ...m, content: (m.content || '') + `\n\n[System Error: ${err.message}]`, isStreaming: false } : m
+            ));
+            cleanupStream('IDLE');
+        };
+
+        const onStatus = (statusData) => {
+            if (!statusData || (statusData.run_id && statusData.run_id !== newRunId)) return;
+            resetFailsafe();
+            resetStallIndicator();
+            const { phase, message } = statusData.content || statusData;
+            setMessages(prev => prev.map(m =>
+                m.id === assistantId ? { ...m, statusMessage: message || phase } : m
+            ));
+        };
+
+        const onNutritionReport = (report) => {
+            if (report.run_id && report.run_id !== newRunId) return;
+            resetFailsafe();
+            resetStallIndicator();
+            setMessages(prev => prev.map(m =>
+                m.id === assistantId ? { ...m, nutritionVerification: report } : m
+            ));
+        };
+
+        const onTrace = (tracePacket) => {
+            const incomingRunId = tracePacket.run_id || (tracePacket.content && tracePacket.content.run_id);
+            const incomingPipeline = tracePacket.pipeline || (tracePacket.content && tracePacket.content.pipeline);
+            
+            if (incomingRunId && incomingRunId !== newRunId) return;
+            
+            if (incomingPipeline) {
+                if (!detectedPipeline) {
+                    detectedPipeline = incomingPipeline;
+                    setActivePipeline(incomingPipeline);
                 }
-                setMessages(prev => prev.map(m =>
-                    m.id === assistantId
-                        ? { ...m, statusMessage: message || phase }
-                        : m
-                ));
-            },
-            // onNutritionReport
-            (report) => {
-                // Border Control
-                if (report.run_id && report.run_id !== newRunId) {
-                    console.warn(`[RUN_GUARD] Rejected foreign report from ${report.run_id}`);
-                    return;
-                }
-
-                resetFailsafe();
-                resetStallIndicator();
-                setMessages(prev => prev.map(m =>
-                    m.id === assistantId
-                        ? { ...m, nutritionVerification: report }
-                        : m
-                ));
-            },
-            // onTrace — Funnel through Single Writer
-            (tracePacket) => {
-                const incomingRunId = tracePacket.run_id || (tracePacket.content && tracePacket.content.run_id);
-                const incomingPipeline = tracePacket.pipeline || (tracePacket.content && tracePacket.content.pipeline);
-
-                // Border Control: No warnings. No merging. No forgiveness.
-                if (incomingRunId && incomingRunId !== newRunId) {
-                    console.warn(`[RUN_GUARD] REJECTED: run=${incomingRunId} (expected ${newRunId})`);
-                    return;
-                }
-
-                // Dynamic Logic: Latch onto the first pipeline we see for this run
-                if (incomingPipeline) {
-                    if (!detectedPipeline) {
-                        detectedPipeline = incomingPipeline;
-                        setActivePipeline(incomingPipeline);
-                        console.log(`[PIPELINE_GUARD] LATCHED onto pipeline: ${incomingPipeline}`);
-                    } else if (incomingPipeline !== detectedPipeline) {
-                        console.warn(`[PIPELINE_GUARD] REJECTED: pipeline=${incomingPipeline} (locked to ${detectedPipeline})`);
-                        return;
-                    }
-                }
-
-                resetFailsafe();
-                resetStallIndicator();
-
-                const trace = tracePacket.content || tracePacket;
-                const incomingSeq = tracePacket.seq || trace.seq || 0;
-
-                console.log("💎 [POINT 2: APP RECEIVE] TRACE SIGNAL IN APP", { trace, seq: incomingSeq });
-                updateMessageTrace(assistantId, trace, "SSE", incomingSeq);
-            },
-            // onMemoryInsight (STC-005)
-            (insight) => {
-                console.log('[MEMORY_INSIGHT] Received insight:', insight);
-                setMemoryInsight(insight);
             }
+
+            resetFailsafe();
+            resetStallIndicator();
+            const trace = tracePacket.content || tracePacket;
+            const incomingSeq = tracePacket.seq || trace.seq || 0;
+            updateMessageTrace(assistantId, trace, "SSE", incomingSeq);
+        };
+
+        const onMemoryInsight = (insight) => {
+            setMemoryInsight(insight);
+        };
+
+        abortRef.current = streamNutriChat(
+            query,
+            {
+                audience_mode: userPreferences.audience_mode,
+                optimization_goal: userPreferences.optimization_goal,
+                verbosity: userPreferences.verbosity,
+                execution_mode: userPreferences.execution_mode,
+                run_id: newRunId
+            },
+            onStatus, // onReasoning (status events also serve as reasoning indicators)
+            onToken,
+            onComplete,
+            onError,
+            onStatus,
+            onNutritionReport,
+            onTrace,
+            onMemoryInsight,
+            imageData
         );
     };
 
