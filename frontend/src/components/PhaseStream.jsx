@@ -127,11 +127,25 @@ const PhaseStream = ({ messages, streamStatus, memoryInsight, onDismissInsight, 
                     <div key={idx} className="max-w-full sm:max-w-4xl mx-auto flex flex-col gap-4 sm:gap-6 animate-fade-in w-full text-[14px] sm:text-[16px]">
                         {/* User Query - Minimalist Header */}
                         {msg.role === 'user' && (
-                            <div className="flex items-start gap-3 sm:gap-4 py-3 sm:py-4 border-b border-neutral-800/50">
-                                <Fingerprint className="w-4 h-4 sm:w-5 sm:h-5 text-neutral-600 shrink-0 mt-1" />
-                                <h2 className="text-lg sm:text-xl font-serif text-neutral-400 font-normal leading-tight break-words overflow-hidden" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
-                                    {msg.content}
-                                </h2>
+                            <div className="flex flex-col gap-2 py-3 sm:py-4 border-b border-neutral-800/50">
+                                <div className="flex items-start gap-3 sm:gap-4">
+                                    <Fingerprint className="w-4 h-4 sm:w-5 sm:h-5 text-neutral-600 shrink-0 mt-1" />
+                                    <h2 className="text-lg sm:text-xl font-serif text-neutral-400 font-normal leading-tight break-words overflow-hidden" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                                        {msg.content}
+                                    </h2>
+                                </div>
+                                {msg.image && (
+                                    <div className="ml-7 sm:ml-9 mt-2 animate-fade-in group/userimg relative max-w-sm">
+                                        <img 
+                                            src={msg.image} 
+                                            alt="User uploaded analysis target" 
+                                            className="rounded-lg border border-neutral-800 shadow-xl ring-1 ring-white/5 object-cover max-h-48 cursor-zoom-in hover:brightness-110 transition-all"
+                                        />
+                                        <div className="absolute top-2 left-2 bg-neutral-950/60 backdrop-blur-md px-1.5 py-0.5 rounded text-[8px] font-mono text-neutral-400 uppercase tracking-tighter opacity-0 group-hover/userimg:opacity-100 transition-opacity">
+                                            Visual Input Attached
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
