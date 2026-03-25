@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { ChevronDown, ChevronRight, Binary, Fingerprint, ShieldCheck, Hash, Activity, Book, FileText, AlertTriangle, Info } from 'lucide-react';
 import StarterPrompts from './StarterPrompts';
 import NutriIntelligencePanel from './IntelligenceTransparency/NutriIntelligencePanel';
+import MemoryInsight from './MemoryInsight';
 import { adaptExecutionTrace } from '../utils/traceAdapter';
 import { SUGGESTION_POOL } from '../api/suggestions';
 import { getUserId } from '../utils/memoryManager';
@@ -42,7 +43,7 @@ function seededShuffle(array, seed) {
 /**
  * PhaseStream - Collapsible, phase-aware reasoning output.
  */
-const PhaseStream = ({ messages, streamStatus, onPromptSelect }) => {
+const PhaseStream = ({ messages, streamStatus, memoryInsight, onDismissInsight, onPromptSelect }) => {
     const scrollRef = useRef(null);
     const [isAtBottom, setIsAtBottom] = useState(true);
 
@@ -232,6 +233,14 @@ const PhaseStream = ({ messages, streamStatus, onPromptSelect }) => {
                         )}
                     </div>
                 ))
+            )}
+
+            {/* Memory Insight Card (STC-005) — Rendered after all messages */}
+            {!isEmptyState && (
+                <MemoryInsight
+                    insight={memoryInsight}
+                    onDismiss={onDismissInsight}
+                />
             )}
         </div>
     );

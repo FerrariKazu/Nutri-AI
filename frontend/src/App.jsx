@@ -1,6 +1,17 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { streamNutriChat, getSessionId, clearSession, getConversation, getConversationsList, createNewSession, getPerformanceMode, getHealth } from './api/apiClient';
+import { 
+  streamNutriChat, 
+  getSessionId, 
+  clearSession, 
+  getConversation, 
+  getConversationsList, 
+  createNewSession, 
+  getPerformanceMode, 
+  getHealth,
+  getPreferences,
+  updatePreferences
+} from './api/apiClient';
 import { saveMessages, loadMessages, clearMessages } from './utils/chatStorage';
 
 
@@ -10,6 +21,7 @@ import PhaseStream from './components/PhaseStream';
 import ErrorBoundary from './components/ErrorBoundary';
 import Sidebar from './components/Sidebar';
 import ChatHeader from './components/ChatHeader';
+import PreferencesModal from './components/PreferencesModal';
 
 // Input value setter for starter prompts
 let inputValueSetter = null;
@@ -39,6 +51,40 @@ function App() {
     const [backendStatus, setBackendStatus] = useState('unknown'); // 'unknown' | 'ok' | 'fail'
     const [activeRunId, setActiveRunId] = useState(null);
     const [activePipeline, setActivePipeline] = useState(null);
+
+    // Personalization & Onboarding
+    const [userPreferences, setUserPreferences] = useState(null);
+    const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
+
+    // Memory Insights (STC-005)
+    const [memoryInsight, setMemoryInsight] = useState(null);
+
+    // Fetch preferences on load
+    useEffect(() => {
+        const fetchPrefs = async () => {
+            const prefs = await getPreferences();
+            if (prefs) {
+                setUserPreferences(prefs);
+                // Onboarding: if skill_level is missing, open modal
+                if (!prefs.skill_level) {
+                    setIsPreferencesOpen(true);
+                }
+            } else {
+                // Fallback: open onboarding if fetch fails or no prefs
+                setIsPreferencesOpen(true);
+            }
+        };
+        fetchPrefs();
+    }, []);
+
+    const handleUpdatePreferences = async (newPrefs) => {
+        try {
+            await updatePreferences(newPrefs);
+            setUserPreferences(newPrefs);
+        } catch (error) {
+            console.error("Failed to update preferences:", error);
+        }
+    };
 
     /**
      * updateMessageTrace - Centralized Single Writer for Scientific Traces.
@@ -253,6 +299,7 @@ function App() {
         // Reset to IDLE briefly to ensure clean slate (React 18 automatic batching handles this,
         // but explicit ordering helps logic clarity)
         cleanupStream('IDLE');
+        setMemoryInsight(null); // Reset memory insight for new query
 
         const newRunId = crypto.randomUUID();
         // CHANGED: Dynamic Pipeline Latching (v2.0)
@@ -496,6 +543,11 @@ function App() {
 
                 console.log("💎 [POINT 2: APP RECEIVE] TRACE SIGNAL IN APP", { trace, seq: incomingSeq });
                 updateMessageTrace(assistantId, trace, "SSE", incomingSeq);
+            },
+            // onMemoryInsight (STC-005)
+            (insight) => {
+                console.log('[MEMORY_INSIGHT] Received insight:', insight);
+                setMemoryInsight(insight);
             }
         );
     };
@@ -509,6 +561,7 @@ function App() {
         setTurnCount(0);
         setStreamStatus('IDLE');
         setMemoryScope('new');
+        setMemoryInsight(null);
     };
 
     return (
@@ -529,6 +582,7 @@ function App() {
                         handleNewChat();
                         setIsSidebarOpen(false);
                     }}
+                    onOpenPreferences={() => setIsPreferencesOpen(true)}
                 />
 
                 {/* Main Content Area */}
@@ -590,6 +644,8 @@ function App() {
                         <PhaseStream
                             messages={messages}
                             streamStatus={streamStatus}
+                            memoryInsight={memoryInsight}
+                            onDismissInsight={() => setMemoryInsight(null)}
                             onPromptSelect={(text) => {
                                 if (inputValueSetter) inputValueSetter(text);
                             }}
@@ -604,8 +660,13 @@ function App() {
                         />
                     </div>
                 </div>
-
-                {/* Control Rail - REMOVED (Dead Code) */}
+                {/* Preferences & Onboarding Modal */}
+                <PreferencesModal 
+                    isOpen={isPreferencesOpen} 
+                    onClose={() => setIsPreferencesOpen(false)} 
+                    onSave={handleUpdatePreferences}
+                    initialData={userPreferences}
+                />
             </div>
         </ErrorBoundary>
     );

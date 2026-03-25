@@ -652,7 +652,8 @@ export function streamNutriChat(
     onError,
     onStatus = null,
     onNutritionReport = null,
-    onTrace = null
+    onTrace = null,
+    onMemoryInsight = null
 ) {
     const sessionId = getSessionId();
     const controller = new AbortController();
@@ -796,6 +797,14 @@ export function streamNutriChat(
                 });
             });
 
+            // Memory Insight events (STC-005)
+            eventSource.addEventListener('memory_insight', (e) => {
+                processSSE(e, 'memory_insight', (data) => {
+                    debugLog('SSE', '🧠 [MEMORY_INSIGHT] received', data);
+                    if (onMemoryInsight) onMemoryInsight(data);
+                });
+            });
+
             // Generic EventSource error (usually network/timeout/closure)
             eventSource.onerror = (e) => {
                 if (completed || aborted) return;
@@ -830,6 +839,62 @@ export function streamNutriChat(
         aborted = true;
         controller.abort();
     };
+}
+
+
+/**
+ * Get the current user's preferences
+ */
+export async function getPreferences() {
+    debugLog('API', '🔄 Fetching user preferences...');
+    try {
+        const baseURL = await getBackendURL();
+        const token = await ensureAuth(baseURL);
+        const response = await fetch(`${baseURL}/api/preferences`, {
+            headers: {
+                'ngrok-skip-browser-warning': 'true',
+                'Authorization': `Bearer ${token}`,
+            }
+        });
+
+        await handleAPIResponse(response, "Failed to fetch preferences");
+
+        const data = await response.json();
+        debugLog('API', `📥 Received preferences`, data);
+        return data;
+    } catch (error) {
+        debugError('API', 'Preferences fetch failed', error);
+        return null;
+    }
+}
+
+/**
+ * Update the current user's preferences
+ */
+export async function updatePreferences(preferences) {
+    debugLog('API', '📤 Updating user preferences...', preferences);
+    try {
+        const baseURL = await getBackendURL();
+        const token = await ensureAuth(baseURL);
+        const response = await fetch(`${baseURL}/api/preferences`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'ngrok-skip-browser-warning': 'true',
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify(preferences)
+        });
+
+        await handleAPIResponse(response, "Failed to update preferences");
+
+        const data = await response.json();
+        debugLog('API', `📥 Update status`, data);
+        return data;
+    } catch (error) {
+        debugError('API', 'Preferences update failed', error);
+        throw error;
+    }
 }
 
 

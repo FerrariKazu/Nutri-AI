@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, MessageSquare, Clock, ChevronLeft, Menu } from 'lucide-react';
+import { Plus, MessageSquare, Clock, ChevronLeft, Menu, Settings } from 'lucide-react';
 
 // Writing simple helper to avoid dependency bloat if not present.
 
@@ -25,7 +25,8 @@ const Sidebar = ({
     conversations,
     currentSessionId,
     onSelectSession,
-    onNewChat
+    onNewChat,
+    onOpenPreferences
 }) => {
     // 1. ESC Key Listener (Cleanup-aware)
     useEffect(() => {
@@ -108,6 +109,17 @@ const Sidebar = ({
                                 </div>
                             ))
                         )}
+                    </div>
+
+                    {/* Profile Settings Entry */}
+                    <div className="px-4 pb-4">
+                        <button
+                            onClick={onOpenPreferences}
+                            className="w-full flex items-center gap-3 py-3 px-4 hover:bg-white/5 rounded-xl text-neutral-400 hover:text-white transition-all text-sm group"
+                        >
+                            <Settings className="w-4 h-4 group-hover:rotate-45 transition-transform" />
+                            <span>Profile Settings</span>
+                        </button>
                     </div>
 
                     {/* Footer / Branding */}
