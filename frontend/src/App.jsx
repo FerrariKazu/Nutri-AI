@@ -447,6 +447,10 @@ function App() {
             updateMessageTrace(assistantId, trace, "SSE", incomingSeq);
         };
 
+        const onMemoryInsight = (insight) => {
+            setMemoryInsight(insight);
+        };
+
         const onAdversarialCritique = (critique) => {
             if (critique.run_id && critique.run_id !== newRunId) return;
             resetFailsafe();
