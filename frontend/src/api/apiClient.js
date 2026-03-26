@@ -654,6 +654,7 @@ export function streamNutriChat(
     onNutritionReport = null,
     onTrace = null,
     onMemoryInsight = null,
+    onAdversarialCritique = null,
     image = null
 ) {
     const sessionId = getSessionId();
@@ -692,6 +693,8 @@ export function streamNutriChat(
             if (onTrace) onTrace(parsed);
         } else if (type === 'memory_insight') {
             if (onMemoryInsight) onMemoryInsight(parsed);
+        } else if (type === 'adversarial_critique') {
+            if (onAdversarialCritique) onAdversarialCritique(parsed);
         } else if (type === 'token') {
             const token = parsed.text || parsed.token || '';
             if (onToken) onToken(token);
@@ -790,7 +793,7 @@ export function streamNutriChat(
                 if (parsed) handleIncomingParsedEvent(parsed);
             };
 
-            const eventTypes = ['nutrition_report', 'execution_trace', 'memory_insight', 'token', 'done', 'error_event'];
+            const eventTypes = ['nutrition_report', 'execution_trace', 'memory_insight', 'adversarial_critique', 'token', 'done', 'error_event'];
             eventTypes.forEach(evt => {
                 eventSource.addEventListener(evt, (e) => {
                     if (evt === 'done') {
