@@ -20,8 +20,10 @@ import {
     Beaker,
     BarChart3,
     Clock,
-    Layers
+    Layers,
+    Swords
 } from 'lucide-react';
+import AdversarialCritique from './AdversarialCritique';
 import Tier1Evidence from './Tier1Evidence';
 import Tier2Mechanism from './Tier2Mechanism';
 import Tier3Causality from './Tier3Causality';
@@ -432,6 +434,11 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                                                     baselineEvidence={uiTrace.baseline_evidence_summary}
                                                                     confidenceTier={confidenceTier}
                                                                 />
+                                                            </AccordionSection>
+
+                                                            {/* ⚔️ Adversarial Critique Pass */}
+                                                            <AccordionSection title="Adversarial Pass" icon={Swords} defaultOpen={false}>
+                                                                <AdversarialCritique critique={uiTrace.adversarial_critique || uiTrace._raw?.adversarial_critique} />
                                                             </AccordionSection>
 
                                                             {/* Confidence Discipline */}

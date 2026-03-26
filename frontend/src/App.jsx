@@ -447,8 +447,20 @@ function App() {
             updateMessageTrace(assistantId, trace, "SSE", incomingSeq);
         };
 
-        const onMemoryInsight = (insight) => {
-            setMemoryInsight(insight);
+        const onAdversarialCritique = (critique) => {
+            if (critique.run_id && critique.run_id !== newRunId) return;
+            resetFailsafe();
+            resetStallIndicator();
+            setMessages(prev => prev.map(m => {
+                if (m.id !== assistantId) return m;
+                return {
+                    ...m,
+                    executionTrace: {
+                        ...(m.executionTrace || {}),
+                        adversarial_critique: critique
+                    }
+                };
+            }));
         };
 
         abortRef.current = streamNutriChat(
@@ -468,6 +480,7 @@ function App() {
             onNutritionReport,
             onTrace,
             onMemoryInsight,
+            onAdversarialCritique,
             imageData
         );
     };
