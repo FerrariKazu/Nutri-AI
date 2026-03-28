@@ -696,7 +696,7 @@ export function streamNutriChat(
         } else if (type === 'adversarial_critique') {
             if (onAdversarialCritique) onAdversarialCritique(parsed);
         } else if (type === 'token') {
-            const token = parsed.text || parsed.token || '';
+            const token = parsed.content || parsed.text || parsed.token || '';
             if (onToken) onToken(token);
         }
     }
@@ -760,7 +760,13 @@ export function streamNutriChat(
                         }
 
                         const parsed = safeParseJSON(dataStr);
-                        if (parsed) handleIncomingParsedEvent(parsed);
+                        if (parsed !== null) {
+                            if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+                                handleIncomingParsedEvent(parsed);
+                            } else {
+                                handleIncomingParsedEvent({ content: parsed, type: 'token' });
+                            }
+                        }
                     }
                 }
                 return;
@@ -809,7 +815,13 @@ export function streamNutriChat(
                         return;
                     }
                     const parsed = safeParseJSON(e.data);
-                    if (parsed) handleIncomingParsedEvent({ ...parsed, type: evt });
+                    if (parsed !== null) {
+                        if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+                            handleIncomingParsedEvent({ ...parsed, type: evt });
+                        } else {
+                            handleIncomingParsedEvent({ content: parsed, type: evt });
+                        }
+                    }
                 });
             });
 
