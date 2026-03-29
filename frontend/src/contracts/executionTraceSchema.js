@@ -63,7 +63,7 @@
  * @property {Object} system_audit
  */
 
-export const SCHEMA_VERSION = "1.2.8";
+export const SCHEMA_VERSION = "1.3.0";
 
 export const VALID_STATUSES = ['INIT', 'STREAMING', 'ENRICHING', 'VERIFIED', 'COMPLETE', 'ERROR'];
 

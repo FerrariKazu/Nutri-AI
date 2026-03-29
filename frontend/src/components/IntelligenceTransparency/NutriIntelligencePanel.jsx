@@ -102,7 +102,7 @@ const BaselineEvidenceCard = ({ data }) => {
 };
 
 /**
- * NutriIntelligencePanel (v1.2.8)
+ * NutriIntelligencePanel (v1.3.0)
  * 
  * STRICT MODE CONTAINER:
  * - Direct Binding to Backend Epistemic Authority.
@@ -110,9 +110,9 @@ const BaselineEvidenceCard = ({ data }) => {
  * - Glassmorphism card aesthetic.
  */
 const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false }) => {
-    // 🛡️ API GOVERNANCE: Version Enforcement (v1.2.8) - UI: v1.2.9
+    // 🛡️ API GOVERNANCE: Version Enforcement (v1.3.0) - UI: v1.2.9
     const currentVersion = uiTrace?.trace_schema_version;
-    const isVersionMismatch = currentVersion && currentVersion !== "1.2.8";
+    const isVersionMismatch = currentVersion && currentVersion !== "1.3.0";
 
     const claims = useMemo(() => (uiTrace?.scientific_layer?.claims || uiTrace?.claims || []), [uiTrace]);
     const metrics = uiTrace?.metrics || {};
@@ -192,7 +192,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                 <AlertTriangle size={20} />
                 <div className="text-sm">
                     <span className="font-bold block text-red-300">Trace Contract Error</span>
-                    Unsupported schema version: {currentVersion}. Frontend requires 1.2.8.
+                    Unsupported schema version: {currentVersion}. Frontend requires 1.3.0.
                 </div>
             </div>
         );
@@ -236,8 +236,8 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                     <div className="flex items-center gap-3">
                         <div className="hidden md:flex items-center gap-2 pr-2 border-r border-neutral-800/50">
                             <span className="text-[7px] font-mono text-neutral-600 uppercase">Run: {uiTrace.run_id?.split('-')[0] || 'NUL'}</span>
-                            <span className="text-[7px] font-mono text-neutral-600 uppercase">Ont: {uiTrace.governance?.ontology_version || '1.2.8'}</span>
-                            <span className="text-[7px] font-mono text-neutral-600 uppercase">Enr: {uiTrace.governance?.enrichment_version || '1.2.8'}</span>
+                            <span className="text-[7px] font-mono text-neutral-600 uppercase">Ont: {uiTrace.governance?.ontology_version || '1.3.0'}</span>
+                            <span className="text-[7px] font-mono text-neutral-600 uppercase">Enr: {uiTrace.governance?.enrichment_version || '1.3.0'}</span>
                         </div>
                         <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold font-mono border ${traceStatus === 'streaming' || traceStatus === 'STREAMING'
                             ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
@@ -554,7 +554,7 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
                                 </span>
                             </div>
                             <span className="text-[9px] font-mono text-neutral-700">
-                                Trace v{uiTrace?.trace_schema_version || '1.2.8'}
+                                Trace v{uiTrace?.trace_schema_version || '1.3.0'}
                             </span>
                         </div>
                     </motion.div>

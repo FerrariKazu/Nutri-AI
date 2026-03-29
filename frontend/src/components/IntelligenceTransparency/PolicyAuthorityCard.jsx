@@ -2,7 +2,7 @@ import React from 'react';
 import { ShieldCheck, ShieldAlert, ShieldOff, Info, Database, Clock } from 'lucide-react';
 
 /**
- * PolicyAuthorityCard (v1.2.8)
+ * PolicyAuthorityCard (v1.3.0)
  * 
  * GOVERNANCE TERMINAL:
  * - 3-state contextual messaging based on backend governance object.

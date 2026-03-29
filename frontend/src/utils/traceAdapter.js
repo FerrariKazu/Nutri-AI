@@ -1,7 +1,7 @@
 /**
  * traceAdapter.js
  * 
- * ANTI-CORRUPTION LAYER (ACL) - v1.2.8
+ * ANTI-CORRUPTION LAYER (ACL) - v1.3.0
  * Strictly normalizes backend AgentExecutionTrace.
  * 
  * EPISTEMIC HONESTY PRINCIPLES:
@@ -53,7 +53,7 @@ const computeConfidenceFallback = (rawTrace, claims) => {
 };
 
 /**
- * Adapt V1.2.8 Schema (Strict)
+ * Adapt V1.3.0 Schema (Strict)
  */
 const adaptStrict = (rawTrace) => {
     // 1. Validate
@@ -76,13 +76,13 @@ const adaptStrict = (rawTrace) => {
     const audit = rawTrace.system_audit || {};
     const profile = rawTrace.execution_profile || {};
 
-    // ── DEFENSIVE NULL GUARDS (v1.2.8 Transitional Safety) ──
+    // ── DEFENSIVE NULL GUARDS (v1.3.0 Transitional Safety) ──
     const governance = rawTrace.governance ?? null;
     const baselineEvidence = rawTrace.baseline_evidence_summary ?? null;
 
     // ── CONTRACT STABILITY ASSERTION (Phase 8) ──
     if (rawTrace.confidence?.breakdown && !Array.isArray(rawTrace.confidence.breakdown.rule_firings)) {
-        console.error("TRACE SHAPE VIOLATION: rule_firings must be array (Canonical v1.2.8 Requirement)");
+        console.error("TRACE SHAPE VIOLATION: rule_firings must be array (Canonical v1.3.0 Requirement)");
     }
 
     // 2. Map Claims (1:1 VERBATIM)

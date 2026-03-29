@@ -104,7 +104,7 @@ const ExecutionProfileCard = ({ metrics, epistemicStatus, executionMode, baselin
                             Execution Profile
                         </h3>
                         <p className="text-[10px] text-neutral-500 font-mono">
-                            ID: {metrics.id?.slice(0, 8) || 'N/A'} • v{metrics.trace_schema_version || '1.2.8'}
+                            ID: {metrics.id?.slice(0, 8) || 'N/A'} • v{metrics.trace_schema_version || '1.3.0'}
                         </p>
                     </div>
                 </div>
