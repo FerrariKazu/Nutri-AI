@@ -19,11 +19,10 @@ export const validateTrace = (trace, isDevMode = false) => {
         return { valid: false, errors: ['Trace is null or undefined'] };
     }
 
-    // 1. Schema Version Gate (Hard Fail)
+    // 1. Schema Version Gate (Soft Fail — warn only, never crash render)
     if (trace.trace_schema_version !== SCHEMA_VERSION) {
-        const msg = `Schema version mismatch. Expected ${SCHEMA_VERSION}, got ${trace.trace_schema_version || trace.schema_version}`;
-        if (isDevMode) console.error(`${LOG_PREFIX} ${msg}`);
-        throw new Error(msg);
+        console.warn(`[TRACE] Schema version mismatch. Expected ${SCHEMA_VERSION}, got ${trace.trace_schema_version}. Rendering anyway.`);
+        // do NOT throw — continue rendering
     }
 
     // 2. Mandatory v1.3.0 Roots
