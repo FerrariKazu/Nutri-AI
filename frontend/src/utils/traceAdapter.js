@@ -230,7 +230,7 @@ export const adaptExecutionTrace = (rawTrace) => {
     } catch (e) {
         console.error("Trace Adapter caught error:", e);
 
-        if (e.message?.includes('CONTRACT_VIOLATION')) {
+        if (e.message?.includes('CONTRACT_VIOLATION') || e.message?.includes('Schema version mismatch')) {
             return {
                 adapter_status: "contract_violation",
                 validation_errors: [e.message],
@@ -240,6 +240,17 @@ export const adaptExecutionTrace = (rawTrace) => {
             };
         }
 
-        return null;
+        // Last resort: return a minimal passthrough so something renders
+        console.warn("[TRACE] Returning raw trace as fallback after adapter error.");
+        return {
+            adapter_status: "fallback",
+            validation_errors: [e.message],
+            _raw: rawTrace,
+            claims: rawTrace?.scientific_layer?.claims || [],
+            run_id: rawTrace?.run_id || 'UNKNOWN',
+            trace_schema_version: rawTrace?.trace_schema_version,
+            mode: rawTrace?.execution_profile?.mode || 'full_trace',
+            execution_profile: rawTrace?.execution_profile || {},
+        };
     }
 };
