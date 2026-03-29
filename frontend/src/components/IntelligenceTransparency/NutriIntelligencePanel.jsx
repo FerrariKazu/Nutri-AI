@@ -186,16 +186,9 @@ const NutriIntelligencePanel = React.memo(({ uiTrace, expertModeDefault = false 
         return null;
     }, [uiTrace, isStandby, executionMode]);
 
+    // Soft-fail: log warning but continue rendering
     if (isVersionMismatch) {
-        return (
-            <div className="p-4 bg-red-900/20 border border-red-500/50 rounded-xl flex items-center gap-3 text-red-400">
-                <AlertTriangle size={20} />
-                <div className="text-sm">
-                    <span className="font-bold block text-red-300">Trace Contract Error</span>
-                    Unsupported schema version: {currentVersion}. Frontend requires 1.3.0.
-                </div>
-            </div>
-        );
+        console.warn(`[TRACE] Schema version mismatch. Expected 1.3.0, got ${currentVersion}. Rendering anyway.`);
     }
 
     const toggleExpertMode = (e) => {
