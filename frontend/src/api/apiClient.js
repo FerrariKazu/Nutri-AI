@@ -476,7 +476,7 @@ export function streamPrompt(
                         }
 
                         // SAFE PARSING: Only parse if it looks like JSON
-                        const parsed = data.trim().startsWith('{') ? safeParseJSON(data) : null;
+                        const parsed = data.startsWith('{') ? safeParseJSON(data) : null;
                         const type = parsed?.type || 'token';
 
                         if (type === 'status' || parsed?.message) {
@@ -748,9 +748,8 @@ export function streamNutriChat(
                     buffer = lines.pop(); // Keep partial line in buffer
 
                     for (const line of lines) {
-                        const trimmedLine = line.trim();
-                        if (!trimmedLine.startsWith('data: ')) continue;
-                        const dataStr = trimmedLine.replace(/^data: /, '').trim();
+                        if (!line.startsWith('data: ')) continue;
+                        const dataStr = line.slice(6);
                         if (!dataStr) continue;
 
                         if (dataStr === '[DONE]') {
