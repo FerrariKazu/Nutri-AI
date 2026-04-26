@@ -35,9 +35,9 @@ const ChatHeader = ({ title, lastActive, mode, onOpenSidebar }) => {
                     className="nutri-header-logo"
                 />
 
-                <div className="flex flex-col overflow-hidden">
+                <div className="flex flex-col overflow-hidden min-w-0">
                     {title && title !== 'New Conversation' && (
-                        <h1 className="text-sm font-medium text-neutral-200 tracking-wide font-serif truncate max-w-[200px] md:max-w-md animate-fade-in">
+                        <h1 className="text-sm font-medium text-neutral-200 tracking-wide font-serif truncate max-w-[140px] sm:max-w-[200px] md:max-w-md animate-fade-in">
                             {title}
                         </h1>
                     )}

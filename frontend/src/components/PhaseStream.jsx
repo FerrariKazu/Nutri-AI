@@ -96,7 +96,7 @@ const PhaseStream = ({ messages, streamStatus, memoryInsight, onDismissInsight, 
         <div
             ref={scrollRef}
             onScroll={handleScroll}
-            className="messages-container flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 md:px-8 md:py-6 space-y-8 md:space-y-12 relative scroll-smooth"
+            className="messages-container scroll-container flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-4 md:px-8 md:py-6 space-y-8 md:space-y-12 relative scroll-smooth"
         >
             {/* 1. Hero / Landing State (Rendered ONLY when messages.length === 0) */}
             {isEmptyState ? (
